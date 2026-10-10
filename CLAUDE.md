@@ -41,7 +41,7 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 
 | Fase | Estado |
 |---|---|
-| Entorno | En cierre. Falta resolver dónde guarda Ghidra su configuración (ver pendientes). |
+| Entorno | **Cerrada** (2026-10-10). Verificación 16/16 OK. ROMs copiados a `roms\`. |
 | 0. Reconocimiento | No iniciada |
 | 1. Análisis 68000 | No iniciada |
 | 2. Recompilador | No iniciada |
@@ -68,7 +68,11 @@ Versiones fijadas en `entorno/versions.json` (todas con hash verificado de la fu
 | MinGit | 2.56.0.2 |
 
 Verificado bajo la ruta con espacio: CMake, Ninja, clang, llvm-windres y SDL3 (compila y abre
-la ventana), y Ghidra headless (importa un PE).
+la ventana), y Ghidra headless (importa un PE). Ghidra no deja nada en `%APPDATA%`,
+`%LOCALAPPDATA%` ni `%TEMP%`.
+
+ROMs: 13 archivos `mslugx_*` copiados desde GOG a `roms\`, con `roms\MANIFEST.sha256`
+verificado.
 
 ## Decisiones
 
@@ -81,6 +85,14 @@ la ventana), y Ghidra headless (importa un PE).
   `Invoke-Proceso` de setup.ps1). Si no, cmd elimina las comillas exteriores y la ruta se rompe.
 - **El hash de Python es SHA512**, porque NuGet solo publica ese. El resto usa SHA256.
 - **Identidad de git** configurada solo en este repo (`git config --local`).
+- **Ghidra portable mediante la ruta corta 8.3** (opción B). `setup.ps1` escribe en
+  `launch.properties` las propiedades `application.settingsdir`, `cachedir`, `tempdir` y
+  `java.io.tmpdir` apuntando a `C:/PROJEC~1/tools/_cache/ghidra/...`. La ruta corta se
+  recalcula en cada ejecución. Si la unidad no tiene nombres 8.3, el instalador avisa y Ghidra
+  usa sus rutas por defecto. Se descartó poner comillas (opción A) porque `LaunchSupport` las
+  toma literalmente.
+- **Archivos de texto:** los `.bat` y `.ps1` usan CRLF (fijado en `.gitattributes`). Los
+  `.ps1` llevan BOM UTF-8, porque PowerShell 5.1 los lee como ANSI si no lo tienen.
 
 ## Hallazgos
 
@@ -97,9 +109,6 @@ la ventana), y Ghidra headless (importa un PE).
 
 ## Pendientes
 
-- [ ] **Ghidra:** decidir cómo mantener settings, cache y temp dentro de `tools\`. La opción
-      con comillas resultó inviable. La siguiente candidata es una ruta corta 8.3
-      (`C:\PROJEC~1\...`, calculada por el instalador en cada ejecución). Mientras tanto,
-      Ghidra escribe en `%APPDATA%\ghidra`, `%LOCALAPPDATA%\ghidra` y `%TEMP%\ghidra`.
-- [ ] **Copiar los ROMs** a `roms\` (`INSTALAR.bat -CopiarRoms`); requiere confirmación.
 - [ ] **Fase 0:** plan corto y esperar el OK.
+- [ ] Considerar un hook pre-commit que rechace archivos cuyo SHA256 aparezca en
+      `roms\MANIFEST.sha256` o que sean binarios grandes (refuerzo de la regla 1).

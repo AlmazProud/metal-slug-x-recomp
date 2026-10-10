@@ -172,16 +172,42 @@ function Set-PostInstalacion($h, [string]$dest) {
             }
         }
         'ghidra' {
-            # PENDIENTE (decisión del usuario): redirigir settings/cache/temp de Ghidra a tools\.
-            # Un VMARGS con espacios rompe launch.bat (línea 185, sin comillas) y LaunchSupport
-            # toma las comillas literalmente. Mientras tanto se deja launch.properties original
-            # y se limpia cualquier línea que haya agregado una versión anterior del instalador.
+            # Settings, cache y temp de Ghidra van a tools\_cache\ghidra y no a %APPDATA%,
+            # %LOCALAPPDATA% ni %TEMP%. Un VMARGS con espacios rompe launch.bat (línea 185, sin
+            # comillas), y LaunchSupport toma las comillas literalmente. Por eso se usa la ruta
+            # corta 8.3, que se recalcula en cada ejecución porque puede cambiar si se recrea la carpeta.
             $props = Join-Path $dest 'support\launch.properties'
             $lineas = @(Get-Content -LiteralPath $props)
-            $limpias = @($lineas | Where-Object { $_ -notmatch 'Projecto Decompile' })
-            if ($limpias.Count -ne $lineas.Count) {
-                Set-Content -LiteralPath $props -Value $limpias -Encoding ASCII
-                Log '    ghidra: se retiraron líneas VMARGS de una versión anterior del instalador' 'Yellow'
+            $limpias = @($lineas | Where-Object {
+                $_ -notmatch '^# --- Projecto Decompile' -and
+                $_ -notmatch '^VMARGS=-D(application\.(settingsdir|cachedir|tempdir)|java\.io\.tmpdir)='
+            })
+            while ($limpias.Count -gt 0 -and $limpias[-1] -eq '') { $limpias = @($limpias[0..($limpias.Count - 2)]) }
+
+            $base = Join-Path $Tools '_cache\ghidra'
+            $cortas = [ordered]@{}
+            $fso = New-Object -ComObject Scripting.FileSystemObject
+            foreach ($d in @('settings', 'cache', 'temp')) {
+                $larga = Join-Path $base $d
+                if (-not (Test-Path -LiteralPath $larga)) { New-Item -ItemType Directory -Path $larga | Out-Null }
+                $cortas[$d] = $fso.GetFolder($larga).ShortPath.Replace('\', '/')
+            }
+            if (@($cortas.Values | Where-Object { $_ -match '\s' }).Count -gt 0) {
+                Log '    ghidra: AVISO: esta unidad no tiene nombres cortos 8.3; Ghidra usará %APPDATA%, %LOCALAPPDATA% y %TEMP%.' 'Yellow'
+                $nuevas = $limpias
+            } else {
+                $nuevas = $limpias + @(
+                    '',
+                    '# --- Projecto Decompile: settings/cache/temp dentro de tools\_cache\ghidra (ruta corta 8.3, sin espacios) ---',
+                    ('VMARGS=-Dapplication.settingsdir=' + $cortas['settings']),
+                    ('VMARGS=-Dapplication.cachedir=' + $cortas['cache']),
+                    ('VMARGS=-Dapplication.tempdir=' + $cortas['temp']),
+                    ('VMARGS=-Djava.io.tmpdir=' + $cortas['temp'])
+                )
+            }
+            if (($nuevas -join "`n") -ne ($lineas -join "`n")) {
+                Set-Content -LiteralPath $props -Value $nuevas -Encoding ASCII
+                Log ('    ghidra: launch.properties apunta a ' + $cortas['settings'] + ' (y cache/temp)')
             }
         }
         'imhex' {
@@ -382,6 +408,12 @@ function Test-Entorno {
     $detG = $r.Salida
     if ($okG) { $detG = 'analyzeHeadless importó ' + (Split-Path $muestra -Leaf) + ' (Import succeeded)' }
     Agregar 'Ghidra headless' $okG $detG
+
+    # Ghidra no debe dejar nada fuera de la carpeta portable.
+    $fuera = @(@("$env:APPDATA\ghidra", "$env:LOCALAPPDATA\ghidra", "$env:TEMP\ghidra") | Where-Object { Test-Path -LiteralPath $_ })
+    $detR = 'todo en tools\_cache\ghidra'
+    if ($fuera.Count -gt 0) { $detR = 'existen: ' + ($fuera -join ', ') + ' (si las creó una versión anterior, bórralas y vuelve a verificar)' }
+    Agregar 'Ghidra sin residuos fuera de la carpeta' ($fuera.Count -eq 0) $detR
     Add-Content -LiteralPath $LogFile -Value ("--- salida completa de Ghidra ---`n" + $r.Salida) -Encoding UTF8
 
     return $res
