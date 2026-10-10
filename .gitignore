@@ -1,0 +1,61 @@
+# =====================================================================
+# Projecto Decompile - .gitignore ESTRICTO (lista blanca)
+#
+# Regla 1 del proyecto: el repo NUNCA contiene ROMs, BIOS, gráficos,
+# audio ni bloques de datos extraídos. Por eso se ignora TODO por defecto
+# y solo se permiten tipos de archivo de código y documentación.
+# Si necesitas un tipo nuevo, agrégalo abajo de forma explícita y justifícalo.
+# =====================================================================
+
+# 1) Ignorar todo...
+*
+
+# 2) ...pero permitir entrar en carpetas (para que la lista blanca funcione)
+!*/
+
+# 3) Lista blanca: código, scripts, build y documentación
+!.gitignore
+!.gitattributes
+!*.md
+!*.c
+!*.h
+!*.py
+!*.ps1
+!*.bat
+!*.rc
+!CMakeLists.txt
+!*.cmake
+!*.json
+!*.toml
+!*.txt
+
+# 4) Siempre ignorado, aunque coincida con la lista blanca
+build/
+out/
+_build*/
+**/__pycache__/
+roms/
+dumps/
+extraido/
+**/mslugx_*
+*.zip
+*.7z
+*.bin
+*.rom
+*.neo
+*.p1
+*.p2
+*.s1
+*.m1
+*.v[0-9]
+*.c[0-9]
+*.sp1
+*.wav
+*.ogg
+*.png
+*.bmp
+*.raw
+*.sav
+*.state
+*.inp
+*.log

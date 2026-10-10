@@ -1,0 +1,4 @@
+# Los scripts de Windows necesitan CRLF (cmd falla en goto/labels con LF).
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+* text=auto

@@ -1,0 +1,24 @@
+// Recurso de versión: obliga a que llvm-windres (y su preprocesador) se
+// ejecuten bajo la ruta con espacio.
+#include <winver.h>
+
+1 VERSIONINFO
+FILEVERSION     0,0,0,1
+PRODUCTVERSION  0,0,0,1
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040A04B0"
+        BEGIN
+            VALUE "ProductName",     "Projecto Decompile - prueba SDL3"
+            VALUE "FileDescription", "Prueba del entorno"
+            VALUE "FileVersion",     "0.0.0.1"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x40A, 1200
+    END
+END
