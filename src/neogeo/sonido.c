@@ -62,6 +62,9 @@ static struct {
 } s;
 
 int ng_audio_activo;
+void (*ng_al_comando_sonido)(uint8_t comando);
+NgNotas ng_notas;
+static uint8_t dir_ym[2];                /* último registro elegido en cada banco (ng_notas) */
 
 /* ------------------------------------------------------------------ YM2610 */
 void ng_ym_temporizador(uint32_t n, int32_t ciclos)
@@ -140,7 +143,18 @@ static void puerto_escribir(uint16_t p, uint8_t v)
     if (traza_ym && s.t >= traza_z80_desde && s.t <= traza_z80_hasta)
         fprintf(traza_ym, "%.3f %02X %02X\n", s.t / 24.0, bajo, v);
     if (bajo == 0x00) s.comando = 0;
-    else if (bajo >= 0x04 && bajo <= 0x07) ym_escribir(bajo & 3, v);
+    else if (bajo >= 0x04 && bajo <= 0x07) {
+        int banco = (bajo >> 1) & 1;
+        if (!(bajo & 1)) dir_ym[banco] = v;
+        else if (banco == 0) {
+            if (dir_ym[0] == 0x28 && (v & 0xF0)) ng_notas.fm++;               /* key on FM */
+            else if (dir_ym[0] >= 0x08 && dir_ym[0] <= 0x0A && (v & 0x1F)) ng_notas.ssg++;
+            else if (dir_ym[0] == 0x10 && (v & 0x80)) ng_notas.adpcm_b++;     /* inicio ADPCM-B */
+        } else if (dir_ym[1] == 0x00 && !(v & 0x80) && (v & 0x3F)) {
+            ng_notas.adpcm_a++;                                              /* key on ADPCM-A */
+        }
+        ym_escribir(bajo & 3, v);
+    }
     else if (bajo == 0x08) s.nmi_habilitada = 1;
     else if (bajo == 0x18) s.nmi_habilitada = 0;
     else if (bajo == 0x0C) {
@@ -236,6 +250,18 @@ void ng_sonido_comando(uint8_t v)
     s.comando = v;
     s.pendiente = 1;
     s.fina_hasta = ng_cpu.ciclos + VENTANA_FINA;
+    if (ng_al_comando_sonido) ng_al_comando_sonido(v);
+}
+
+void ng_sonido_solo_comando(uint8_t comando)
+{
+    ng_cpu.ciclos = s.t / MAESTRO_POR_68K;
+    ng_sonido_comando(comando);
+}
+
+void ng_sonido_solo_avanzar(int64_t ciclos_68k)
+{
+    ng_sonido_hasta(s.t / MAESTRO_POR_68K + ciclos_68k);
 }
 
 uint8_t ng_sonido_respuesta(void)

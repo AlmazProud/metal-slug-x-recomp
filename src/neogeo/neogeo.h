@@ -167,6 +167,17 @@ int64_t ng_sonido_proximo_evento(void);            /* próximo temporizador del 
 void ng_sonido_comando(uint8_t v);
 uint8_t ng_sonido_respuesta(void);
 
+/* Fase 6B: gancho opcional, llamado con cada comando de sonido del 68000 (vibración). */
+extern void (*ng_al_comando_sonido)(uint8_t comando);
+/* Notas iniciadas por tipo de canal del YM2610 desde el encendido (clasificar sonidos; no son
+ * parte del estado de la máquina). */
+typedef struct { uint32_t fm, ssg, adpcm_a, adpcm_b; } NgNotas;
+extern NgNotas ng_notas;
+/* Solo sonido (menú de música): el 68000 queda detenido y el Z80 y el YM2610 avanzan solos. La
+ * máquina queda en un estado que no es el del juego: guardarlo antes y restaurarlo después. */
+void ng_sonido_solo_comando(uint8_t comando);
+void ng_sonido_solo_avanzar(int64_t ciclos_68k);
+
 /* Audio generado (estéreo, 16 bits, 55 555 Hz). Solo se guarda si ng_audio_activo != 0. */
 extern int ng_audio_activo;
 #define NG_AUDIO_HZ 55555
