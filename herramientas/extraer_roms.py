@@ -111,6 +111,14 @@ def reconstruir(roms: Path) -> dict[str, tuple[str, bytes]]:
     return out
 
 
+SUSTITUTOS = {
+    # GOG no incluye el BIOS Z80 de la placa MVS. Como en la Neo Geo AES (que no tiene SM1),
+    # el Z80 arranca desde el M1 del cartucho. MAME lo acepta con advertencia de checksum.
+    # Decisión documentada en docs/ROM_MAP.md ("sm1.sm1: sustituto").
+    "sm1.sm1": ("neogeo", "250-m1.m1"),
+}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     pd_roms = os.environ.get("PD_ROMS")
@@ -125,6 +133,13 @@ def main() -> int:
 
     esperado = esperados_de_mame(a.mame)
     datos = reconstruir(a.roms)
+    sustituidos = set()
+    for nombre, (carpeta, origen) in SUSTITUTOS.items():
+        real = salida / carpeta / nombre
+        if real.is_file() and f"{zlib.crc32(real.read_bytes()):08x}" == esperado[nombre]["crc"]:
+            continue                                  # el usuario aportó el archivo auténtico
+        datos[nombre] = (carpeta, datos[origen][1])
+        sustituidos.add(nombre)
 
     print(f"{'archivo':<14} {'carpeta':<7} {'bytes':>9}  {'crc32':<8}  estado")
     fallas = 0
@@ -135,13 +150,16 @@ def main() -> int:
         crc = f"{zlib.crc32(b):08x}"
         sha1 = hashlib.sha1(b).hexdigest()
         e = esperado.get(nombre)
-        if e is None:
+        if nombre in sustituidos:
+            estado = f"SUSTITUTO ({SUSTITUTOS[nombre][1]}; MAME avisará checksum)"
+        elif e is None:
             estado = "SIN REFERENCIA EN MAME"
         elif crc == e["crc"] and sha1 == e["sha1"] and len(b) == e["size"]:
             estado = "OK (CRC32+SHA1)"
         else:
             estado = f"DISTINTO (MAME espera crc {e['crc']})"
-        fallas += not estado.startswith("OK")
+        fallas += not (estado.startswith("OK") or estado.startswith("SUSTITUTO")
+                       or nombre == "250-p1.p1")       # P1 de GOG: diferencia conocida (ROM_MAP.md)
         print(f"{nombre:<14} {carpeta:<7} {len(b):>9}  {crc}  {estado}")
 
     faltan = sorted(n for n, e in esperado.items()

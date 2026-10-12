@@ -42,12 +42,29 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | Fase | Estado |
 |---|---|
 | Entorno | **Cerrada** (2026-10-10). Verificación 16/16 OK. ROMs copiados a `roms\`. |
-| 0. Reconocimiento | No iniciada |
+| 0. Reconocimiento | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/ROM_MAP.md`. |
 | 1. Análisis 68000 | No iniciada |
 | 2. Recompilador | No iniciada |
 | 3. Runtime | No iniciada |
 | 4. Arranque y verificación diferencial | No iniciada |
 | 5. Mejoras nativas | No iniciada |
+
+### Fase 0: resultado
+
+- **Extractor:** `herramientas/extraer_roms.py` reconstruye el set de MAME en `roms\mame\`
+  a partir de los archivos de DotEmu. 15 archivos coinciden exactos (CRC32 + SHA1) con
+  `mame -listxml`; sigue siendo MAME quien da los hashes.
+- **P1 de GOG:** es distinto del de MAME (CRC `60c33b1a`). El origen no está identificado y se
+  investigará en la Fase 1. El port y el oráculo usan el mismo P1, el de GOG.
+- **`sm1.sm1`:** GOG no lo incluye. Se sustituye con M1, como arranca la AES. Verificado:
+  arranca, entra en attract mode y el sonido funciona.
+- **Formatos de DotEmu:** fix y sprites vienen desempaquetados a 4 bits por píxel en orden de
+  filas. La conversión es reversible y está documentada.
+- **Protección:** ALTERA en `0x2FFFE0`–`0x2FFFEF`, que devuelve bits de una tabla en P1
+  (`0x0DEDD2`). Confirmada con `herramientas/mame/traza_proteccion.lua`: 127 206 de 127 206
+  lecturas coinciden con el modelo.
+- **Arrancar el oráculo:** `mame mslugx -bios us -rompath "<raíz>\roms\mame"`.
+- **Hook pre-commit:** rechaza binarios, archivos de más de 1 MB y copias de ROMs.
 
 ### Fase Entorno: resultado
 
@@ -109,6 +126,7 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 0:** plan corto y esperar el OK.
-- [ ] Considerar un hook pre-commit que rechace archivos cuyo SHA256 aparezca en
-      `roms\MANIFEST.sha256` o que sean binarios grandes (refuerzo de la regla 1).
+- [ ] **Fase 1:** plan corto y esperar el OK.
+- [ ] Identificar en qué difiere el P1 de GOG del de MAME (Fase 1).
+- [ ] Lua en MAME: las suscripciones (`add_machine_stop_notifier`, taps) deben guardarse en
+      variables globales; si no, Lua las recolecta en silencio.
