@@ -1,5 +1,5 @@
--- Latencia del Z80: tiempo entre cada comando del 68000 (escritura en 0x320000) y cada
--- respuesta del Z80 (escritura en su puerto 0x0C), con la hora de la máquina en microsegundos.
+-- Latencia del Z80: tiempo entre cada command del 68000 (escritura en 0x320000) y cada
+-- respuesta del Z80 (escritura en su puerto 0x0C), con la hour de la máquina en microsegundos.
 -- Salida: PD_TRAZA (por defecto latencia_z80.txt).
 
 local cpu = manager.machine.devices[":maincpu"]
@@ -31,7 +31,7 @@ wtap_resp = io_z80:install_write_tap(0x0000, 0xFFFF, "pd_resp", function(offset,
     table.insert(lineas, string.format("%.3f f=%d v=%d RESP %02X", us(), scr:frame_number(), vpos(), data & 0xFF))
 end)
 
--- Primera lectura del 68000 que ve cada valor nuevo de la respuesta (puede llegar más tarde que la
+-- Primera lectura del 68000 que ve cada value nuevo de la respuesta (puede llegar más tarde que la
 -- escritura del Z80 por los tramos de ejecución del planificador de MAME).
 local visto = -1
 rtap_resp = mem:install_read_tap(0x320000, 0x320001, "pd_resp_r", function(offset, data, mask)

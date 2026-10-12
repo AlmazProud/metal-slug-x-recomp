@@ -2,11 +2,11 @@
 
 Lanza MAME con el depurador (sin interfaz) y tools/mame/coverage.lua, consume las
 trazas por partes a medida que se generan y las borra, y guarda un JSON con:
-  - direcciones ejecutadas por región (P1, ventana de P2 por banco, BIOS, RAM),
+  - direcciones ejecutadas por región (P1, window de P2 por bank, BIOS, RAM),
   - destinos observados de saltos indirectos (jmp/jsr con operando entre paréntesis).
 
 Uso:
-    python tools/coverage.py --segundos 180 [--salida ARCHIVO] [--sin-bot]
+    python tools/coverage.py --segundos 180 [--output ARCHIVO] [--sin-bot]
 
 El resultado (direcciones, no bytes del ROM) va por defecto a <raíz>/analysis/coverage.json.
 """
@@ -50,26 +50,26 @@ def region(pc: int) -> str:
 class Acumulador:
     def __init__(self) -> None:
         self.pcs: dict[str, set] = defaultdict(set)
-        self.indirectos: set[tuple[int, int, int]] = set()   # (origen, destino, banco)
-        self.banco = 0
+        self.indirectos: set[tuple[int, int, int]] = set()   # (origen, destino, bank)
+        self.bank = 0
         self.instrucciones = 0
 
     def procesar(self, archivo: Path) -> None:
         previo = None
         with archivo.open("r", encoding="ascii", errors="replace") as f:
-            for linea in f:
-                if linea.startswith("BANK "):
-                    self.banco = int(linea[5:])
+            for line in f:
+                if line.startswith("BANK "):
+                    self.bank = int(line[5:])
                     continue
-                m = LINEA.match(linea)
+                m = LINEA.match(line)
                 if not m:
                     continue
                 pc = int(m.group(1), 16)
                 self.instrucciones += 1
                 r = region(pc)
-                self.pcs[r if r != "p2_ventana" else f"p2_banco{self.banco}"].add(pc)
+                self.pcs[r if r != "p2_ventana" else f"p2_banco{self.bank}"].add(pc)
                 if previo is not None:
-                    self.indirectos.add((previo, pc, self.banco))
+                    self.indirectos.add((previo, pc, self.bank))
                     previo = None
                 if m.group(2) in ("jmp", "jsr") and "(" in m.group(3):
                     previo = pc
@@ -86,7 +86,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     raiz = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[2]))
     ap.add_argument("--segundos", type=int, default=180, help="segundos emulados")
-    ap.add_argument("--salida", type=Path, default=raiz / "analisis" / "coverage.json")
+    ap.add_argument("--output", type=Path, default=raiz / "analisis" / "coverage.json")
     ap.add_argument("--sin-bot", action="store_true")
     ap.add_argument("--playback", type=Path,
                     help="reproduce una grabación .inp de MAME (ignora --segundos y desactiva el bot)")
@@ -147,9 +147,9 @@ def main() -> int:
         # Direcciones (pares) de P1 leídas por el 68000, incluidas las búsquedas de opcodes.
         res["lecturas_p1"] = sorted(int(x, 16) for x in lecturas.read_text().split())
         lecturas.unlink()
-    a.salida.parent.mkdir(parents=True, exist_ok=True)
-    a.salida.write_text(json.dumps(res), encoding="utf-8")
-    print(f"MAME terminó con código {proc.returncode}; {acc.instrucciones} instrucciones; salida: {a.salida}")
+    a.output.parent.mkdir(parents=True, exist_ok=True)
+    a.output.write_text(json.dumps(res), encoding="utf-8")
+    print(f"MAME terminó con código {proc.returncode}; {acc.instrucciones} instrucciones; output: {a.output}")
     return 0 if proc.returncode == 0 else 1
 
 

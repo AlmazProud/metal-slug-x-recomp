@@ -1,7 +1,7 @@
-"""Audita la tabla de ciclos del recompilador contra los ciclos reales del 68000 de MAME.
+"""Audita la tabla de cycles del recompilador contra los cycles reales del 68000 de MAME.
 
 Uso:
-  python audit_cycles.py --roms CARPETA --ciclos ciclos_68000.bin TRAZA_MAME.txt [...]
+  python audit_cycles.py --roms CARPETA --cycles ciclos_68000.bin TRAZA_MAME.txt [...]
 
 Lee trazas de tools/mame/cycles.lua ("C=<ciclo> <PC>: <instrucción>"), toma la duración
 de cada instrucción no interrumpida (diferencia con la línea siguiente) y la compara con la
@@ -34,17 +34,17 @@ def es_dinamica(txt: str) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--roms", type=Path, required=True)
-    ap.add_argument("--ciclos", type=Path, required=True)
+    ap.add_argument("--cycles", type=Path, required=True)
     ap.add_argument("trazas", type=Path, nargs="+")
     a = ap.parse_args()
 
-    def vista(nombre: str) -> bytes:
-        d = bytearray((a.roms / nombre).read_bytes())
+    def vista(name: str) -> bytes:
+        d = bytearray((a.roms / name).read_bytes())
         d[0::2], d[1::2] = d[1::2], d[0::2]
         return bytes(d)
 
     p, bios = vista("mslugx_game_m68k"), vista("mslugx_bios_m68k")
-    tabla = a.ciclos.read_bytes()
+    tabla = a.cycles.read_bytes()
 
     def opcode(pc: int) -> int | None:
         if pc < 0x100000:
@@ -55,7 +55,7 @@ def main() -> int:
         return None
 
     obs: dict[int, Counter] = defaultdict(Counter)
-    texto: dict[int, str] = {}
+    text: dict[int, str] = {}
     for t in a.trazas:
         filas, cortes = [], set()
         for l in t.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -73,11 +73,11 @@ def main() -> int:
             if op is None:
                 continue
             obs[op][filas[i + 1][0] - c] += 1
-            texto.setdefault(op, txt)
+            text.setdefault(op, txt)
 
     fijas, dinam = [], []
     for op, cnt in sorted(obs.items()):
-        txt = texto[op]
+        txt = text[op]
         if es_dinamica(txt):
             dinam.append((op, txt, cnt))
         elif set(cnt) != {tabla[op]}:

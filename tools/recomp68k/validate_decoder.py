@@ -2,7 +2,7 @@
 
 Compara longitud en bytes y mnemónico base. Las diferencias se agrupan por tipo para revisarlas
 a mano: puede equivocarse cualquiera de los dos (Capstone decodifica algunos formatos del 68020
-incluso en modo 68000).
+incluso en mode 68000).
 
 Uso: python tools/recomp68k/validate_decoder.py
 """
@@ -21,7 +21,7 @@ RAIZ = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[3]))
 
 
 def nombre_capstone(i) -> str:
-    """Nuestro nombre canónico expresado como lo escribe Capstone."""
+    """Nuestro name canónico expresado como lo escribe Capstone."""
     if i.op == "bcc":
         return "b" + i.cc
     if i.op == "dbcc":
@@ -48,8 +48,8 @@ def main() -> int:
     total = 0
     distintos = Counter()
     ejemplos = {}
-    for linea in (RAIZ / "analisis" / "listing_p1.txt").read_text(encoding="utf-8").splitlines():
-        m = re.match(r"^([0-9A-F]{6})[* ] (\S+)", linea)
+    for line in (RAIZ / "analisis" / "listing_p1.txt").read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^([0-9A-F]{6})[* ] (\S+)", line)
         if not m:
             continue
         dir_ = int(m.group(1), 16)
@@ -60,13 +60,13 @@ def main() -> int:
         if i is None:
             clave = f"nuestro: invalido / capstone: {cap}"
         elif nombre_capstone(i) != cap:
-            clave = f"nombre: nuestro {nombre_capstone(i)} / capstone {cap}"
+            clave = f"name: nuestro {nombre_capstone(i)} / capstone {cap}"
         elif i.largo != largo_cap:
             clave = f"largo: nuestro {i.largo} / capstone {largo_cap} ({cap})"
         else:
             continue
         distintos[clave] += 1
-        ejemplos.setdefault(clave, f"{dir_:06X} {linea[8:]}")
+        ejemplos.setdefault(clave, f"{dir_:06X} {line[8:]}")
     # longitudes: se comparan con la siguiente dirección del listado cuando es contigua
     print(f"instrucciones comparadas: {total}")
     print(f"coinciden en mnemónico: {total - sum(distintos.values())}")

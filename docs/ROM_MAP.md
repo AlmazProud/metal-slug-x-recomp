@@ -88,7 +88,7 @@ Referencia: MAME 0.289, archivos `src/devices/bus/neogeo/prot_mslugx.cpp`, `mslu
 
 - **Hardware:** placa NEO-MVS PROGEOP con un CPLD ALTERA EPM7128 conectado a 250-P1.
 - **Ventana de E/S:** `0x2FFFE0`–`0x2FFFEF` (lectura y escritura de 16 bits).
-- **Estado interno:** `command` (16 bits) y `counter`.
+- **State interno:** `command` (16 bits) y `counter`.
 
 | Escritura en | Efecto |
 |---|---|

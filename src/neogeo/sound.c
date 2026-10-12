@@ -3,24 +3,24 @@
  * Mapa del Z80 (4 MHz), según la documentación de MAME 0.289 (neogeo.cpp):
  *   0000-7FFF  M1 fijo (sin SM1: arranca desde el M1, como la AES; MAME usa una copia del M1
  *              como SM1, ver docs/ROM_MAP.md)
- *   8000-BFFF, C000-DFFF, E000-EFFF, F000-F7FF  ventanas del M1 de 16/8/4/2 KB; el banco se
- *              elige LEYENDO el puerto 0x08-0x0B (mirror 0xF0) con el banco en el byte alto:
- *              dirección = banco << (11 + ventana), ventana 0 = F000 ... 3 = 8000
+ *   8000-BFFF, C000-DFFF, E000-EFFF, F000-F7FF  ventanas del M1 de 16/8/4/2 KB; el bank se
+ *              elige LEYENDO el puerto 0x08-0x0B (mirror 0xF0) con el bank en el byte alto:
+ *              dirección = bank << (11 + window), window 0 = F000 ... 3 = 8000
  *   F800-FFFF  RAM (2 KB)
- * Puertos (byte bajo): 00 lee el comando del 68000 (y lo reconoce) / escribir lo borra;
+ * Puertos (byte bajo): 00 lee el command del 68000 (y lo reconoce) / escribir lo borra;
  *   04-07 YM2610; 08 / 18 habilita / deshabilita la NMI; 0C escribe la respuesta al 68000.
- * La NMI está activa mientras haya un comando sin leer y la NMI esté habilitada; la IRQ del
+ * La NMI está active mientras haya un command sin leer y la NMI esté habilitada; la IRQ del
  * YM2610 va a la línea INT (el programa usa IM 1).
  *
- * Tiempo: todo se mide en ciclos del reloj maestro de 24 MHz (68000 = 2, Z80 = 6, YM = 3; las
+ * Tiempo: todo se mide en cycles del reloj maestro de 24 MHz (68000 = 2, Z80 = 6, YM = 3; las
  * muestras, a 55 555 Hz como en MAME, ver HZ_MUESTRAS).
  *
  * Intercalado con el 68000, como el planificador de MAME (el oráculo):
  *   - el Z80 avanza hasta cada evento del 68000 (inicio de línea, VBlank, temporizadores del YM...),
  *     que en MAME son los límites de los tramos de ejecución;
- *   - un comando del 68000 sincroniza al Z80 en ese instante y abre una ventana de 50 us de
+ *   - un command del 68000 sincroniza al Z80 en ese instante y abre una window de 50 us de
  *     intercalado fino (MAME: perfect_quantum en audio_command_w);
- *   - fuera de esa ventana, el 68000 ve la respuesta del Z80 recién en el tramo siguiente
+ *   - fuera de esa window, el 68000 ve la respuesta del Z80 recién en el tramo siguiente
  *     (medido: 15,8-33,9 us de retraso, tools/mame/z80_latency.lua).
  */
 #include "neogeo.h"
@@ -40,7 +40,7 @@
    ADPCM), se usa la misma cadencia: la muestra k termina en ceil((k + 1) * 24e6 / 55 555). */
 #define HZ_MUESTRAS 55555
 #define MAESTRO_HZ 24000000
-#define VENTANA_FINA 600                 /* ciclos del 68000 = 50 us */
+#define VENTANA_FINA 600                 /* cycles del 68000 = 50 us */
 #define AUDIO_CAP 65536                  /* muestras estéreo en el búfer circular */
 
 static struct {
@@ -49,10 +49,10 @@ static struct {
     int64_t t;                           /* ciclo maestro alcanzado por el Z80 */
     int64_t ahora;                       /* ciclo maestro del evento en curso (callbacks del YM) */
     uint8_t ram[0x800];
-    uint8_t banco[4];
-    uint8_t comando, pendiente, nmi_habilitada, respuesta;
+    uint8_t bank[4];
+    uint8_t command, pendiente, nmi_habilitada, respuesta;
     int irq_ym;
-    int64_t temporizador[2];             /* vencimiento (maestro), -1 = detenido */
+    int64_t temporizador[2];             /* vencimiento (maestro), -1 = stopped */
     int64_t ocupado_fin;
     int64_t proxima_muestra;
     int64_t n_muestras;
@@ -61,25 +61,25 @@ static struct {
     uint32_t escritura, lectura;
 } s;
 
-int ng_audio_activo;
-void (*ng_al_comando_sonido)(uint8_t comando);
-NgNotas ng_notas;
-static uint8_t dir_ym[2];                /* último registro elegido en cada banco (ng_notas) */
+int ng_audio_enabled;
+void (*ng_on_sound_command)(uint8_t command);
+NgNotes ng_notes;
+static uint8_t dir_ym[2];                /* último registro elegido en cada bank (ng_notes) */
 
 /* ------------------------------------------------------------------ YM2610 */
-void ng_ym_temporizador(uint32_t n, int32_t ciclos)
+void ng_ym_timer(uint32_t n, int32_t cycles)
 {
-    s.temporizador[n & 1] = ciclos < 0 ? -1 : s.ahora + (int64_t)ciclos * MAESTRO_POR_YM;
+    s.temporizador[n & 1] = cycles < 0 ? -1 : s.ahora + (int64_t)cycles * MAESTRO_POR_YM;
 }
 
-void ng_ym_ocupado_hasta(uint32_t ciclos) { s.ocupado_fin = s.ahora + (int64_t)ciclos * MAESTRO_POR_YM; }
-int ng_ym_ocupado(void) { return s.ahora < s.ocupado_fin; }
-void ng_ym_irq(int activa) { s.irq_ym = activa; }
+void ng_ym_busy_until(uint32_t cycles) { s.ocupado_fin = s.ahora + (int64_t)cycles * MAESTRO_POR_YM; }
+int ng_ym_busy(void) { return s.ahora < s.ocupado_fin; }
+void ng_ym_irq(int active) { s.irq_ym = active; }
 
 uint8_t ng_ym_rom(uint32_t d)
 {
     d &= 0xFFFFFF;
-    return d < ng_roms.adpcm_tam ? ng_roms.adpcm[d] : 0;
+    return d < ng_roms.adpcm_size ? ng_roms.adpcm[d] : 0;
 }
 
 static int16_t saturar(double v)
@@ -90,8 +90,8 @@ static int16_t saturar(double v)
 static void muestra(void)
 {
     int32_t o[3];
-    ym_generar(o);
-    if (!ng_audio_activo) return;
+    ym_generate(o);
+    if (!ng_audio_enabled) return;
     /* Mezcla de MAME (neogeo_stereo): SSG x0,84 a ambos canales; FM izq./der. x0,98. */
     uint32_t i = s.escritura % AUDIO_CAP;
     s.audio[i][0] = saturar(0.98 * o[0] + 0.84 * o[2]);
@@ -100,7 +100,7 @@ static void muestra(void)
     if (s.escritura - s.lectura > AUDIO_CAP) s.lectura = s.escritura - AUDIO_CAP;   /* descarta lo viejo */
 }
 
-uint32_t ng_audio_leer(int16_t *destino, uint32_t max)
+uint32_t ng_audio_read(int16_t *destino, uint32_t max)
 {
     uint32_t n = 0;
     while (n < max && s.lectura != s.escritura) {
@@ -121,19 +121,19 @@ static uint8_t mem_leer(uint16_t a)
 {
     const uint8_t *m1 = ng_roms.z80;
     if (a < 0x8000) return m1[a];
-    if (a < 0xC000) return m1[(((uint32_t)s.banco[3] << 14) + (a & 0x3FFF)) & 0x1FFFF];
-    if (a < 0xE000) return m1[(((uint32_t)s.banco[2] << 13) + (a & 0x1FFF)) & 0x1FFFF];
-    if (a < 0xF000) return m1[(((uint32_t)s.banco[1] << 12) + (a & 0x0FFF)) & 0x1FFFF];
-    if (a < 0xF800) return m1[(((uint32_t)s.banco[0] << 11) + (a & 0x07FF)) & 0x1FFFF];
+    if (a < 0xC000) return m1[(((uint32_t)s.bank[3] << 14) + (a & 0x3FFF)) & 0x1FFFF];
+    if (a < 0xE000) return m1[(((uint32_t)s.bank[2] << 13) + (a & 0x1FFF)) & 0x1FFFF];
+    if (a < 0xF000) return m1[(((uint32_t)s.bank[1] << 12) + (a & 0x0FFF)) & 0x1FFFF];
+    if (a < 0xF800) return m1[(((uint32_t)s.bank[0] << 11) + (a & 0x07FF)) & 0x1FFFF];
     return s.ram[a & 0x7FF];
 }
 
 static uint8_t puerto_leer(uint16_t p)
 {
     uint8_t bajo = (uint8_t)p;
-    if (bajo == 0x00) { s.pendiente = 0; return s.comando; }
-    if (bajo >= 0x04 && bajo <= 0x07) return ym_leer(bajo & 3);
-    if ((bajo & 0x0F) >= 0x08 && (bajo & 0x0F) <= 0x0B) { s.banco[bajo & 3] = (uint8_t)(p >> 8); return 0; }
+    if (bajo == 0x00) { s.pendiente = 0; return s.command; }
+    if (bajo >= 0x04 && bajo <= 0x07) return ym_read(bajo & 3);
+    if ((bajo & 0x0F) >= 0x08 && (bajo & 0x0F) <= 0x0B) { s.bank[bajo & 3] = (uint8_t)(p >> 8); return 0; }
     return 0;
 }
 
@@ -142,24 +142,24 @@ static void puerto_escribir(uint16_t p, uint8_t v)
     uint8_t bajo = (uint8_t)p;
     if (traza_ym && s.t >= traza_z80_desde && s.t <= traza_z80_hasta)
         fprintf(traza_ym, "%.3f %02X %02X\n", s.t / 24.0, bajo, v);
-    if (bajo == 0x00) s.comando = 0;
+    if (bajo == 0x00) s.command = 0;
     else if (bajo >= 0x04 && bajo <= 0x07) {
-        int banco = (bajo >> 1) & 1;
-        if (!(bajo & 1)) dir_ym[banco] = v;
-        else if (banco == 0) {
-            if (dir_ym[0] == 0x28 && (v & 0xF0)) ng_notas.fm++;               /* key on FM */
-            else if (dir_ym[0] >= 0x08 && dir_ym[0] <= 0x0A && (v & 0x1F)) ng_notas.ssg++;
-            else if (dir_ym[0] == 0x10 && (v & 0x80)) ng_notas.adpcm_b++;     /* inicio ADPCM-B */
+        int bank = (bajo >> 1) & 1;
+        if (!(bajo & 1)) dir_ym[bank] = v;
+        else if (bank == 0) {
+            if (dir_ym[0] == 0x28 && (v & 0xF0)) ng_notes.fm++;               /* key on FM */
+            else if (dir_ym[0] >= 0x08 && dir_ym[0] <= 0x0A && (v & 0x1F)) ng_notes.ssg++;
+            else if (dir_ym[0] == 0x10 && (v & 0x80)) ng_notes.adpcm_b++;     /* inicio ADPCM-B */
         } else if (dir_ym[1] == 0x00 && !(v & 0x80) && (v & 0x3F)) {
-            ng_notas.adpcm_a++;                                              /* key on ADPCM-A */
+            ng_notes.adpcm_a++;                                              /* key on ADPCM-A */
         }
-        ym_escribir(bajo & 3, v);
+        ym_write(bajo & 3, v);
     }
     else if (bajo == 0x08) s.nmi_habilitada = 1;
     else if (bajo == 0x18) s.nmi_habilitada = 0;
     else if (bajo == 0x0C) {
         s.respuesta = v;
-        if (ng_traza) fprintf(ng_traza, "%.3f RESP %02X\n", s.t / 24.0, v);
+        if (ng_trace) fprintf(ng_trace, "%.3f RESP %02X\n", s.t / 24.0, v);
     }
 }
 
@@ -212,7 +212,7 @@ static void perifericos_hasta(int64_t t)
         s.ahora = prox;
         if (n >= 0) {
             s.temporizador[n] = -1;
-            ym_temporizador_vencido((uint32_t)n);
+            ym_timer_expired((uint32_t)n);
         } else {
             muestra();
             s.n_muestras++;
@@ -221,9 +221,9 @@ static void perifericos_hasta(int64_t t)
     }
 }
 
-void ng_sonido_hasta(int64_t ciclos_68k)
+void ng_sound_until(int64_t cycles_68k)
 {
-    int64_t fin = ciclos_68k * MAESTRO_POR_68K;
+    int64_t fin = cycles_68k * MAESTRO_POR_68K;
     while (s.t + MAESTRO_POR_Z80 <= fin) {
         s.ahora = s.t;
         tick_z80();
@@ -232,7 +232,7 @@ void ng_sonido_hasta(int64_t ciclos_68k)
     }
 }
 
-int64_t ng_sonido_proximo_evento(void)
+int64_t ng_sound_next_event(void)
 {
     int64_t t = INT64_MAX;
     for (int i = 0; i < 2; i++)
@@ -241,74 +241,74 @@ int64_t ng_sonido_proximo_evento(void)
 }
 
 /* ------------------------------------------------------------------ lado del 68000 */
-void ng_sonido_comando(uint8_t v)
+void ng_sound_command(uint8_t v)
 {
-    if (ng_traza)
-        fprintf(ng_traza, "%.3f f=%llu linea=%lld pc=%06X CMD %02X\n", ng_cpu.ciclos / 12.0,
-                (unsigned long long)ng.cuadros, (long long)((ng_cpu.ciclos - ng.inicio_cuadro) / NG_CICLOS_LINEA), ng_cpu.pc, v);
-    ng_sonido_hasta(ng_cpu.ciclos);
-    s.comando = v;
+    if (ng_trace)
+        fprintf(ng_trace, "%.3f f=%llu line=%lld pc=%06X CMD %02X\n", ng_cpu.cycles / 12.0,
+                (unsigned long long)ng.frames, (long long)((ng_cpu.cycles - ng.frame_start) / NG_CYCLES_PER_LINE), ng_cpu.pc, v);
+    ng_sound_until(ng_cpu.cycles);
+    s.command = v;
     s.pendiente = 1;
-    s.fina_hasta = ng_cpu.ciclos + VENTANA_FINA;
-    if (ng_al_comando_sonido) ng_al_comando_sonido(v);
+    s.fina_hasta = ng_cpu.cycles + VENTANA_FINA;
+    if (ng_on_sound_command) ng_on_sound_command(v);
 }
 
-void ng_sonido_solo_comando(uint8_t comando)
+void ng_sound_only_command(uint8_t command)
 {
-    ng_cpu.ciclos = s.t / MAESTRO_POR_68K;
-    ng_sonido_comando(comando);
+    ng_cpu.cycles = s.t / MAESTRO_POR_68K;
+    ng_sound_command(command);
 }
 
-void ng_sonido_solo_avanzar(int64_t ciclos_68k)
+void ng_sound_only_advance(int64_t cycles_68k)
 {
-    ng_sonido_hasta(s.t / MAESTRO_POR_68K + ciclos_68k);
+    ng_sound_until(s.t / MAESTRO_POR_68K + cycles_68k);
 }
 
-uint8_t ng_sonido_respuesta(void)
+uint8_t ng_sound_reply(void)
 {
-    if (ng_cpu.ciclos <= s.fina_hasta) {
-        ng_sonido_hasta(ng_cpu.ciclos);
+    if (ng_cpu.cycles <= s.fina_hasta) {
+        ng_sound_until(ng_cpu.cycles);
     } else {
         /* La lectura de bus ocurre cerca del final de la instrucción (antes de la última
-           búsqueda anticipada): ng_cpu.ciclos ya incluye la instrucción entera. Si un límite de
+           búsqueda anticipada): ng_cpu.cycles ya incluye la instrucción entera. Si un límite de
            tramo de MAME cae antes de esa lectura, el Z80 ya corrió hasta él (medido en Fase 4:
-           MAME ve la respuesta en la lectura que empieza 5 ciclos antes de un inicio de línea). */
-        int64_t lectura = ng_cpu.ciclos - 8, limite = ng_proximo_limite();
-        if (limite <= lectura) ng_sonido_hasta(limite);
+           MAME ve la respuesta en la lectura que empieza 5 cycles antes de un inicio de línea). */
+        int64_t lectura = ng_cpu.cycles - 8, limite = ng_next_limit();
+        if (limite <= lectura) ng_sound_until(limite);
     }
     static int visto = -1;
-    if (ng_traza && s.respuesta != visto) {
-        fprintf(ng_traza, "%.3f VISTO %02X\n", ng_cpu.ciclos / 12.0, s.respuesta);
+    if (ng_trace && s.respuesta != visto) {
+        fprintf(ng_trace, "%.3f VISTO %02X\n", ng_cpu.cycles / 12.0, s.respuesta);
         visto = s.respuesta;
     }
     return s.respuesta;
 }
 
-void ng_sonido_estado(NgEstado *e)
+void ng_sound_state(NgState *e)
 {
-    ng_estado_bloque(e, &s, sizeof s);
-    uint32_t n = ym_estado_tam();
+    ng_state_block(e, &s, sizeof s);
+    uint32_t n = ym_state_size();
     uint32_t n_guardado = n;
-    ng_estado_bloque(e, &n_guardado, sizeof n_guardado);
-    if (e->guardando) {
-        if (e->datos) ym_estado_guardar(e->datos + e->pos);
+    ng_state_block(e, &n_guardado, sizeof n_guardado);
+    if (e->saving) {
+        if (e->data) ym_state_save(e->data + e->pos);
     } else {
         s.lectura = s.escritura;                 /* el audio pendiente no se repite */
-        if (n_guardado == n && e->pos + n <= e->tam) ym_estado_cargar(e->datos + e->pos, n);
+        if (n_guardado == n && e->pos + n <= e->tam) ym_state_load(e->data + e->pos, n);
     }
     e->pos += n;
 }
 
-void ng_sonido_iniciar(void)
+void ng_sound_init(void)
 {
-    int activo = ng_audio_activo;
+    int active = ng_audio_enabled;
     memset(&s, 0, sizeof s);
-    ng_audio_activo = activo;
+    ng_audio_enabled = active;
     s.pines = z80_init(&s.z80);
     /* Bancos iniciales de MAME (identidad); el NEO-ZMC real empieza en 0, pero el programa de
        sonido los fija antes de usarlos. */
-    s.banco[0] = 0x1E; s.banco[1] = 0x0E; s.banco[2] = 0x06; s.banco[3] = 0x02;
+    s.bank[0] = 0x1E; s.bank[1] = 0x0E; s.bank[2] = 0x06; s.bank[3] = 0x02;
     s.temporizador[0] = s.temporizador[1] = -1;
     s.proxima_muestra = (MAESTRO_HZ + HZ_MUESTRAS - 1) / HZ_MUESTRAS;
-    ym_reiniciar();
+    ym_reset();
 }

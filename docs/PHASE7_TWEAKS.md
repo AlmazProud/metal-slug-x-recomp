@@ -31,7 +31,7 @@ Notas:
 
 - Escribir ese byte desde el encendido rompía el test de RAM del BIOS ("WORK RAM ERROR
   10FD8E").
-- Por eso se fuerza **solo la lectura del código del juego** (`ng_lectura_forzada` en el bus:
+- Por eso se fuerza **solo la lectura del código del juego** (`ng_forced_read` en el bus:
   PC < `0xC00000`).
 - El BIOS ve la RAM real y su menú de servicio sigue mostrando el ajuste del usuario.
 - Tampoco toca la SRAM. Activar BLOOD en el menú de servicio sigue funcionando igual.

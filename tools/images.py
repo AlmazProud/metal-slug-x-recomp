@@ -58,14 +58,14 @@ def leer_png(ruta: Path) -> Imagen:
             idat += cuerpo
         pos += 12 + n
     canales = 3 if tipo == 2 else 4
-    crudo = zlib.decompress(idat)
+    raw = zlib.decompress(idat)
     paso = ancho * canales
     out = bytearray()
     previa = bytearray(paso)
     i = 0
     for _ in range(alto):
-        filtro = crudo[i]
-        f = bytearray(crudo[i + 1: i + 1 + paso])
+        filtro = raw[i]
+        f = bytearray(raw[i + 1: i + 1 + paso])
         i += 1 + paso
         for x in range(paso):
             a = f[x - canales] if x >= canales else 0
@@ -98,9 +98,9 @@ def escribir_png(ruta: Path, img: Imagen) -> None:
     def bloque(t: bytes, cuerpo: bytes) -> bytes:
         return struct.pack(">I", len(cuerpo)) + t + cuerpo + struct.pack(">I", zlib.crc32(t + cuerpo) & 0xFFFFFFFF)
 
-    crudo = b"".join(b"\0" + rgb[y * ancho * 3:(y + 1) * ancho * 3] for y in range(alto))
+    raw = b"".join(b"\0" + rgb[y * ancho * 3:(y + 1) * ancho * 3] for y in range(alto))
     Path(ruta).write_bytes(b"\x89PNG\r\n\x1a\n" + bloque(b"IHDR", struct.pack(">IIBBBBB", ancho, alto, 8, 2, 0, 0, 0))
-                           + bloque(b"IDAT", zlib.compress(crudo, 6)) + bloque(b"IEND", b""))
+                           + bloque(b"IDAT", zlib.compress(raw, 6)) + bloque(b"IEND", b""))
 
 
 def escalar(img: Imagen, k: int) -> Imagen:

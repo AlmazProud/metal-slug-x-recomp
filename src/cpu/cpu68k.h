@@ -1,4 +1,4 @@
-/* Estado del 68000 y semántica de las operaciones para el código recompilado.
+/* State del 68000 y semántica de las operaciones para el código recompilado.
  *
  * El código C que genera tools/recomp68k/ usa exclusivamente estas definiciones:
  * registros en Cpu68k, accesos a memoria a través de las funciones de bus, y una función
@@ -15,23 +15,23 @@
 
 typedef struct Cpu68k {
     uint32_t d[8];
-    uint32_t a[8];          /* a[7] es el puntero de pila activo (SSP o USP según S) */
+    uint32_t a[8];          /* a[7] es el puntero de pila active (SSP o USP según S) */
     uint32_t pc;
     uint32_t usp, ssp;      /* copia del puntero inactivo */
     /* CCR desglosado: cada flag vale 0 o 1 */
     uint8_t x, n, z, v, c;
-    /* resto del SR: modo supervisor, traza y máscara de interrupciones */
+    /* resto del SR: mode supervisor, traza y máscara de interrupciones */
     uint8_t s, t, imask;
-    int64_t ciclos;         /* ciclos de reloj del 68000 consumidos */
-    uint8_t detenido;       /* STOP ejecutado: espera una interrupción */
+    int64_t cycles;         /* cycles de reloj del 68000 consumidos */
+    uint8_t stopped;       /* STOP ejecutado: espera una interrupción */
     /* Muestreo de interrupciones (cycles68k.h): opcode y ciclo de inicio de la última
      * instrucción ejecutada. */
     uint16_t op;
-    int64_t ini;
+    int64_t start_cycle;
 } Cpu68k;
 
 /* ------------------------------------------------------------------ bus */
-/* Las implementa el runtime (o el arnés de pruebas). Direcciones de 24 bits. */
+/* Las implementa el runtime (o el arnés de tests). Direcciones de 24 bits. */
 uint32_t bus_r8(uint32_t a);
 uint32_t bus_r16(uint32_t a);
 void bus_w8(uint32_t a, uint32_t v);
@@ -55,7 +55,7 @@ static inline void cpu_set_ccr(Cpu68k *c, uint32_t ccr)
 static inline void cpu_set_sr(Cpu68k *c, uint32_t sr)
 {
     uint8_t s_nuevo = sr >> 13 & 1;
-    if (s_nuevo != c->s) {                     /* cambio de modo: intercambia punteros de pila */
+    if (s_nuevo != c->s) {                     /* cambio de mode: intercambia punteros de pila */
         if (s_nuevo) { c->usp = c->a[7]; c->a[7] = c->ssp; }
         else         { c->ssp = c->a[7]; c->a[7] = c->usp; }
         c->s = s_nuevo;
@@ -68,12 +68,12 @@ static inline void cpu_set_sr(Cpu68k *c, uint32_t sr)
 /* ------------------------------------------------------------------ excepciones */
 /* Excepción de grupo 1/2 del 68000 (TRAP, división por cero, CHK, TRAPV, privilegio, ilegal):
  * pasa a supervisor, apila PC y SR (6 bytes) y salta al vector. */
-static inline void cpu_excepcion(Cpu68k *c, int vector, uint32_t pc_retorno)
+static inline void cpu_exception(Cpu68k *c, int vector, uint32_t return_pc)
 {
     uint32_t sr = cpu_get_sr(c);
     if (!c->s) { c->usp = c->a[7]; c->a[7] = c->ssp; c->s = 1; }
     c->t = 0;
-    c->a[7] -= 4; bus_w32(c->a[7], pc_retorno);
+    c->a[7] -= 4; bus_w32(c->a[7], return_pc);
     c->a[7] -= 2; bus_w16(c->a[7], sr);
     c->pc = bus_r32((uint32_t)vector * 4);
 }
@@ -89,7 +89,7 @@ static inline void cpu_excepcion(Cpu68k *c, int vector, uint32_t pc_retorno)
 static inline uint32_t sext8(uint32_t v)  { return (uint32_t)(int32_t)(int8_t)v; }
 static inline uint32_t sext16(uint32_t v) { return (uint32_t)(int32_t)(int16_t)v; }
 
-/* Escribe en un registro de datos solo los bits del tamaño de la operación. */
+/* Escribe en un registro de data solo los bits del tamaño de la operación. */
 static inline void set_d(Cpu68k *c, int r, uint32_t v, uint32_t mask) { c->d[r] = (c->d[r] & ~mask) | (v & mask); }
 
 /* N y Z de un resultado del tamaño dado. */
@@ -143,7 +143,7 @@ static inline void op_cmp(Cpu68k *c, uint32_t s, uint32_t d, uint32_t mask, uint
     c->c = (((s & ~d) | (r & ~d) | (s & r)) & msb) != 0;
 }
 
-/* ADDX: d + s + X. Z solo se borra si el resultado no es cero (no se activa). */
+/* ADDX: d + s + X. Z solo se borra si el resultado no es cero (no se active). */
 static inline uint32_t op_addx(Cpu68k *c, uint32_t s, uint32_t d, uint32_t mask, uint32_t msb)
 {
     uint32_t r = (d + s + c->x) & mask;
@@ -217,20 +217,20 @@ static inline uint32_t op_shift(Cpu68k *c, int tipo, int izq, uint32_t cnt, uint
     return v;
 }
 
-/* ------------------------------------------------------------------ ciclos de MUL */
+/* ------------------------------------------------------------------ cycles de MUL */
 /* Ciclos extra del 68000 en MULU/MULS (el costo base ya está en la tabla por opcode):
  * MULU suma 2 por cada bit en 1 del operando fuente; MULS, 2 por cada transición 0->1 o 1->0
  * recorriendo el operando con signo extendido. Igual que Musashi 4.60 para el 68000. */
-static inline int ciclos_mulu(uint32_t s)
+static inline int cycles_mulu(uint32_t s)
 {
     int n = 0;
     for (uint32_t y = s & 0xFFFF; y; y >>= 1) n += (y & 1) * 2;
     return n;
 }
 
-/* MULS: 2 ciclos por cada par 01/10 en la fuente de 17 bits (la palabra con un 0 añadido como
+/* MULS: 2 cycles por cada par 01/10 en la fuente de 17 bits (la palabra con un 0 añadido como
  * bit menos significativo), según el manual del 68000; verificado contra MAME (Fase 4). */
-static inline int ciclos_muls(uint32_t s)
+static inline int cycles_muls(uint32_t s)
 {
     uint32_t t = ((s << 1) ^ s) & 0xFFFF;
     int n = 0;

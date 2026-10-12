@@ -1,4 +1,4 @@
-# Prueba del entorno: CMake + Ninja + clang (llvm-mingw) + windres + SDL3,
+# Test del entorno: CMake + Ninja + clang (llvm-mingw) + windres + SDL3,
 # compilada bajo una ruta con espacio ("Projecto Decompile").
 cmake_minimum_required(VERSION 3.25)
 project(sdl3_test LANGUAGES C RC)

@@ -27,13 +27,13 @@ static int ajuste_actual(void)
         previo.a[i] = m68k_get_reg(NULL, (m68k_register_t)(M68K_REG_A0 + i));
     }
     previo.pc = m68k_get_reg(NULL, M68K_REG_PC);
-    return ciclos_ajuste_previo(&previo);
+    return cycles_adjust_previous(&previo);
 }
 
 /* Ciclos que el código generado suma ANTES de ejecutar la instrucción: base + ajuste. */
 int ref_ciclos_base(unsigned pc) { return CYC_INSTRUCTION[m68k_read_memory_16(pc) & 0xFFFF] + ajuste_actual(); }
 
-/* Una instrucción, con el mismo ajuste de ciclos que el código generado (cycles68k.h). */
+/* Una instrucción, con el mismo ajuste de cycles que el código generado (cycles68k.h). */
 int ref_ejecutar_una(void)
 {
     int ajuste = ajuste_actual();

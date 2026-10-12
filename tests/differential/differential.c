@@ -14,12 +14,12 @@
 #include "tests.h"
 
 void ms_iniciar(void);
-int ms_ejecutar(Estado *e);
+int ms_ejecutar(State *e);
 
 static uint32_t rng;
 static uint32_t azar(void) { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
 
-static void estado_aleatorio(Estado *e, uint32_t pc)
+static void estado_aleatorio(State *e, uint32_t pc)
 {
     for (int i = 0; i < 8; i++) { e->d[i] = azar(); e->a[i] = azar(); }
     /* Valores frecuentes en el juego: pequeños, cero y bordes, para ejercitar flags. */
@@ -33,7 +33,7 @@ static void estado_aleatorio(Estado *e, uint32_t pc)
     e->pc = pc;
 }
 
-static int ejecutar_recompilado(const Prueba *p, Estado *e)
+static int ejecutar_recompilado(const Test *p, State *e)
 {
     Cpu68k c;
     memset(&c, 0, sizeof c);
@@ -53,10 +53,10 @@ static int ejecutar_recompilado(const Prueba *p, Estado *e)
     e->sr = cpu_get_sr(&c);
     if (c.s) { e->ssp = c.a[7]; e->usp = c.usp; } else { e->usp = c.a[7]; e->ssp = c.ssp; }
     e->pc = c.pc;
-    return (int)c.ciclos;
+    return (int)c.cycles;
 }
 
-static int comparar(const Estado *m, const Estado *r, const Capa *cm, const Capa *cr, char *det, size_t n)
+static int comparar(const State *m, const State *r, const Layer *cm, const Layer *cr, char *det, size_t n)
 {
     int ok = 1;
     size_t k = 0;
@@ -69,11 +69,11 @@ static int comparar(const Estado *m, const Estado *r, const Capa *cm, const Capa
     if (m->ssp != r->ssp) DIF(" ssp musashi=%08X recomp=%08X;", m->ssp, r->ssp);
     if ((m->sr & 0xA71F) != (r->sr & 0xA71F)) DIF(" sr musashi=%04X recomp=%04X;", m->sr & 0xA71F, r->sr & 0xA71F);
     if ((m->pc & 0xFFFFFF) != (r->pc & 0xFFFFFF)) DIF(" pc musashi=%06X recomp=%06X;", m->pc & 0xFFFFFF, r->pc & 0xFFFFFF);
-    const Capa *capas[2] = {cm, cr};
+    const Layer *capas[2] = {cm, cr};
     for (int c = 0; c < 2; c++)
         for (int i = 0; i < capas[c]->n; i++) {
             uint32_t a = capas[c]->dir[i];
-            uint8_t vm = mem_leer8_en(cm, a), vr = mem_leer8_en(cr, a);
+            uint8_t vm = mem_read8_in(cm, a), vr = mem_read8_in(cr, a);
             if (vm != vr) { DIF(" mem[%06X] musashi=%02X recomp=%02X;", a, vm, vr); break; }
         }
 #undef DIF
@@ -89,44 +89,44 @@ int main(int argc, char **argv)
     int semillas = argc > 3 ? atoi(argv[3]) : 64;
     int depurar = getenv("PD_DEPURAR") != NULL;
     setvbuf(stdout, NULL, _IONBF, 0);
-    mem_cargar_roms(argv[1], argv[2]);
-    static Capa capa_m, capa_r;
-    mem_usar_capa(&capa_m);          /* el reset de Musashi lee los vectores */
+    mem_load_roms(argv[1], argv[2]);
+    static Layer capa_m, capa_r;
+    mem_use_layer(&capa_m);          /* el reset de Musashi lee los vectors */
     ms_iniciar();
     int fallidas = 0, casos = 0;
-    for (int t = 0; t < n_pruebas; t++) {
-        const Prueba *p = &pruebas[t];
+    for (int t = 0; t < n_tests; t++) {
+        const Test *p = &tests[t];
         int fallos = 0;
-        if (depurar) fprintf(stderr, "%d %06X %s\n", t, p->dir, p->texto);
+        if (depurar) fprintf(stderr, "%d %06X %s\n", t, p->dir, p->text);
         char primero[512] = "";
         for (int s = 0; s < semillas; s++) {
             rng = 0x12345678u ^ (uint32_t)(t * 7919 + s * 104729 + 1);
-            Estado ini, em, er;
-            estado_aleatorio(&ini, p->dir);
-            mem_semilla(azar());
-            em = ini; er = ini;
-            capa_m.n = 0; mem_usar_capa(&capa_m); int cic_m = ms_ejecutar(&em);
-            capa_r.n = 0; mem_usar_capa(&capa_r); int cic_r = ejecutar_recompilado(p, &er);
+            State start_cycle, em, er;
+            estado_aleatorio(&start_cycle, p->dir);
+            mem_seed(azar());
+            em = start_cycle; er = start_cycle;
+            capa_m.n = 0; mem_use_layer(&capa_m); int cic_m = ms_ejecutar(&em);
+            capa_r.n = 0; mem_use_layer(&capa_r); int cic_r = ejecutar_recompilado(p, &er);
             casos++;
             char det[400] = "";
             int ok = comparar(&em, &er, &capa_m, &capa_r, det, sizeof det);
             if (cic_m != cic_r) {
                 size_t k = strlen(det);
-                snprintf(det + k, sizeof det - k, " ciclos musashi=%d recomp=%d;", cic_m, cic_r);
+                snprintf(det + k, sizeof det - k, " cycles musashi=%d recomp=%d;", cic_m, cic_r);
                 ok = 0;
             }
             if (!ok) {
                 if (!fallos)
-                    snprintf(primero, sizeof primero, "semilla %d, sr_ini=%04X:%s", s, ini.sr, det);
+                    snprintf(primero, sizeof primero, "seed %d, sr_ini=%04X:%s", s, start_cycle.sr, det);
                 fallos++;
             }
         }
         if (fallos) {
             fallidas++;
-            printf("FALLA %06X  %-34s  %d/%d  %s\n", p->dir, p->texto, fallos, semillas, primero);
+            printf("FALLA %06X  %-34s  %d/%d  %s\n", p->dir, p->text, fallos, semillas, primero);
         }
     }
     printf("\nInstrucciones probadas: %d  casos: %d  instrucciones con diferencias: %d\n",
-           n_pruebas, casos, fallidas);
+           n_tests, casos, fallidas);
     return fallidas ? 1 : 0;
 }

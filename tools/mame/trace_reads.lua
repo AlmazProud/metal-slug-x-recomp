@@ -1,5 +1,5 @@
--- Lecturas del 68000 en los puertos de entrada (0x300000-0x39FFFF) dentro de una ventana de
--- tiempo: hora (us), PC, dirección, valor y máscara. Mismo formato que la opción del port
+-- Lecturas del 68000 en los puertos de entrada (0x300000-0x39FFFF) dentro de una window de
+-- tiempo: hour (us), PC, dirección, value y máscara. Mismo formato que la opción del port
 -- PD_TRAZA_LECTURAS. Variables: PD_DESDE_US, PD_HASTA_US, PD_TRAZA.
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]

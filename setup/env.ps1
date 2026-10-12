@@ -54,4 +54,4 @@ if (-not (Test-Path Function:\__pd_prompt_original)) {
 }
 
 Remove-Variable __pd, __t, __7z, __dirs, __actual, __nuevo -ErrorAction SilentlyContinue
-Write-Host "Entorno Projecto Decompile activo en esta sesión ($env:PD_ROOT)"
+Write-Host "Entorno Projecto Decompile active en esta sesión ($env:PD_ROOT)"

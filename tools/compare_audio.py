@@ -4,10 +4,10 @@ Uso:
   python compare_audio.py PORT.wav MAME.wav [--max-desfase-ms 50]
 
 Busca el desfase (en muestras) que mejor alinea ambas señales y reporta, para ese desfase:
-  - correlación de Pearson global y por segundo (1.0 = idénticas salvo escala);
+  - correlación de Pearson global y por second (1.0 = idénticas salvo scale);
   - error relativo (RMS de la diferencia / RMS de MAME);
   - cuántas muestras coinciden exactamente.
-MAME remuestrea la salida del YM2610 (55 555,5 Hz) a la frecuencia pedida con -samplerate, así
+MAME remuestrea la output del YM2610 (55 555,5 Hz) a la frecuencia pedida con -samplerate, así
 que no se espera igualdad bit a bit; una correlación cercana a 1 indica el mismo contenido.
 """
 from __future__ import annotations
@@ -24,8 +24,8 @@ def leer(ruta: Path) -> tuple[int, np.ndarray]:
     with wave.open(str(ruta), "rb") as w:
         if w.getsampwidth() != 2:
             raise ValueError(f"{ruta}: se esperan muestras de 16 bits")
-        datos = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float64)
-        return w.getframerate(), datos.reshape(-1, w.getnchannels())
+        data = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float64)
+        return w.getframerate(), data.reshape(-1, w.getnchannels())
 
 
 def main() -> int:
@@ -61,15 +61,15 @@ def main() -> int:
     ps, ms = ps[:k], ms[:k]
     print(f"desfase óptimo: {d} muestras ({1000 * d / hz_p:+.2f} ms; positivo = el port va detrás)")
 
-    for c, nombre in enumerate(("izquierdo", "derecho")):
+    for c, name in enumerate(("izquierdo", "derecho")):
         x, y = ps[:, c], ms[:, c]
         corr = float(np.corrcoef(x, y)[0, 1]) if x.std() and y.std() else float("nan")
         err = float(np.sqrt(np.mean((x - y) ** 2)) / max(np.sqrt(np.mean(y ** 2)), 1e-9))
         exactas = int(np.sum(x == y))
-        print(f"canal {nombre}: correlación {corr:.5f}  error relativo {100 * err:.2f}%  "
+        print(f"canal {name}: correlación {corr:.5f}  error relativo {100 * err:.2f}%  "
               f"muestras exactas {exactas}/{k} ({100 * exactas / k:.1f}%)")
 
-    print("correlación por segundo (mezcla mono):")
+    print("correlación por second (mezcla mono):")
     filas = []
     for s in range(k // hz_p):
         x = ps[s * hz_p:(s + 1) * hz_p].mean(axis=1)

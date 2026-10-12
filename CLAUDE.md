@@ -48,9 +48,9 @@ instalación de GOG). Pruebas: `ctest` en `repo\build`.
 Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 `call "C:\Projecto Decompile\env.bat"` (cmd).
 
-## Estado por fase
+## State por fase
 
-| Fase | Estado |
+| Fase | State |
 |---|---|
 | Entorno | **Cerrada** (2026-10-10). Verificación 16/16 OK. ROMs copiados a `roms\`. |
 | 0. Reconocimiento | **Cerrada** (2026-10-11). Ver `docs/ROM_MAP.md`. |
@@ -72,7 +72,7 @@ Detalle en `docs/PHASE7_TWEAKS.md`.
 
 - **Sangre roja:** es la opción BLOOD de los soft dips del juego (en EE. UU., OFF), en
   `0x10FD8F`; el juego la consulta en `0x1B2BE`.
-  - La opción del port fuerza solo la lectura del código del juego (`ng_lectura_forzada`,
+  - La opción del port fuerza solo la lectura del código del juego (`ng_forced_read`,
     PC < `0xC00000`). Escribir la RAM rompía el test del BIOS.
   - Comprobado con capturas: salpicadura blanca frente a roja.
 - **V-sync:**
@@ -104,8 +104,8 @@ Detalle en `docs/PHASE6_REMASTER.md`.
   genera `src/port/profile_sounds.c` (18 músicas, 185 efectos, 61 voces).
 - **Nombres:** solo los confirmados con capturas de la partida; el resto, por número.
 - **Menú "Musica y sonidos"** (`src/port/sounds.c`): guarda el estado, avanza solo el Z80 y el YM
-  (`ng_sonido_solo_*`) y restaura al salir. Prueba `menu_sonido`.
-- **Vibración** por comandos de sonido (`ng_al_comando_sonido`): explosiones, cañón, disparos;
+  (`ng_sonido_solo_*`) y restaura al salir. Test `menu_sonido`.
+- **Vibración** por comandos de sonido (`ng_on_sound_command`): explosiones, cañón, disparos;
   intensidad 0-100.
 
 ### Fase 6A: resultado
@@ -150,7 +150,7 @@ Detalle en `docs/PHASE4_VERIFICATION.md`.
 
 - **Cero divergencias en la Misión 1:** la grabación del usuario (11 969 cuadros) se reproduce
   con la RAM y la paleta idénticas en las 11 771 VBlanks y la imagen idéntica en los 11 968
-  cuadros. Prueba automática: `ctest` → `mision1_contra_mame` (referencias en
+  cuadros. Test automática: `ctest` → `mision1_contra_mame` (referencias en
   `analisis/fase4/`, fuera del repo).
 - **Exactitud de ciclo del 68000 frente a MAME:**
   - reset: la primera instrucción empieza en el ciclo 34;
@@ -176,7 +176,7 @@ Detalle en `docs/PHASE4_VERIFICATION.md`.
 
 ### Fase 3B: resultado
 
-- **Sonido real:** Z80 (`external/chips/z80.h`, zlib) + YM2610 (`external/ymfm`, BSD-3, el mismo
+- **Sound real:** Z80 (`external/chips/z80.h`, zlib) + YM2610 (`external/ymfm`, BSD-3, el mismo
   núcleo que MAME) en `src/neogeo/sound.c`; `ym2610.cpp` es el único C++ del port (runtime de
   C++ estático: el ejecutable solo necesita `SDL3.dll`). Audio por SDL3 a 55 555 Hz, colchón
   de 50 ms, sin cortes.
@@ -200,7 +200,7 @@ Detalle y evidencia en `docs/PHASE3_RUNTIME.md`.
   - capturas idénticas píxel a píxel, colores incluidos (cifras actuales en la Fase 3B);
   - las escrituras de E/S coinciden en orden y dato, con un desfase de unos 1 µs.
 - **Interrupciones en el límite de la instrucción:** el generador pone un punto de control
-  antes de cada instrucción. El despachador usa `rc_irq_nivel` para volver a `rc_evento`
+  antes de cada instrucción. El despachador usa `rc_irq_level` para volver a `rc_event`
   cuando la máscara baja.
 - **Fase del cuadro como en MAME:** al encender, el haz está en vpos 240; el cuadro termina en
   el VBlank.
@@ -226,7 +226,7 @@ Detalle y evidencia en `docs/PHASE3_RUNTIME.md`.
   (componentes conexos del grafo de control), cada instrucción emitida una sola vez y entrada
   por `switch(c->pc)`. 124 193 instrucciones, 3 318 regiones, 31,7 MB de C en `build/`.
 - **Despachador** (`src/cpu/dispatcher.c`): JSR/BSR = llamada nativa verificada
-  (`rc_llamar`); puntos de control en los saltos hacia atrás; respaldo con Musashi en RAM, P2 y
+  (`rc_call`); puntos de control en los saltos hacia atrás; respaldo con Musashi en RAM, P2 y
   código no visto.
 - **Pruebas** (`ctest`):
   - `diferencial_cpu`: 4 253 instrucciones reales (3 356 opcodes) × 64 estados = 272 192 casos,

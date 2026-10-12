@@ -1,7 +1,7 @@
--- Traza de escrituras del 68000 en E/S (0x300000-0x3FFFFF) y paleta (0x400000-0x7FFFFF) dentro
--- de una ventana de tiempo, con la hora de la máquina (us), el PC y el dato. Sirve para encontrar la primera divergencia
+-- Traza de escrituras del 68000 en E/S (0x300000-0x3FFFFF) y palette (0x400000-0x7FFFFF) dentro
+-- de una window de tiempo, con la hour de la máquina (us), el PC y el dato. Sirve para encontrar la primera divergencia
 -- de temporización contra el port (src/neogeo, opción --traza-es).
--- Variables: PD_DESDE_US, PD_HASTA_US, PD_TRAZA (salida).
+-- Variables: PD_DESDE_US, PD_HASTA_US, PD_TRAZA (output).
 
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]

@@ -8,14 +8,14 @@ Entradas de función:
 
 Cada función se emite con una etiqueta por instrucción. Los saltos a instrucciones de la misma
 función son `goto`; los saltos hacia atrás pasan antes por un punto de control (límite de
-ciclos -> despachador) para que los bucles de espera no bloqueen las interrupciones. Lo demás
+cycles -> despachador) para que los bucles de espera no bloqueen las interrupciones. Lo demás
 vuelve al despachador con c->pc.
 
-La salida se deriva del programa del juego: se escribe en el directorio de compilación y
+La output se deriva del programa del juego: se escribe en el directorio de compilación y
 nunca se versiona.
 
-Uso: python program.py --roms DIR --listados L1 [L2...] --cobertura J [J...] --ciclos BIN
-                        --salida DIR [--por-archivo N]
+Uso: python program.py --roms DIR --listados L1 [L2...] --cobertura J [J...] --cycles BIN
+                        --output DIR [--por-archivo N]
 """
 from __future__ import annotations
 
@@ -38,12 +38,12 @@ CABECERA = r"""/* GENERADO por tools/recomp68k/program.py: NO EDITAR, NO VERSION
 
 #define PD_SALTO_DIN(e)        do { c->pc = (e) & 0xFFFFFFu; return; } while (0)
 #define PD_RETORNO(e)          PD_SALTO_DIN(e)
-#define PD_EXCEPCION(v, pc)    do { cpu_excepcion(c, (v), (pc)); return; } while (0)
+#define PD_EXCEPCION(v, pc)    do { cpu_exception(c, (v), (pc)); return; } while (0)
 #define PD_SR_CAMBIADO(d)      do { c->pc = (d); return; } while (0)
-#define PD_STOP(d)             do { c->pc = (d); c->detenido = 1; return; } while (0)
+#define PD_STOP(d)             do { c->pc = (d); c->stopped = 1; return; } while (0)
 #define PD_RESET_EXTERNO()     ((void)0)
 /* Opcode e inicio de la instrucción, para el muestreo de interrupciones (cycles68k.h). */
-#define PD_INI(o)              do { c->op = (o); c->ini = c->ciclos; } while (0)
+#define PD_INI(o)              do { c->op = (o); c->start_cycle = c->cycles; } while (0)
 """
 
 RE_SALTO = re.compile(r"PD_(SIGUIENTE|SALTO)\(0x([0-9A-F]+)u\);")
@@ -70,17 +70,17 @@ class Memoria:
 
 
 def leer_listados(rutas):
-    instr, entradas = set(), set()
+    instr, inputs = set(), set()
     for ruta in rutas:
-        for linea in Path(ruta).read_text(encoding="utf-8").splitlines():
-            m = re.match(r"^; ---- funcion ([0-9A-F]{6})", linea)
+        for line in Path(ruta).read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^; ---- funcion ([0-9A-F]{6})", line)
             if m:
-                entradas.add(int(m.group(1), 16))
+                inputs.add(int(m.group(1), 16))
                 continue
-            m = re.match(r"^([0-9A-F]{6})", linea)
+            m = re.match(r"^([0-9A-F]{6})", line)
             if m:
                 instr.add(int(m.group(1), 16))
-    return instr, entradas
+    return instr, inputs
 
 
 def sucesores(i) -> list[int]:
@@ -102,23 +102,23 @@ def main() -> int:
     ap.add_argument("--roms", type=Path, required=True)
     ap.add_argument("--listados", type=Path, nargs="+", required=True)
     ap.add_argument("--cobertura", type=Path, nargs="*", default=[])
-    ap.add_argument("--ciclos", type=Path, required=True)
-    ap.add_argument("--salida", type=Path, required=True)
-    ap.add_argument("--archivos", type=int, default=16, help="número fijo de archivos .c de salida")
+    ap.add_argument("--cycles", type=Path, required=True)
+    ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument("--archivos", type=int, default=16, help="número fijo de archivos .c de output")
     ap.add_argument("--sin-punto-por-instruccion", action="store_true",
                     help="solo puntos de control en los saltos hacia atrás (las interrupciones entran "
                          "en los puntos de despacho, no en el límite exacto de la instrucción)")
     a = ap.parse_args()
     por_instruccion = not a.sin_punto_por_instruccion
-    generator.cargar_ciclos(a.ciclos)
+    generator.cargar_ciclos(a.cycles)
     mem = Memoria(a.roms)
 
-    instr, entradas = leer_listados(a.listados)
+    instr, inputs = leer_listados(a.listados)
     for ruta in a.cobertura:
         if ruta.exists():
             for _src, dst, _banco in json.loads(ruta.read_text())["indirectos"]:
                 if dst in instr:
-                    entradas.add(dst)
+                    inputs.add(dst)
 
     decod = {}
     for d in sorted(instr):
@@ -147,31 +147,31 @@ def main() -> int:
     for d in sorted(decod):
         regiones.setdefault(raiz(d), []).append(d)
 
-    a.salida.mkdir(parents=True, exist_ok=True)
-    for viejo in a.salida.glob("programa_*.c"):
+    a.output.mkdir(parents=True, exist_ok=True)
+    for viejo in a.output.glob("program_*.c"):
         viejo.unlink()
 
     funciones, registros, no_soportadas = [], [], 0
     for r, miembros in sorted(regiones.items()):
         en_region = set(miembros)
-        nombre = f"r_{r:06X}"
+        name = f"r_{r:06X}"
         casos = " ".join(f"case 0x{d:X}u: goto L_{d:06X};" for d in miembros)
-        lineas = [f"static void {nombre}(Cpu68k *c)", "{",
-                  f"    switch (c->pc) {{ {casos} default: rc_interprete_paso(c); return; }}"]
+        lineas = [f"static void {name}(Cpu68k *c)", "{",
+                  f"    switch (c->pc) {{ {casos} default: rc_interpreter_step(c); return; }}"]
         for d in miembros:
             i = decod[d]
             try:
                 cuerpo = Emisor(i).emitir()
             except NoSoportada:
                 no_soportadas += 1
-                cuerpo = [f"rc_interprete_paso(c); return; /* no soportada */"]
-            texto = "\n        ".join(cuerpo)
+                cuerpo = [f"rc_interpreter_step(c); return; /* no soportada */"]
+            text = "\n        ".join(cuerpo)
 
             def salto(m, d=d):
                 destino = int(m.group(2), 16)
                 if destino in en_region:
                     if destino <= d and not por_instruccion:   # hacia atrás: punto de control
-                        return (f"if (c->ciclos >= rc_limite_ciclos) {{ c->pc = 0x{destino:X}u; return; }} "
+                        return (f"if (c->cycles >= rc_cycle_limit) {{ c->pc = 0x{destino:X}u; return; }} "
                                 f"goto L_{destino:06X};")
                     return f"goto L_{destino:06X};"
                 return f"{{ c->pc = 0x{destino:X}u; return; }}"
@@ -181,42 +181,42 @@ def main() -> int:
                     return f"goto L_{ret:06X};"
                 return f"{{ c->pc = 0x{ret:X}u; return; }}"
 
-            texto = RE_SALTO.sub(salto, texto)
-            texto = RE_LLAMADA.sub(lambda m: f"if (!rc_llamar(c, 0x{m.group(1)}u, 0x{m.group(2)}u)) return; "
-                                             + continuar(int(m.group(2), 16)), texto)
-            texto = RE_LLAMADA_DIN.sub(lambda m: f"if (!rc_llamar(c, {m.group(1)}, 0x{m.group(2)}u)) return; "
-                                                 + continuar(int(m.group(2), 16)), texto)
-            lineas.append(f"  L_{d:06X}: {{  /* {i.texto()} */")
+            text = RE_SALTO.sub(salto, text)
+            text = RE_LLAMADA.sub(lambda m: f"if (!rc_call(c, 0x{m.group(1)}u, 0x{m.group(2)}u)) return; "
+                                             + continuar(int(m.group(2), 16)), text)
+            text = RE_LLAMADA_DIN.sub(lambda m: f"if (!rc_call(c, {m.group(1)}, 0x{m.group(2)}u)) return; "
+                                                 + continuar(int(m.group(2), 16)), text)
+            lineas.append(f"  L_{d:06X}: {{  /* {i.text()} */")
             if por_instruccion:
                 # Punto de control en el límite de cada instrucción: los eventos (interrupciones,
                 # líneas del video) se atienden antes de la primera instrucción que empieza en o
                 # después de su ciclo, como en el 68000 real.
-                lineas.append(f"        if (c->ciclos >= rc_limite_ciclos) {{ c->pc = 0x{d:X}u; return; }}")
-            lineas.append("        " + texto)
+                lineas.append(f"        if (c->cycles >= rc_cycle_limit) {{ c->pc = 0x{d:X}u; return; }}")
+            lineas.append("        " + text)
             lineas.append("    }")
         lineas.append("}")
         funciones.append("\n".join(lineas))
-        registros.append((nombre, miembros))
+        registros.append((name, miembros))
 
     archivos = 0
     por = max(1, -(-len(funciones) // a.archivos))
     for k in range(0, a.archivos * por, por):
         bloque = funciones[k:k + por]
-        registro = "\n".join(f"    for (size_t i = 0; i < sizeof d_{n} / sizeof d_{n}[0]; i++) rc_registrar(d_{n}[i], {n});"
+        registro = "\n".join(f"    for (size_t i = 0; i < sizeof d_{n} / sizeof d_{n}[0]; i++) rc_register(d_{n}[i], {n});"
                               for n, _ in registros[k:k + por])
         tablas = "\n".join(f"static const uint32_t d_{n}[] = {{{', '.join(f'0x{d:X}u' for d in ms)}}};"
                             for n, ms in registros[k:k + por])
-        (a.salida / f"programa_{archivos:03d}.c").write_text(
+        (a.output / f"program_{archivos:03d}.c").write_text(
             CABECERA + "\n\n".join(bloque) + "\n\n" + tablas +
-            f"\n\nvoid programa_registrar_{archivos:03d}(void)\n{{\n{registro}\n}}\n", encoding="utf-8")
+            f"\n\nvoid program_register_{archivos:03d}(void)\n{{\n{registro}\n}}\n", encoding="utf-8")
         archivos += 1
-    llamadas = "\n".join(f"    programa_registrar_{n:03d}();" for n in range(archivos))
-    decls = "\n".join(f"void programa_registrar_{n:03d}(void);" for n in range(archivos))
-    (a.salida / "programa_registro.c").write_text(
+    llamadas = "\n".join(f"    program_register_{n:03d}();" for n in range(archivos))
+    decls = "\n".join(f"void program_register_{n:03d}(void);" for n in range(archivos))
+    (a.output / "program_registry.c").write_text(
         "/* GENERADO: NO EDITAR, NO VERSIONAR. */\n" + decls +
-        f"\n\nvoid programa_registrar(void)\n{{\n{llamadas}\n}}\n", encoding="utf-8")
+        f"\n\nvoid program_register(void)\n{{\n{llamadas}\n}}\n", encoding="utf-8")
     print(f"regiones: {len(funciones)}  instrucciones: {len(decod)}  archivos: {archivos}  "
-          f"no soportadas: {no_soportadas}  (entradas del análisis: {len(entradas)})")
+          f"no soportadas: {no_soportadas}  (inputs del análisis: {len(inputs)})")
     return 0
 
 

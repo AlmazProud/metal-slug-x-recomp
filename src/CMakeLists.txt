@@ -4,7 +4,7 @@ add_library(cpu68k STATIC cpu/dispatcher.c cpu/musashi_interpreter.c)
 target_include_directories(cpu68k PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
 target_link_libraries(cpu68k PUBLIC musashi)
 
-# Tabla de ciclos base de Musashi para el 68000, que usa el generador.
+# Tabla de cycles base de Musashi para el 68000, que usa el generador.
 add_executable(volcar_ciclos ${PROJECT_SOURCE_DIR}/tools/recomp68k/dump_cycles.c)
 target_link_libraries(volcar_ciclos PRIVATE musashi)
 
@@ -12,16 +12,16 @@ target_link_libraries(volcar_ciclos PRIVATE musashi)
 add_executable(clases_muestreo ${PROJECT_SOURCE_DIR}/tools/recomp68k/sampling_classes.c)
 target_link_libraries(clases_muestreo PRIVATE cpu68k)
 
-if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALISIS}/listing_bios.txt")
-    message(STATUS "Programa recompilado desactivado: faltan ROMs (${PD_ROMS}) o listados del análisis (${PD_ANALISIS})")
+if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALYSIS}/listing_bios.txt")
+    message(STATUS "Programa recompilado desactivado: faltan ROMs (${PD_ROMS}) o listados del análisis (${PD_ANALYSIS})")
     return()
 endif()
 
 set(CICLOS ${CMAKE_CURRENT_BINARY_DIR}/ciclos_68000.bin)
 add_custom_command(OUTPUT ${CICLOS} COMMAND volcar_ciclos ${CICLOS} DEPENDS volcar_ciclos VERBATIM)
 
-set(PROG_DIR ${CMAKE_CURRENT_BINARY_DIR}/programa)
-set(PROG_C ${PROG_DIR}/programa_registro.c)
+set(PROG_DIR ${CMAKE_CURRENT_BINARY_DIR}/program)
+set(PROG_C ${PROG_DIR}/program_registry.c)
 foreach(n RANGE 0 15)
     string(LENGTH "${n}" largo)
     if(largo EQUAL 1)
@@ -29,12 +29,12 @@ foreach(n RANGE 0 15)
     else()
         set(num "0${n}")
     endif()
-    list(APPEND PROG_C ${PROG_DIR}/programa_${num}.c)
+    list(APPEND PROG_C ${PROG_DIR}/program_${num}.c)
 endforeach()
 
-set(COBERTURA ${PD_ANALISIS}/coverage.json)
-if(EXISTS "${PD_ANALISIS}/coverage_mission1.json")
-    list(APPEND COBERTURA ${PD_ANALISIS}/coverage_mission1.json)
+set(COBERTURA ${PD_ANALYSIS}/coverage.json)
+if(EXISTS "${PD_ANALYSIS}/coverage_mission1.json")
+    list(APPEND COBERTURA ${PD_ANALYSIS}/coverage_mission1.json)
 endif()
 
 file(GLOB RECOMP_PY ${PROJECT_SOURCE_DIR}/tools/recomp68k/*.py)
@@ -42,17 +42,17 @@ add_custom_command(
     OUTPUT ${PROG_C}
     COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/recomp68k/program.py
             --roms ${PD_ROMS}
-            --listados ${PD_ANALISIS}/listing_p1.txt ${PD_ANALISIS}/listing_bios.txt
+            --listados ${PD_ANALYSIS}/listing_p1.txt ${PD_ANALYSIS}/listing_bios.txt
             --cobertura ${COBERTURA}
-            --ciclos ${CICLOS} --salida ${PROG_DIR} --archivos 16
+            --cycles ${CICLOS} --output ${PROG_DIR} --archivos 16
     DEPENDS ${RECOMP_PY} ${CICLOS}
     COMMENT "Recompilando P1 y BIOS del usuario a C"
     VERBATIM)
 
 # Código generado a partir de la copia del usuario: vive solo en build/.
-add_library(programa_recompilado STATIC ${PROG_C})
-target_link_libraries(programa_recompilado PUBLIC cpu68k)
-target_compile_options(programa_recompilado PRIVATE -O1 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-label)
+add_library(recompiled_program STATIC ${PROG_C})
+target_link_libraries(recompiled_program PUBLIC cpu68k)
+target_compile_options(recompiled_program PRIVATE -O1 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-label)
 
 # Runtime de hardware de la Neo Geo (Fase 3).
 add_library(neogeo STATIC
@@ -78,7 +78,7 @@ if(WIN32)
     list(APPEND PORT_FUENTES port/mslugx.rc)
 endif()
 add_executable(mslugx WIN32 ${PORT_FUENTES})
-target_link_libraries(mslugx PRIVATE neogeo programa_recompilado SDL3::SDL3)
+target_link_libraries(mslugx PRIVATE neogeo recompiled_program SDL3::SDL3)
 target_compile_options(mslugx PRIVATE -Wall -Wextra)
 # Runtime de C++ (por ymfm) enlazado estático: el ejecutable solo necesita SDL3.dll.
 target_link_options(mslugx PRIVATE -static-libstdc++ -static-libgcc)
@@ -94,20 +94,20 @@ install(FILES $<TARGET_RUNTIME_DLLS:mslugx> DESTINATION .)
 
 # Fase 5: un estado guardado, cargado en una máquina reiniciada, reproduce RAM, imagen y audio.
 add_test(NAME estado_guardado
-         COMMAND mslugx --roms ${PD_ROMS} --sin-ventana --cuadros 3000 --probar-estado 600)
+         COMMAND mslugx --roms ${PD_ROMS} --sin-window --frames 3000 --probar-estado 600)
 # Fase 6B: el menú de sonido suena y, al cerrarlo, el juego sigue idéntico.
 add_test(NAME menu_sonido
-         COMMAND mslugx --roms ${PD_ROMS} --sin-ventana --cuadros 3000 --probar-sonidos)
+         COMMAND mslugx --roms ${PD_ROMS} --sin-window --frames 3000 --probar-sonidos)
 
 # Fase 4: la partida grabada del usuario (Misión 1) reproducida contra MAME, sin divergencias en RAM,
-# paleta ni imagen. Las referencias de MAME y las entradas viven en PD_ANALISIS/fase4 (fuera del repo;
+# palette ni imagen. Las referencias de MAME y las inputs viven en PD_ANALYSIS/fase4 (fuera del repo;
 # cómo generarlas: tools/verify_mission.py).
-if(EXISTS "${PD_ANALISIS}/phase4/mission1_fingerprints_mame.txt" AND EXISTS "${PD_ANALISIS}/phase4/mission1_inputs.txt")
+if(EXISTS "${PD_ANALYSIS}/phase4/mission1_fingerprints_mame.txt" AND EXISTS "${PD_ANALYSIS}/phase4/mission1_inputs.txt")
     add_test(NAME mision1_contra_mame
              COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/verify_mission.py
                      --exe $<TARGET_FILE:mslugx> --roms ${PD_ROMS}
-                     --entradas ${PD_ANALISIS}/phase4/mission1_inputs.txt
-                     --referencia ${PD_ANALISIS}/phase4/mission1_fingerprints_mame.txt
-                     --cuadros 11970 --fecha 2026-10-11-20-28-31-0
-                     --salida ${CMAKE_CURRENT_BINARY_DIR}/mision1_huellas_port.txt)
+                     --inputs ${PD_ANALYSIS}/phase4/mission1_inputs.txt
+                     --referencia ${PD_ANALYSIS}/phase4/mission1_fingerprints_mame.txt
+                     --frames 11970 --date 2026-10-11-20-28-31-0
+                     --output ${CMAKE_CURRENT_BINARY_DIR}/mision1_huellas_port.txt)
 endif()

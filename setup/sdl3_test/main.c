@@ -1,4 +1,4 @@
-/* Prueba del entorno: abre una ventana SDL3 unos milisegundos y termina sola.
+/* Test del entorno: abre una window SDL3 unos milisegundos y termina sola.
  * Uso: hola_sdl3 [milisegundos]   (por defecto 2000) */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -17,9 +17,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    SDL_Window *ventana = NULL;
+    SDL_Window *window = NULL;
     SDL_Renderer *render = NULL;
-    if (!SDL_CreateWindowAndRenderer("Hola - Projecto Decompile", 640, 448, 0, &ventana, &render)) {
+    if (!SDL_CreateWindowAndRenderer("Hola - Projecto Decompile", 640, 448, 0, &window, &render)) {
         fprintf(stderr, "SDL_CreateWindowAndRenderer: %s\n", SDL_GetError());
         SDL_Quit();
         return 2;
@@ -30,12 +30,12 @@ int main(int argc, char *argv[])
            SDL_VERSIONNUM_MICRO(v), SDL_GetRendererName(render));
 
     Uint64 inicio = SDL_GetTicks();
-    bool activo = true;
-    while (activo && SDL_GetTicks() - inicio < duracion) {
+    bool active = true;
+    while (active && SDL_GetTicks() - inicio < duracion) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT) {
-                activo = false;
+                active = false;
             }
         }
         float t = (float)(SDL_GetTicks() - inicio) / (float)duracion;
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
     }
 
     SDL_DestroyRenderer(render);
-    SDL_DestroyWindow(ventana);
+    SDL_DestroyWindow(window);
     SDL_Quit();
     puts("OK");
     return 0;

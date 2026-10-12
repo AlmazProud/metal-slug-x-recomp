@@ -6,9 +6,9 @@ El control de flujo se expresa con macros que define quien incluye el código ge
     PD_SALTO(destino)      salto a una dirección conocida
     PD_SALTO_DIN(expr)     salto a una dirección calculada en tiempo de ejecución
     PD_SIGUIENTE(dir)      continuar con la instrucción siguiente (dir = su dirección)
-    PD_EXCEPCION(vector, pc_retorno)
+    PD_EXCEPCION(vector, return_pc)
 
-Así el mismo generador sirve para las pruebas diferenciales (una función por instrucción)
+Así el mismo generador sirve para las tests diferenciales (una función por instrucción)
 y para el port (funciones completas con etiquetas).
 
 El código C generado se deriva del programa del juego: se genera en tiempo de compilación a
@@ -81,7 +81,7 @@ class Emisor:
     def direccion(self, ea: EA, tam: str | None) -> str:
         """Calcula la dirección efectiva (con efectos de (An)+ / -(An)) y devuelve una variable."""
         v = self.tmp("ea")
-        m = ea.modo
+        m = ea.mode
         if m == "(An)":
             self.e(f"uint32_t {v} = c->a[{ea.reg}];")
         elif m == "(An)+":
@@ -93,7 +93,7 @@ class Emisor:
         elif m == "d8(An,Xi)":
             self.e(f"uint32_t {v} = c->a[{ea.reg}] + (uint32_t)({ea.disp}) + {self.indice(ea)};")
         elif m in ("abs.w", "abs.l"):
-            self.e(f"uint32_t {v} = 0x{ea.valor & 0xFFFFFFFF:X}u;")
+            self.e(f"uint32_t {v} = 0x{ea.value & 0xFFFFFFFF:X}u;")
         elif m == "d16(PC)":
             self.e(f"uint32_t {v} = 0x{(ea.pc_ext + ea.disp) & 0xFFFFFFFF:X}u;")
         elif m == "d8(PC,Xi)":
@@ -105,27 +105,27 @@ class Emisor:
     def leer(self, ea: EA, tam: str, dir_var: str | None = None) -> str:
         """Lee un operando; para memoria, `dir_var` permite reutilizar una dirección ya calculada."""
         v = self.tmp("v")
-        m = ea.modo
+        m = ea.mode
         if m == "Dn":
             self.e(f"uint32_t {v} = c->d[{ea.reg}] & {MASK[tam]};")
         elif m == "An":
             self.e(f"uint32_t {v} = c->a[{ea.reg}] & {MASK[tam]};")
         elif m == "#imm":
-            self.e(f"uint32_t {v} = 0x{ea.valor & 0xFFFFFFFF:X}u;")
+            self.e(f"uint32_t {v} = 0x{ea.value & 0xFFFFFFFF:X}u;")
         else:
             d = dir_var or self.direccion(ea, tam)
             self.e(f"uint32_t {v} = {_rd(tam)}({d});")
         return v
 
-    def escribir(self, ea: EA, tam: str, valor: str, dir_var: str | None = None) -> None:
-        m = ea.modo
+    def escribir(self, ea: EA, tam: str, value: str, dir_var: str | None = None) -> None:
+        m = ea.mode
         if m == "Dn":
-            self.e(f"set_d(c, {ea.reg}, {valor}, {MASK[tam]});")
+            self.e(f"set_d(c, {ea.reg}, {value}, {MASK[tam]});")
         elif m == "An":
-            self.e(f"c->a[{ea.reg}] = {valor};")
+            self.e(f"c->a[{ea.reg}] = {value};")
         else:
             d = dir_var or self.direccion(ea, tam)
-            self.e(f"{_wr(tam)}({d}, {valor});")
+            self.e(f"{_wr(tam)}({d}, {value});")
 
     def leer_modificar(self, ea: EA, tam: str):
         """Para operaciones lectura-modificación-escritura: calcula la dirección una sola vez."""
@@ -144,16 +144,16 @@ class Emisor:
         if f is None:
             raise NoSoportada(i.op)
         if CICLOS_BASE is not None:
-            self.e(f"PD_INI(0x{self.i.opcode:04X}u); c->ciclos += CIC({self.base()}{self.ajuste()});")
+            self.e(f"PD_INI(0x{self.i.opcode:04X}u); c->cycles += CIC({self.base()}{self.ajuste()});")
         f()
         return self.lineas
 
     def ajuste(self) -> str:
-        """Llamada a ciclos_ajuste (src/cpu/cycles68k.h) para las familias con ciclos corregidos
+        """Llamada a cycles_adjust (src/cpu/cycles68k.h) para las familias con cycles corregidos
         contra MAME; vacía en el resto (no hace falta llamarla)."""
         op = self.i.opcode
-        modo = (op >> 3) & 7
-        familia = ((((op & 0xF1C0) in (0xD1C0, 0x91C0, 0xD080, 0x9080, 0xC080, 0x8080)) and modo <= 1)
+        mode = (op >> 3) & 7
+        familia = ((((op & 0xF1C0) in (0xD1C0, 0x91C0, 0xD080, 0x9080, 0xC080, 0x8080)) and mode <= 1)
                    or (op & 0xF1FF) in (0xD0FC, 0x90FC)
                    or (op & 0xF1F8) == 0x5048
                    or (op & 0xFFF8) == 0x0280
@@ -163,19 +163,19 @@ class Emisor:
             return ""
         ext = 0
         if (op & 0xFFF8) in (0x0840, 0x0880, 0x08C0) and self.i.ops:
-            ext = self.i.ops[0].valor & 0xFFFF
-        return f" + ciclos_ajuste(c, 0x{op:04X}u, 0x{ext:X}u)"
+            ext = self.i.ops[0].value & 0xFFFF
+        return f" + cycles_adjust(c, 0x{op:04X}u, 0x{ext:X}u)"
 
     def base(self) -> int:
         return CICLOS_BASE[self.i.opcode] if CICLOS_BASE is not None else 0
 
-    def ciclos(self, n) -> str:
-        """Sentencia que suma `n` ciclos (texto C o entero); vacía si no hay tabla de ciclos."""
-        return f"c->ciclos += CIC({n}); " if CICLOS_BASE is not None else ""
+    def cycles(self, n) -> str:
+        """Sentencia que suma `n` cycles (text C o entero); vacía si no hay tabla de cycles."""
+        return f"c->cycles += CIC({n}); " if CICLOS_BASE is not None else ""
 
     def excepcion(self, vector: int, pc: int) -> str:
         """Sentencia de excepción: su costo reemplaza al de la instrucción."""
-        return f"{self.ciclos(CICLOS_EXCEPCION[vector] - self.base())}PD_EXCEPCION({vector}, 0x{pc:X}u);"
+        return f"{self.cycles(CICLOS_EXCEPCION[vector] - self.base())}PD_EXCEPCION({vector}, 0x{pc:X}u);"
 
     def fin(self) -> None:
         self.e(f"PD_SIGUIENTE(0x{self.sig():X}u);")
@@ -190,7 +190,7 @@ class Emisor:
         self.fin()
 
     def op_moveq(self):
-        self.e(f"c->d[{self.i.ops[1].reg}] = op_logic(c, 0x{self.i.ops[0].valor:X}u, MASK_L, MSB_L);")
+        self.e(f"c->d[{self.i.ops[1].reg}] = op_logic(c, 0x{self.i.ops[0].value:X}u, MASK_L, MSB_L);")
         self.fin()
 
     def op_movea(self):
@@ -229,8 +229,8 @@ class Emisor:
 
     def op_exg(self):
         a, b = self.i.ops
-        ra = f"c->{'d' if a.modo == 'Dn' else 'a'}[{a.reg}]"
-        rb = f"c->{'d' if b.modo == 'Dn' else 'a'}[{b.reg}]"
+        ra = f"c->{'d' if a.mode == 'Dn' else 'a'}[{a.reg}]"
+        rb = f"c->{'d' if b.mode == 'Dn' else 'a'}[{b.reg}]"
         t = self.tmp()
         self.e(f"uint32_t {t} = {ra}; {ra} = {rb}; {rb} = {t};")
         self.fin()
@@ -281,9 +281,9 @@ class Emisor:
 
     def _quick(self, funcion: str):
         src, dst = self.i.ops
-        if dst.modo == "An":                         # ADDQ/SUBQ a An: 32 bits, sin flags
+        if dst.mode == "An":                         # ADDQ/SUBQ a An: 32 bits, sin flags
             signo = "+" if funcion == "add" else "-"
-            self.e(f"c->a[{dst.reg}] {signo}= {src.valor};")
+            self.e(f"c->a[{dst.reg}] {signo}= {src.value};")
             self.fin()
             return
         self._binaria(funcion)
@@ -318,7 +318,7 @@ class Emisor:
     def _extendida(self, funcion: str):
         t = self.i.tam
         src, dst = self.i.ops
-        if src.modo == "Dn":
+        if src.mode == "Dn":
             s = self.leer(src, t)
             d = self.leer(dst, t)
             r = self.tmp()
@@ -354,7 +354,7 @@ class Emisor:
 
     def op_bcc(self):
         self.e(f"if (cond(c, {CC_C[self.i.cc]})) {{ PD_SALTO(0x{self.i.destino:X}u); }}")
-        self.e(self.ciclos(2 if self.i.largo == 4 else -2))
+        self.e(self.cycles(2 if self.i.largo == 4 else -2))
         self.fin()
 
     def op_bsr(self):
@@ -392,8 +392,8 @@ class Emisor:
         r = self.i.ops[0].reg
         self.e(f"if (!cond(c, {CC_C[self.i.cc]})) {{")
         self.e(f"    uint32_t cnt = (c->d[{r}] - 1) & 0xFFFF; set_d(c, {r}, cnt, MASK_W);")
-        self.e(f"    if (cnt != 0xFFFF) {{ {self.ciclos(-2)}PD_SALTO(0x{self.i.destino:X}u); }}")
-        self.e(f"    {self.ciclos(2)}")
+        self.e(f"    if (cnt != 0xFFFF) {{ {self.cycles(-2)}PD_SALTO(0x{self.i.destino:X}u); }}")
+        self.e(f"    {self.cycles(2)}")
         self.e("}")
         self.fin()
 
@@ -407,7 +407,7 @@ class Emisor:
         else:
             self.escribir(ea, "b", v)
             if self.i.cc != "t":                  # ST Dn ya trae su costo completo en la tabla base
-                self.e(f"if (cond(c, {CC_C[self.i.cc]})) {{ {self.ciclos(2)}}}")
+                self.e(f"if (cond(c, {CC_C[self.i.cc]})) {{ {self.cycles(2)}}}")
         self.fin()
 
     def op_nop(self):
@@ -437,10 +437,10 @@ class Emisor:
     # --- bits
     def _bit(self, accion: str):
         src, dst = self.i.ops
-        t = "l" if dst.modo == "Dn" else "b"
+        t = "l" if dst.mode == "Dn" else "b"
         modulo = 31 if t == "l" else 7
-        if src.modo == "#imm":
-            nbit = f"{src.valor & modulo}u"
+        if src.mode == "#imm":
+            nbit = f"{src.value & modulo}u"
         else:
             nbit = f"(c->d[{src.reg}] & {modulo}u)"
         d, dir_ = self.leer_modificar(dst, t)
@@ -466,8 +466,8 @@ class Emisor:
             self.escribir(self.i.ops[0], "w", r, dir_)
         else:
             cnt_ea, dst = self.i.ops
-            cnt = f"{cnt_ea.valor}u" if cnt_ea.modo == "#imm" else f"(c->d[{cnt_ea.reg}] & 63u)"
-            self.e(self.ciclos(f"2 * {cnt}"))
+            cnt = f"{cnt_ea.value}u" if cnt_ea.mode == "#imm" else f"(c->d[{cnt_ea.reg}] & 63u)"
+            self.e(self.cycles(f"2 * {cnt}"))
             r = self.tmp()
             self.e(f"uint32_t {r} = op_shift(c, SH_{tipo.upper()}, {int(izq)}, {cnt}, "
                    f"c->d[{dst.reg}] & {MASK[t]}, {MASK[t]}, {MSB[t]});")
@@ -488,7 +488,7 @@ class Emisor:
         s = self.leer(self.i.ops[0], "w")
         r = self.i.ops[1].reg
         if CICLOS_BASE is not None:
-            self.e(f"c->ciclos += CIC({'ciclos_muls' if con_signo else 'ciclos_mulu'}({s}));")
+            self.e(f"c->cycles += CIC({'cycles_muls' if con_signo else 'cycles_mulu'}({s}));")
         if con_signo:
             expr = f"(uint32_t)((int32_t)(int16_t){s} * (int32_t)(int16_t)(c->d[{r}] & 0xFFFF))"
         else:
@@ -504,7 +504,7 @@ class Emisor:
         r = self.i.ops[1].reg
         self.e(f"if ({s} == 0) {{ {self.excepcion(5, self.sig())} }}")
         if CICLOS_BASE is not None:
-            self.e(f"c->ciclos += CIC(ciclos_ajuste_div{'s' if con_signo else 'u'}(c->d[{r}], {s}));")
+            self.e(f"c->cycles += CIC(cycles_adjust_div{'s' if con_signo else 'u'}(c->d[{r}], {s}));")
         self.e(f"op_div{'s' if con_signo else 'u'}(c, {r}, {s});")
         self.fin()
 
@@ -512,15 +512,15 @@ class Emisor:
     def op_divs(self): self._div(True)
 
     # --- MOVEM / MOVEP
-    def _regs(self, mascara: int) -> list[str]:
-        return [f"c->{'d' if n < 8 else 'a'}[{n & 7}]" for n in range(16) if mascara >> n & 1]
+    def _regs(self, mask: int) -> list[str]:
+        return [f"c->{'d' if n < 8 else 'a'}[{n & 7}]" for n in range(16) if mask >> n & 1]
 
     def op_movem_carga(self):
         t = self.i.tam
         ea = self.i.ops[0]
         n = TAMAÑO_BYTES[t]
-        self.e(self.ciclos(bin(self.i.lista).count("1") * (8 if t == "l" else 4)))
-        if ea.modo == "(An)+":
+        self.e(self.cycles(bin(self.i.lista).count("1") * (8 if t == "l" else 4)))
+        if ea.mode == "(An)+":
             p = self.tmp("p")
             self.e(f"uint32_t {p} = c->a[{ea.reg}];")
         else:
@@ -528,7 +528,7 @@ class Emisor:
         for reg in self._regs(self.i.lista):
             v = f"sext16(bus_r16({p}))" if t == "w" else f"bus_r32({p})"
             self.e(f"{reg} = {v}; {p} += {n};")
-        if ea.modo == "(An)+":
+        if ea.mode == "(An)+":
             self.e(f"c->a[{ea.reg}] = {p};")
         self.fin()
 
@@ -536,12 +536,12 @@ class Emisor:
         t = self.i.tam
         ea = self.i.ops[0]
         n = TAMAÑO_BYTES[t]
-        self.e(self.ciclos(bin(self.i.lista).count("1") * (8 if t == "l" else 4)))
+        self.e(self.cycles(bin(self.i.lista).count("1") * (8 if t == "l" else 4)))
         regs = self._regs(self.i.lista)
         cop = self.tmp("r")
         self.e(f"uint32_t {cop}[16]; memcpy({cop}, c->d, 32); memcpy({cop} + 8, c->a, 32);")
         idx = [k for k in range(16) if self.i.lista >> k & 1]
-        if ea.modo == "-(An)":
+        if ea.mode == "-(An)":
             p = self.tmp("p")
             self.e(f"uint32_t {p} = c->a[{ea.reg}];")
             for k in reversed(idx):
@@ -557,7 +557,7 @@ class Emisor:
     def op_movep(self):
         t = self.i.tam
         a, b = self.i.ops
-        if a.modo == "Dn":                            # registro -> memoria
+        if a.mode == "Dn":                            # registro -> memoria
             d = self.direccion(b, None)
             r = a.reg
             desplaz = [24, 16, 8, 0] if t == "l" else [8, 0]
@@ -575,7 +575,7 @@ class Emisor:
     # --- BCD
     def _bcd(self, funcion: str):
         src, dst = self.i.ops
-        if src.modo == "Dn":
+        if src.mode == "Dn":
             s = self.leer(src, "b")
             d = self.leer(dst, "b")
             r = self.tmp()
@@ -617,7 +617,7 @@ class Emisor:
         self.fin()
 
     def _ccr(self, opc: str):
-        v = self.i.ops[0].valor & 0x1F
+        v = self.i.ops[0].value & 0x1F
         self.e(f"cpu_set_ccr(c, (cpu_get_sr(c) & 0x1F) {opc} 0x{v:X}u);")
         self.fin()
 
@@ -627,7 +627,7 @@ class Emisor:
 
     def _sr(self, opc: str):
         self.privilegiada()
-        v = self.i.ops[0].valor & 0xFFFF
+        v = self.i.ops[0].value & 0xFFFF
         self.e(f"cpu_set_sr(c, (cpu_get_sr(c) {opc} 0x{v:X}u) & 0xA71Fu);")
         self.e(f"PD_SR_CAMBIADO(0x{self.sig():X}u);")
 
@@ -668,12 +668,12 @@ class Emisor:
 
     def op_stop(self):
         self.privilegiada()
-        self.e(f"cpu_set_sr(c, 0x{self.i.ops[0].valor & 0xA71F:X}u);")
+        self.e(f"cpu_set_sr(c, 0x{self.i.ops[0].value & 0xA71F:X}u);")
         self.e(f"PD_STOP(0x{self.sig():X}u);")
 
     def op_reset(self):
         self.privilegiada()
-        self.e(self.ciclos(132) + "PD_RESET_EXTERNO();")
+        self.e(self.cycles(132) + "PD_RESET_EXTERNO();")
         self.fin()
 
 

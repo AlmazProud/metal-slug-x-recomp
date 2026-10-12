@@ -112,10 +112,10 @@ Notas sobre la medición:
 
 ## Estados guardados
 
-`ng_estado_guardar` y `ng_estado_cargar` (`src/neogeo/savestate.c`) guardan la máquina completa
+`ng_state_save` y `ng_state_load` (`src/neogeo/savestate.c`) guardan la máquina completa
 entre cuadros, en unos 835 KB:
 
-- 68000 y hardware de video y E/S (`NgMaquina`, que incluye la SRAM);
+- 68000 y hardware de video y E/S (`NgMachine`, que incluye la SRAM);
 - planificador;
 - uPD4990A;
 - Z80 y estado del sonido;
@@ -127,7 +127,7 @@ llamadas nativas se deshacen.
 Un estado lleva versión y tamaño. Si no coinciden con el ejecutable, se rechaza sin tocar la
 máquina.
 
-**Prueba:** `ctest` → `estado_guardado` (`--probar-estado 600`). Guarda un estado, corre 600
+**Test:** `ctest` → `estado_guardado` (`--probar-estado 600`). Guarda un estado, corre 600
 cuadros, reinicia la máquina, carga el estado y repite. RAM, imagen y audio salen idénticos. Lo
 mismo se comprobó en la Misión 1 (900 cuadros desde el cuadro 5000).
 

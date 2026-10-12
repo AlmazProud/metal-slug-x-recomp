@@ -47,8 +47,8 @@ foreach ($d in @($Tools, $Descargas, $Logs)) {
 $LogFile = Join-Path $Logs ('instalacion_{0}.log' -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
 
 function Log([string]$msg, [string]$color = 'Gray') {
-    $linea = '{0}  {1}' -f (Get-Date -Format 'HH:mm:ss'), $msg
-    Add-Content -LiteralPath $LogFile -Value $linea -Encoding UTF8
+    $line = '{0}  {1}' -f (Get-Date -Format 'HH:mm:ss'), $msg
+    Add-Content -LiteralPath $LogFile -Value $line -Encoding UTF8
     Write-Host $msg -ForegroundColor $color
 }
 function Fallo([string]$msg) {
@@ -161,7 +161,7 @@ function Expand-Archivo([string]$sieteZip, [string]$archivo, [string]$destino, [
 
 # ---------------------------------------------------------------- ajustes posteriores
 function Set-PostInstalacion($h, [string]$dest) {
-    switch ($h.nombre) {
+    switch ($h.name) {
         'python' {
             $py = Join-Path $dest 'python.exe'
             $r = Invoke-Proceso -Exe $py -Argumentos @('-m', 'pip', '--version')
@@ -220,30 +220,30 @@ function Set-PostInstalacion($h, [string]$dest) {
 
 # ---------------------------------------------------------------- instalar una herramienta
 function Install-Herramienta($h) {
-    $dest  = Join-Path $Tools $h.nombre
+    $dest  = Join-Path $Tools $h.name
     $marca = Join-Path $dest '.instalado.json'
     $firma = $h.version + '|' + ((@($h.descargas) | ForEach-Object { $_.hash }) -join ',')
 
     if ((Test-Path -LiteralPath $marca) -and (Test-Path -LiteralPath (Join-Path $dest $h.comprobar))) {
         $m = Get-Content -LiteralPath $marca -Raw | ConvertFrom-Json
         if ($m.firma -eq $firma) {
-            Log "[saltar]     $($h.nombre) $($h.version) ya instalado" 'DarkGray'
+            Log "[saltar]     $($h.name) $($h.version) ya instalado" 'DarkGray'
             Set-PostInstalacion $h $dest   # idempotente: reaplica la configuración vigente
             return 'ya instalado'
         }
-        Log "[actualizar] $($h.nombre) $($m.version) -> $($h.version)" 'Cyan'
+        Log "[actualizar] $($h.name) $($m.version) -> $($h.version)" 'Cyan'
         $accion = 'actualizado'
     } elseif (Test-Path -LiteralPath $dest) {
-        Log "[reparar]    $($h.nombre) $($h.version) (instalación incompleta o dañada)" 'Cyan'
+        Log "[reparar]    $($h.name) $($h.version) (instalación incompleta o dañada)" 'Cyan'
         $accion = 'reparado'
     } else {
-        Log "[instalar]   $($h.nombre) $($h.version)" 'Cyan'
+        Log "[instalar]   $($h.name) $($h.version)" 'Cyan'
         $accion = 'instalado'
     }
 
     $archivos = @(foreach ($d in @($h.descargas)) { Get-Descarga $d })
 
-    $tmp = Join-Path $Tools ('_tmp_' + $h.nombre)
+    $tmp = Join-Path $Tools ('_tmp_' + $h.name)
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
     New-Item -ItemType Directory -Path $tmp | Out-Null
 
@@ -266,7 +266,7 @@ function Install-Herramienta($h) {
         }
     }
     if (-not (Test-Path -LiteralPath (Join-Path $src $h.comprobar))) {
-        Fallo "Tras extraer $($h.nombre) no aparece '$($h.comprobar)'. ¿Cambió la estructura del paquete?"
+        Fallo "Tras extraer $($h.name) no aparece '$($h.comprobar)'. ¿Cambió la estructura del paquete?"
     }
 
     if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
@@ -276,12 +276,12 @@ function Install-Herramienta($h) {
     Set-PostInstalacion $h $dest
 
     [pscustomobject]@{
-        nombre    = $h.nombre
+        name    = $h.name
         version   = $h.version
         firma     = $firma
         instalado = (Get-Date -Format 's')
     } | ConvertTo-Json | Set-Content -LiteralPath $marca -Encoding UTF8
-    Log "    OK: $($h.nombre) en $dest" 'Green'
+    Log "    OK: $($h.name) en $dest" 'Green'
     return $accion
 }
 
@@ -347,23 +347,23 @@ function Initialize-Repo {
 function Test-Entorno {
     . (Join-Path $Entorno 'env.ps1') | Out-Null
     $res = New-Object System.Collections.Generic.List[object]
-    function Agregar($nombre, $ok, $detalle) {
-        $linea = (($detalle -split "`r?`n") | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1)
-        if (-not $linea) { $linea = '' }
-        $res.Add([pscustomobject]@{ Prueba = $nombre; Estado = $(if ($ok) { 'OK' } else { 'FALLA' }); Detalle = $linea.Trim() })
-        Log ("  [{0}] {1}: {2}" -f $(if ($ok) { 'OK' } else { 'FALLA' }), $nombre, $detalle) $(if ($ok) { 'Green' } else { 'Red' })
+    function Agregar($name, $ok, $detalle) {
+        $line = (($detalle -split "`r?`n") | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1)
+        if (-not $line) { $line = '' }
+        $res.Add([pscustomobject]@{ Test = $name; State = $(if ($ok) { 'OK' } else { 'FALLA' }); Detalle = $line.Trim() })
+        Log ("  [{0}] {1}: {2}" -f $(if ($ok) { 'OK' } else { 'FALLA' }), $name, $detalle) $(if ($ok) { 'Green' } else { 'Red' })
     }
-    function Probar($nombre, $exe, $argumentos, $patron) {
-        if (-not (Test-Path -LiteralPath $exe)) { Agregar $nombre $false "no existe $exe"; return }
+    function Probar($name, $exe, $argumentos, $patron) {
+        if (-not (Test-Path -LiteralPath $exe)) { Agregar $name $false "no existe $exe"; return }
         $r = Invoke-Proceso -Exe $exe -Argumentos $argumentos -TimeoutSeg 120
-        $salida = $r.Salida -replace "\x1b\[[0-9;]*m", ''   # quita colores ANSI (ImHex)
-        $ok = ($salida -match $patron)
-        $detalle = $salida
+        $output = $r.Salida -replace "\x1b\[[0-9;]*m", ''   # quita colores ANSI (ImHex)
+        $ok = ($output -match $patron)
+        $detalle = $output
         if ($ok) {
-            $linea = (($salida -split "`r?`n") | Where-Object { $_ -match $patron } | Select-Object -First 1)
-            $detalle = $linea.Substring([regex]::Match($linea, $patron).Index)
+            $line = (($output -split "`r?`n") | Where-Object { $_ -match $patron } | Select-Object -First 1)
+            $detalle = $line.Substring([regex]::Match($line, $patron).Index)
         }
-        Agregar $nombre $ok $detalle
+        Agregar $name $ok $detalle
     }
 
     Log ''
@@ -397,7 +397,7 @@ function Test-Entorno {
         $exe = Join-Path $buildSdl 'hola_sdl3.exe'
         if ($r.Codigo -eq 0 -and (Test-Path -LiteralPath $exe)) {
             $r = Invoke-Proceso -Exe $exe -Argumentos @('2000') -Dir $buildSdl -TimeoutSeg 30
-            Agregar 'SDL3: ventana' ($r.Codigo -eq 0 -and $r.Salida -match 'OK') $r.Salida.Replace("`r", '').Replace("`n", ' | ')
+            Agregar 'SDL3: window' ($r.Codigo -eq 0 -and $r.Salida -match 'OK') $r.Salida.Replace("`r", '').Replace("`n", ' | ')
         }
     }
 
@@ -418,7 +418,7 @@ function Test-Entorno {
     $detR = 'todo en tools\_cache\ghidra'
     if ($fuera.Count -gt 0) { $detR = 'existen: ' + ($fuera -join ', ') + ' (si las creó una versión anterior, bórralas y vuelve a verificar)' }
     Agregar 'Ghidra sin residuos fuera de la carpeta' ($fuera.Count -eq 0) $detR
-    Add-Content -LiteralPath $LogFile -Value ("--- salida completa de Ghidra ---`n" + $r.Salida) -Encoding UTF8
+    Add-Content -LiteralPath $LogFile -Value ("--- output completa de Ghidra ---`n" + $r.Salida) -Encoding UTF8
 
     return $res
 }
@@ -435,7 +435,7 @@ try {
         # 1. No se ejecuta como administrador.
         $id = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
         if ($id.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-            Fallo 'Se está ejecutando como administrador. Cierra esta ventana y ejecuta INSTALL.bat como usuario normal.'
+            Fallo 'Se está ejecutando como administrador. Cierra esta window y ejecuta INSTALL.bat como usuario normal.'
         }
         # 2. Espacio libre.
         $unidad = (Get-Item -LiteralPath $Root).PSDrive
@@ -447,7 +447,7 @@ try {
         $resumen = New-Object System.Collections.Generic.List[object]
         foreach ($h in $Cfg.herramientas) {
             $acc = Install-Herramienta $h
-            $resumen.Add([pscustomobject]@{ Herramienta = $h.nombre; Version = $h.version; Accion = $acc })
+            $resumen.Add([pscustomobject]@{ Herramienta = $h.name; Version = $h.version; Accion = $acc })
         }
         Log ''
         $resumen | Format-Table -AutoSize | Out-String | ForEach-Object { Log $_ }
@@ -460,12 +460,12 @@ try {
     # 5. Verificación.
     $res = Test-Entorno
     Write-Host ''
-    $tabla = $res | Format-Table Prueba, Estado, Detalle -AutoSize -Wrap | Out-String -Width 160
+    $tabla = $res | Format-Table Test, State, Detalle -AutoSize -Wrap | Out-String -Width 160
     Write-Host $tabla
     Add-Content -LiteralPath $LogFile -Value $tabla -Encoding UTF8
-    $fallas = @($res | Where-Object { $_.Estado -ne 'OK' }).Count
+    $fallas = @($res | Where-Object { $_.State -ne 'OK' }).Count
     if ($fallas -gt 0) { Log "$fallas prueba(s) con FALLA. Revisa $LogFile" 'Red' }
-    else { Log 'Todas las pruebas OK.' 'Green' }
+    else { Log 'Todas las tests OK.' 'Green' }
 
     # 6. ROMs (solo con confirmación).
     if (-not $SoloVerificar -and -not $SinRoms) { Copy-Roms }

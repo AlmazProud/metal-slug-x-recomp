@@ -1,5 +1,5 @@
 -- Traza de lecturas de E/S del 68000 (0x300000-0x3FFFFF y 0x800000-0xBFFFFF): para cada
--- (dirección, máscara, valor) cuenta cuántas veces se leyó y en qué cuadro apareció primero.
+-- (dirección, máscara, value) cuenta cuántas veces se leyó y en qué cuadro apareció primero.
 -- Sirve para fijar los valores de los puertos del runtime contra el oráculo.
 -- Salida: PD_TRAZA (por defecto traza_puertos.txt).
 

@@ -3,7 +3,7 @@
 Mejoras opcionales sobre el port de la Fase 5. Todas se apagan desde el menú, y ninguna cambia la
 emulación cuando está apagada: `ctest` (con la Misión 1 contra MAME) sigue pasando.
 
-| Subfase | Contenido | Estado |
+| Subfase | Contenido | State |
 |---|---|---|
 | 6A | Disparo automático y modo debug | Cerrada (2026-10-12) |
 | 6B | Catálogo de sonidos, menú de música, voces y efectos; vibración del mando | Cerrada (2026-10-12) |
@@ -78,7 +78,7 @@ Teclas del modo debug:
 
 ## 6B: el driver de sonido de Metal Slug X
 
-El 68000 controla el sonido con comandos de un byte al Z80 (`ng_sonido_comando`). Se descubrió con
+El 68000 controla el sonido con comandos de un byte al Z80 (`ng_sound_command`). Se descubrió con
 la traza de comandos de la Misión 1 (`--traza`) y catálogos sin el juego:
 
 - **Modos:** los comandos `00`, `10` y `11` fijan un modo que queda activo, y el comando siguiente
@@ -97,7 +97,7 @@ la traza de comandos de la Misión 1 (`--traza`) y catálogos sin el juego:
 después de que el juego reinicia el driver):
 
 - para cada comando: duración, si queda en bucle, pico y notas iniciadas por tipo de canal
-  (`ng_notas`: FM, SSG, ADPCM-A, ADPCM-B);
+  (`ng_notes`: FM, SSG, ADPCM-A, ADPCM-B);
 - las músicas reales usan FM y ADPCM a la vez y quedan en bucle.
 
 `tools/sound_catalog.py` genera con eso `src/port/profile_sounds.c`: comando, duración y
@@ -148,14 +148,14 @@ Menú → "Musica y sonidos":
   entre cada uno;
 - al cerrar se restaura el estado y el juego sigue exactamente donde estaba.
 
-**Prueba:** `ctest` → `menu_sonido` (`--probar-sonidos`).
+**Test:** `ctest` → `menu_sonido` (`--probar-sonidos`).
 
 - La música y la voz suenan: energía media de 2473 y 620, frente a 66 en silencio.
 - Al cerrar, 300 cuadros del juego son idénticos a no haber abierto el menú (RAM, imagen y audio).
 
 ## 6B: vibración
 
-`ng_al_comando_sonido` avisa al port de cada comando. El port sigue el modo del driver y, para los
+`ng_on_sound_command` avisa al port de cada comando. El port sigue el modo del driver y, para los
 efectos identificados, pide una vibración del mando:
 
 | Efecto | Vibración |
@@ -184,7 +184,7 @@ usuario.
 **Menús** (`src/port/menu.c`): páginas apiladas, sobre el juego oscurecido. La escala es entera,
 con un lienzo de al menos 440 x 250.
 
-- **Inicio**, al abrir el juego (se apaga con `pantalla_inicio=0`): Jugar, Cargar partida,
+- **Inicio**, al abrir el juego (se apaga con `start_screen=0`): Jugar, Cargar partida,
   Configuración, Música y sonidos, Extras, Salir.
   - De fondo sigue corriendo el demo, sin recibir las entradas.
   - "Jugar" inserta una moneda y pulsa START como un jugador. Comprobado: CREDIT 1, y luego el
@@ -217,12 +217,12 @@ con un lienzo de al menos 440 x 250.
 - En la pantalla de título del attract (cuadro ~1150 con la SRAM vacía), el logo son los sprites
   41-124 más el 380 ("TM"); el fondo rojo son los 21-40.
 - La primera vez, el port guarda el estado, corre la máquina en silencio hasta que aparece el
-  "TM" (primer tile `0x309CA`), redibuja solo esos sprites (`ng_video_capturar_sprites`) y
+  "TM" (primer tile `0x309CA`), redibuja solo esos sprites (`ng_video_capture_sprites`) y
   restaura el estado. Tarda menos de un segundo.
 - El logo queda en `logo_titulo.png` de la carpeta del usuario, nunca en el repo.
 
 **Escala de la interfaz:** continua, como un lienzo de 480 x 300 ajustado a la ventana
-(`fuente_factor`), con `SDL_SCALEMODE_PIXELART` para que los píxeles se vean parejos con escalas
+(`font_factor`), con `SDL_SCALEMODE_PIXELART` para que los píxeles se vean parejos con escalas
 no enteras. Así los menús entran en cualquier tamaño de ventana.
 
 **Corregido:** renombrar dos veces el mismo sonido colgaba el port. `SDL_strdup` reserva con el

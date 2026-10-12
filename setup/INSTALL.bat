@@ -1,7 +1,7 @@
 @echo off
 rem Punto de entrada unico del instalador de Projecto Decompile.
 rem Ejecuta setup.ps1 con ExecutionPolicy Bypass SOLO para este proceso.
-rem Opciones (se pasan a setup.ps1):  -CopiarRoms  -SinRoms  -SoloVerificar  -Gog "ruta"
+rem Options (se pasan a setup.ps1):  -CopiarRoms  -SinRoms  -SoloVerificar  -Gog "ruta"
 setlocal
 set "PD_SETUP=%~dp0setup.ps1"
 if not exist "%PD_SETUP%" set "PD_SETUP=%~dp0repo\setup\setup.ps1"

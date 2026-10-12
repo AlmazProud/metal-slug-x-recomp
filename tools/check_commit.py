@@ -1,7 +1,7 @@
-"""Hook pre-commit: refuerza la regla 1 (el repo nunca contiene ROMs ni datos extraídos).
+"""Hook pre-commit: refuerza la regla 1 (el repo nunca contiene ROMs ni data extraídos).
 
 Rechaza el commit si algún archivo preparado:
-  - es binario (contiene bytes NUL): el repo es solo de texto;
+  - es binario (contiene bytes NUL): el repo es solo de text;
   - pesa más de 1 MB;
   - tiene el mismo SHA256 que cualquier archivo bajo la carpeta de ROMs del usuario
     (incluye el set reconstruido en roms/mame).
@@ -38,17 +38,17 @@ def main() -> int:
     nombres = [n for n in git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z").decode().split("\0") if n]
     problemas = []
     for n in nombres:
-        datos = git("show", f":{n}")
-        if b"\0" in datos:
+        data = git("show", f":{n}")
+        if b"\0" in data:
             problemas.append(f"{n}: es binario")
-        if len(datos) > LIMITE:
-            problemas.append(f"{n}: pesa {len(datos)} bytes (limite {LIMITE})")
-        coincide = prohibidos.get(hashlib.sha256(datos).hexdigest())
+        if len(data) > LIMITE:
+            problemas.append(f"{n}: pesa {len(data)} bytes (limite {LIMITE})")
+        coincide = prohibidos.get(hashlib.sha256(data).hexdigest())
         if coincide:
             problemas.append(f"{n}: identico a roms/{coincide}")
 
     if problemas:
-        print("pre-commit: RECHAZADO (regla 1: el repo nunca contiene ROMs ni datos extraidos)")
+        print("pre-commit: RECHAZADO (regla 1: el repo nunca contiene ROMs ni data extraidos)")
         for p in problemas:
             print("   " + p)
         return 1

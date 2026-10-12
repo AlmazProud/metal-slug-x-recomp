@@ -35,14 +35,14 @@ static void bloque(uint32_t h[8], const uint8_t *p)
     h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += k;
 }
 
-void sha256(const uint8_t *datos, size_t n, uint8_t salida[32])
+void sha256(const uint8_t *data, size_t n, uint8_t output[32])
 {
     uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
     size_t i = 0;
-    for (; i + 64 <= n; i += 64) bloque(h, datos + i);
+    for (; i + 64 <= n; i += 64) bloque(h, data + i);
     uint8_t resto[128] = {0};
     size_t r = n - i;
-    memcpy(resto, datos + i, r);
+    memcpy(resto, data + i, r);
     resto[r] = 0x80;
     size_t total = r + 1 + 8 <= 64 ? 64 : 128;
     uint64_t bits = (uint64_t)n * 8;
@@ -50,7 +50,7 @@ void sha256(const uint8_t *datos, size_t n, uint8_t salida[32])
     bloque(h, resto);
     if (total == 128) bloque(h, resto + 64);
     for (int j = 0; j < 8; j++) {
-        salida[4 * j] = (uint8_t)(h[j] >> 24); salida[4 * j + 1] = (uint8_t)(h[j] >> 16);
-        salida[4 * j + 2] = (uint8_t)(h[j] >> 8); salida[4 * j + 3] = (uint8_t)h[j];
+        output[4 * j] = (uint8_t)(h[j] >> 24); output[4 * j + 1] = (uint8_t)(h[j] >> 16);
+        output[4 * j + 2] = (uint8_t)(h[j] >> 8); output[4 * j + 3] = (uint8_t)h[j];
     }
 }

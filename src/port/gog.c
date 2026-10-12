@@ -3,7 +3,7 @@
  * El instalador de GOG registra cada juego en HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\<id> con
  * los valores "gameName" y "path" (Metal Slug X: id 2046360890). Si no hay registro (copia
  * movida a mano), se prueban las carpetas habituales en cada unidad. La validación completa (SHA-256)
- * la hace después ng_roms_cargar; aquí basta con que exista el programa del 68000.
+ * la hace después ng_roms_load; aquí basta con que exista el programa del 68000.
  *
  * Las rutas se manejan en UTF-8: el manifiesto del ejecutable (mslugx.manifest) fija UTF-8 como
  * página de códigos, así fopen las acepta.
@@ -34,19 +34,19 @@ static int probar(const char *base, char *carpeta, int tam)
 #ifdef _WIN32
 static int ruta_del_registro(HKEY juegos, const wchar_t *id, char *base, int tam, int exigir_nombre)
 {
-    wchar_t valor[1024];
-    DWORD n = sizeof valor;
+    wchar_t value[1024];
+    DWORD n = sizeof value;
     if (exigir_nombre) {
-        if (RegGetValueW(juegos, id, L"gameName", RRF_RT_REG_SZ, NULL, valor, &n) != ERROR_SUCCESS) return 0;
-        if (!wcsstr(valor, L"Metal Slug X")) return 0;
-        n = sizeof valor;
+        if (RegGetValueW(juegos, id, L"gameName", RRF_RT_REG_SZ, NULL, value, &n) != ERROR_SUCCESS) return 0;
+        if (!wcsstr(value, L"Metal Slug X")) return 0;
+        n = sizeof value;
     }
-    if (RegGetValueW(juegos, id, L"path", RRF_RT_REG_SZ, NULL, valor, &n) != ERROR_SUCCESS) return 0;
-    return WideCharToMultiByte(CP_UTF8, 0, valor, -1, base, tam, NULL, NULL) > 0;
+    if (RegGetValueW(juegos, id, L"path", RRF_RT_REG_SZ, NULL, value, &n) != ERROR_SUCCESS) return 0;
+    return WideCharToMultiByte(CP_UTF8, 0, value, -1, base, tam, NULL, NULL) > 0;
 }
 #endif
 
-int gog_buscar(char *carpeta, int tam)
+int gog_find(char *carpeta, int tam)
 {
     char base[1024];
 #ifdef _WIN32

@@ -1,8 +1,8 @@
-/* mslugx.ini: formato INI sencillo ([sección], clave=valor, comentarios con ; o #).
+/* mslugx.ini: formato INI sencillo ([sección], clave=value, comentarios con ; o #).
  *
  * Las teclas usan los nombres de SDL (SDL_GetScancodeName: "Up", "Z", "Left Shift"...) y los
  * botones del mando los de SDL_GetGamepadStringForButton ("a", "b", "x", "y", "start",
- * "back", "dpup"..., con la disposición de Xbox: "a" es el botón de abajo). Una tecla o un
+ * "back", "dpup"..., con la disposición de Xbox: "a" es el botón de abajo). Una key o un
  * botón vacío deja la acción sin asignar.
  */
 #include "config.h"
@@ -12,52 +12,52 @@
 #include <stdlib.h>
 #include <string.h>
 
-const char *const ACCION_NOMBRE[ACC_N] = {
+const char *const ACTION_KEY[ACT_COUNT] = {
     "arriba", "abajo", "izquierda", "derecha", "a", "b", "c", "d", "start", "moneda", "auto",
 };
-const char *const ACCION_TEXTO[ACC_N] = {
+const char *const ACTION_LABEL[ACT_COUNT] = {
     "Arriba", "Abajo", "Izquierda", "Derecha", "A (disparo)", "B (salto)", "C (granada)", "D",
     "Start", "Moneda", "Disparo automatico",
 };
 
-static const char *const ASPECTO_NOMBRE[ASPECTO_N] = {"4:3", "pixeles"};
-static const char *const FILTRO_NOMBRE[FILTRO_N] = {"nitido", "suave", "pixeles"};
-static const char *const AUTO_NOMBRE[AUTO_N] = {"no", "boton", "disparo"};
-static const char *const VELOCIDAD_NOMBRE[AUTO_VELOCIDADES] = {"10", "7.5", "5"};
-const int AUTO_PERIODO[AUTO_VELOCIDADES] = {6, 8, 12};
+static const char *const ASPECTO_NOMBRE[ASPECT_COUNT] = {"4:3", "pixeles"};
+static const char *const FILTRO_NOMBRE[FILTER_COUNT] = {"nitido", "suave", "pixeles"};
+static const char *const AUTO_NOMBRE[AUTO_COUNT] = {"no", "button", "disparo"};
+static const char *const VELOCIDAD_NOMBRE[AUTO_SPEEDS] = {"10", "7.5", "5"};
+const int AUTO_PERIOD[AUTO_SPEEDS] = {6, 8, 12};
 
-void config_por_defecto(Config *c)
+void config_defaults(Config *c)
 {
     memset(c, 0, sizeof *c);
-    c->escala = 3;
-    c->aspecto = ASPECTO_4_3;
-    c->filtro = FILTRO_NITIDO;
-    c->volumen = 100;
-    c->ranura = 1;
-    c->autodisparo[0] = c->autodisparo[1] = AUTO_BOTON;
-    c->vibracion = 70;
+    c->scale = 3;
+    c->aspect = ASPECT_4_3;
+    c->filter = FILTER_SHARP;
+    c->volume = 100;
+    c->slot = 1;
+    c->autofire[0] = c->autofire[1] = AUTO_BUTTON;
+    c->rumble = 70;
     c->vsync = 1;
-    c->pantalla_inicio = 1;
-    static const SDL_Scancode t1[ACC_N] = {
+    c->start_screen = 1;
+    static const SDL_Scancode t1[ACT_COUNT] = {
         SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT,
         SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_C, SDL_SCANCODE_V, SDL_SCANCODE_1, SDL_SCANCODE_5,
         SDL_SCANCODE_B,
     };
-    static const SDL_Scancode t2[ACC_N] = {
+    static const SDL_Scancode t2[ACT_COUNT] = {
         SDL_SCANCODE_I, SDL_SCANCODE_K, SDL_SCANCODE_J, SDL_SCANCODE_L,
         SDL_SCANCODE_A, SDL_SCANCODE_S, SDL_SCANCODE_D, SDL_SCANCODE_F, SDL_SCANCODE_2, SDL_SCANCODE_6,
         SDL_SCANCODE_G,
     };
-    static const SDL_GamepadButton b[ACC_N] = {
+    static const SDL_GamepadButton b[ACT_COUNT] = {
         SDL_GAMEPAD_BUTTON_DPAD_UP, SDL_GAMEPAD_BUTTON_DPAD_DOWN, SDL_GAMEPAD_BUTTON_DPAD_LEFT,
         SDL_GAMEPAD_BUTTON_DPAD_RIGHT, SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_SOUTH,
         SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_START, SDL_GAMEPAD_BUTTON_BACK,
         SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER,
     };
-    for (int i = 0; i < ACC_N; i++) {
-        c->tecla[0][i] = t1[i];
-        c->tecla[1][i] = t2[i];
-        c->boton[0][i] = c->boton[1][i] = b[i];
+    for (int i = 0; i < ACT_COUNT; i++) {
+        c->key[0][i] = t1[i];
+        c->key[1][i] = t2[i];
+        c->button[0][i] = c->button[1][i] = b[i];
     }
 }
 
@@ -84,13 +84,13 @@ static int entero(const char *v, int min, int max, int actual)
     return n < min ? min : n > max ? max : (int)n;
 }
 
-int config_cargar(Config *c, const char *ruta)
+int config_load(Config *c, const char *ruta)
 {
     FILE *f = fopen(ruta, "r");
     if (!f) return -1;
-    char linea[1200], seccion[64] = "";
-    while (fgets(linea, sizeof linea, f)) {
-        char *l = recortar(linea);
+    char line[1200], seccion[64] = "";
+    while (fgets(line, sizeof line, f)) {
+        char *l = recortar(line);
         if (!*l || *l == ';' || *l == '#') continue;
         if (*l == '[') {
             char *fin = strchr(l, ']');
@@ -102,76 +102,76 @@ int config_cargar(Config *c, const char *ruta)
         *igual = 0;
         char *k = recortar(l), *v = recortar(igual + 1);
         if (!strcmp(seccion, "video")) {
-            if (!strcmp(k, "escala")) c->escala = entero(v, 1, 10, c->escala);
-            else if (!strcmp(k, "pantalla_completa")) c->pantalla_completa = entero(v, 0, 1, c->pantalla_completa);
-            else if (!strcmp(k, "aspecto")) c->aspecto = buscar(ASPECTO_NOMBRE, ASPECTO_N, v, c->aspecto);
-            else if (!strcmp(k, "filtro")) c->filtro = buscar(FILTRO_NOMBRE, FILTRO_N, v, c->filtro);
+            if (!strcmp(k, "scale")) c->scale = entero(v, 1, 10, c->scale);
+            else if (!strcmp(k, "fullscreen")) c->fullscreen = entero(v, 0, 1, c->fullscreen);
+            else if (!strcmp(k, "aspect")) c->aspect = buscar(ASPECTO_NOMBRE, ASPECT_COUNT, v, c->aspect);
+            else if (!strcmp(k, "filter")) c->filter = buscar(FILTRO_NOMBRE, FILTER_COUNT, v, c->filter);
             else if (!strcmp(k, "scanlines")) c->scanlines = entero(v, 0, 1, c->scanlines);
             else if (!strcmp(k, "vsync")) c->vsync = entero(v, 0, 1, c->vsync);
         } else if (!strcmp(seccion, "audio")) {
-            if (!strcmp(k, "volumen")) c->volumen = entero(v, 0, 100, c->volumen);
+            if (!strcmp(k, "volume")) c->volume = entero(v, 0, 100, c->volume);
         } else if (!strcmp(seccion, "juego")) {
             if (!strcmp(k, "turbo")) c->turbo = entero(v, 0, 2, c->turbo);
-            else if (!strcmp(k, "ranura")) c->ranura = entero(v, 1, 9, c->ranura);
+            else if (!strcmp(k, "slot")) c->slot = entero(v, 1, 9, c->slot);
             else if (!strcmp(k, "roms")) snprintf(c->roms, sizeof c->roms, "%s", v);
-            else if (!strcmp(k, "autodisparo1")) c->autodisparo[0] = buscar(AUTO_NOMBRE, AUTO_N, v, c->autodisparo[0]);
-            else if (!strcmp(k, "autodisparo2")) c->autodisparo[1] = buscar(AUTO_NOMBRE, AUTO_N, v, c->autodisparo[1]);
+            else if (!strcmp(k, "autodisparo1")) c->autofire[0] = buscar(AUTO_NOMBRE, AUTO_COUNT, v, c->autofire[0]);
+            else if (!strcmp(k, "autodisparo2")) c->autofire[1] = buscar(AUTO_NOMBRE, AUTO_COUNT, v, c->autofire[1]);
             else if (!strcmp(k, "autodisparo_por_segundo"))
-                c->auto_velocidad = buscar(VELOCIDAD_NOMBRE, AUTO_VELOCIDADES, v, c->auto_velocidad);
+                c->auto_speed = buscar(VELOCIDAD_NOMBRE, AUTO_SPEEDS, v, c->auto_speed);
             else if (!strcmp(k, "debug")) c->debug = entero(v, 0, 1, c->debug);
-            else if (!strcmp(k, "vibracion")) c->vibracion = entero(v, 0, 100, c->vibracion);
-            else if (!strcmp(k, "pantalla_inicio")) c->pantalla_inicio = entero(v, 0, 1, c->pantalla_inicio);
-            else if (!strcmp(k, "sangre")) c->sangre = entero(v, 0, 1, c->sangre);
+            else if (!strcmp(k, "rumble")) c->rumble = entero(v, 0, 100, c->rumble);
+            else if (!strcmp(k, "start_screen")) c->start_screen = entero(v, 0, 1, c->start_screen);
+            else if (!strcmp(k, "blood")) c->blood = entero(v, 0, 1, c->blood);
         } else if (!strncmp(seccion, "teclado", 7) || !strncmp(seccion, "mando", 5)) {
             int teclado = seccion[0] == 't';
             int j = seccion[teclado ? 7 : 5] - '1';
             if (j < 0 || j > 1) continue;
-            int a = buscar(ACCION_NOMBRE, ACC_N, k, -1);
+            int a = buscar(ACTION_KEY, ACT_COUNT, k, -1);
             if (a < 0) continue;
-            if (teclado) c->tecla[j][a] = *v ? SDL_GetScancodeFromName(v) : SDL_SCANCODE_UNKNOWN;
-            else c->boton[j][a] = *v ? SDL_GetGamepadButtonFromString(v) : SDL_GAMEPAD_BUTTON_INVALID;
+            if (teclado) c->key[j][a] = *v ? SDL_GetScancodeFromName(v) : SDL_SCANCODE_UNKNOWN;
+            else c->button[j][a] = *v ? SDL_GetGamepadButtonFromString(v) : SDL_GAMEPAD_BUTTON_INVALID;
         }
     }
     fclose(f);
     return 0;
 }
 
-int config_guardar(const Config *c, const char *ruta)
+int config_save(const Config *c, const char *ruta)
 {
     FILE *f = fopen(ruta, "w");
     if (!f) return -1;
     fprintf(f, "; Metal Slug X (port nativo): configuración. Se reescribe al salir.\n\n");
-    fprintf(f, "[video]\n; escala: tamaño inicial de la ventana (x 224 líneas)\nescala=%d\npantalla_completa=%d\n",
-            c->escala, c->pantalla_completa);
-    fprintf(f, "; aspecto: 4:3 (como el monitor original) o pixeles (cuadrados, 320x224)\naspecto=%s\n",
-            ASPECTO_NOMBRE[c->aspecto]);
-    fprintf(f, "; filtro: nitido (píxeles parejos con bordes suaves), suave o pixeles\nfiltro=%s\nscanlines=%d\n\n",
-            FILTRO_NOMBRE[c->filtro], c->scanlines);
+    fprintf(f, "[video]\n; scale: tamaño inicial de la window (x 224 líneas)\nescala=%d\npantalla_completa=%d\n",
+            c->scale, c->fullscreen);
+    fprintf(f, "; aspect: 4:3 (como el monitor original) o pixeles (cuadrados, 320x224)\naspecto=%s\n",
+            ASPECTO_NOMBRE[c->aspect]);
+    fprintf(f, "; filter: nitido (píxeles parejos con bordes suaves), suave o pixeles\nfiltro=%s\nscanlines=%d\n\n",
+            FILTRO_NOMBRE[c->filter], c->scanlines);
     fprintf(f, "; vsync: 1 = sincronía con el monitor (sin cortes en la imagen), 0 = ritmo exacto de la placa\n"
                "vsync=%d\n\n", c->vsync);
-    fprintf(f, "[audio]\nvolumen=%d\n\n", c->volumen);
+    fprintf(f, "[audio]\nvolumen=%d\n\n", c->volume);
     fprintf(f, "[juego]\n; turbo: 0 = como el original (con la ralentización), 1 = 68000 al doble, 2 = al cuádruple\n");
-    fprintf(f, "turbo=%d\nranura=%d\nroms=%s\n", c->turbo, c->ranura, c->roms);
-    fprintf(f, "; autodisparo: no, boton (tecla o botón propio, \"auto\" en los controles) o disparo\n");
-    fprintf(f, "autodisparo1=%s\nautodisparo2=%s\n", AUTO_NOMBRE[c->autodisparo[0]], AUTO_NOMBRE[c->autodisparo[1]]);
+    fprintf(f, "turbo=%d\nranura=%d\nroms=%s\n", c->turbo, c->slot, c->roms);
+    fprintf(f, "; autofire: no, button (key o botón propio, \"auto\" en los controles) o disparo\n");
+    fprintf(f, "autodisparo1=%s\nautodisparo2=%s\n", AUTO_NOMBRE[c->autofire[0]], AUTO_NOMBRE[c->autofire[1]]);
     fprintf(f, "; autodisparo_por_segundo: 10 (máximo de la pistola), 7.5 o 5\nautodisparo_por_segundo=%s\n",
-            VELOCIDAD_NOMBRE[c->auto_velocidad]);
+            VELOCIDAD_NOMBRE[c->auto_speed]);
     fprintf(f, "; debug: panel de depuración (F3)\ndebug=%d\n", c->debug);
-    fprintf(f, "; vibracion: intensidad del mando con explosiones y disparos, 0-100 (0 = apagada)\nvibracion=%d\n",
-            c->vibracion);
-    fprintf(f, "; pantalla_inicio: menú de inicio al abrir el juego (1) o directo al juego (0)\npantalla_inicio=%d\n",
-            c->pantalla_inicio);
-    fprintf(f, "; sangre: 0 = la que diga el menú de servicio (BLOOD, en EE. UU. viene apagada), 1 = siempre roja\n"
-               "sangre=%d\n", c->sangre);
+    fprintf(f, "; rumble: intensidad del mando con explosiones y disparos, 0-100 (0 = apagada)\nvibracion=%d\n",
+            c->rumble);
+    fprintf(f, "; start_screen: menú de inicio al abrir el juego (1) o directo al juego (0)\npantalla_inicio=%d\n",
+            c->start_screen);
+    fprintf(f, "; blood: 0 = la que diga el menú de service (BLOOD, en EE. UU. viene apagada), 1 = siempre roja\n"
+               "blood=%d\n", c->blood);
     for (int j = 0; j < 2; j++) {
         fprintf(f, "\n[teclado%d]\n", j + 1);
-        for (int a = 0; a < ACC_N; a++)
-            fprintf(f, "%s=%s\n", ACCION_NOMBRE[a],
-                    c->tecla[j][a] != SDL_SCANCODE_UNKNOWN ? SDL_GetScancodeName(c->tecla[j][a]) : "");
+        for (int a = 0; a < ACT_COUNT; a++)
+            fprintf(f, "%s=%s\n", ACTION_KEY[a],
+                    c->key[j][a] != SDL_SCANCODE_UNKNOWN ? SDL_GetScancodeName(c->key[j][a]) : "");
         fprintf(f, "\n[mando%d]\n", j + 1);
-        for (int a = 0; a < ACC_N; a++) {
-            const char *n = c->boton[j][a] != SDL_GAMEPAD_BUTTON_INVALID ? SDL_GetGamepadStringForButton(c->boton[j][a]) : NULL;
-            fprintf(f, "%s=%s\n", ACCION_NOMBRE[a], n ? n : "");
+        for (int a = 0; a < ACT_COUNT; a++) {
+            const char *n = c->button[j][a] != SDL_GAMEPAD_BUTTON_INVALID ? SDL_GetGamepadStringForButton(c->button[j][a]) : NULL;
+            fprintf(f, "%s=%s\n", ACTION_KEY[a], n ? n : "");
         }
     }
     fclose(f);

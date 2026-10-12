@@ -2,7 +2,7 @@
  *
  * Se leen los archivos de la instalación de GOG/DotEmu (resources\game\mslugx_*) y se validan
  * por SHA-256 contra los valores de docs/ROM_MAP.md. El repo solo contiene los hashes, nunca
- * los datos. */
+ * los data. */
 #include "neogeo.h"
 #include "sha256.h"
 
@@ -11,7 +11,7 @@
 #include <string.h>
 
 typedef struct {
-    const char *nombre;
+    const char *name;
     uint32_t tam;
     const char *sha256;
 } Archivo;
@@ -28,19 +28,19 @@ static const Archivo ARCHIVOS[] = {
 };
 #define N_ARCHIVOS (int)(sizeof ARCHIVOS / sizeof ARCHIVOS[0])
 
-static uint8_t *leer(const char *carpeta, const Archivo *a, char *error, int tam_error)
+static uint8_t *leer(const char *carpeta, const Archivo *a, char *error, int error_size)
 {
     char ruta[1024];
-    snprintf(ruta, sizeof ruta, "%s/%s", carpeta, a->nombre);
+    snprintf(ruta, sizeof ruta, "%s/%s", carpeta, a->name);
     FILE *f = fopen(ruta, "rb");
-    if (!f) { snprintf(error, tam_error, "No se encontró %s", ruta); return NULL; }
+    if (!f) { snprintf(error, error_size, "No se encontró %s", ruta); return NULL; }
     uint8_t *d = malloc(a->tam);
     size_t n = d ? fread(d, 1, a->tam, f) : 0;
     int extra = fgetc(f) != EOF;
     fclose(f);
     if (n != a->tam || extra) {
         free(d);
-        snprintf(error, tam_error, "%s no tiene el tamaño esperado (%u bytes)", ruta, a->tam);
+        snprintf(error, error_size, "%s no tiene el tamaño esperado (%u bytes)", ruta, a->tam);
         return NULL;
     }
     uint8_t h[32];
@@ -49,7 +49,7 @@ static uint8_t *leer(const char *carpeta, const Archivo *a, char *error, int tam
     for (int i = 0; i < 32; i++) snprintf(hex + 2 * i, 3, "%02x", h[i]);
     if (strcmp(hex, a->sha256) != 0) {
         free(d);
-        snprintf(error, tam_error, "%s no coincide con la versión de GOG (SHA-256 %s)", ruta, hex);
+        snprintf(error, error_size, "%s no coincide con la versión de GOG (SHA-256 %s)", ruta, hex);
         return NULL;
     }
     return d;
@@ -60,12 +60,12 @@ static void intercambiar_bytes(uint8_t *d, uint32_t n)
     for (uint32_t i = 0; i < n; i += 2) { uint8_t t = d[i]; d[i] = d[i + 1]; d[i + 1] = t; }
 }
 
-int ng_roms_cargar(NgRoms *r, const char *carpeta, char *error, int tam_error)
+int ng_roms_load(NgRoms *r, const char *carpeta, char *error, int error_size)
 {
     uint8_t *d[N_ARCHIVOS];
     memset(r, 0, sizeof *r);
     for (int i = 0; i < N_ARCHIVOS; i++) {
-        d[i] = leer(carpeta, &ARCHIVOS[i], error, tam_error);
+        d[i] = leer(carpeta, &ARCHIVOS[i], error, error_size);
         if (!d[i]) {
             while (i--) free(d[i]);
             return -1;
@@ -74,20 +74,20 @@ int ng_roms_cargar(NgRoms *r, const char *carpeta, char *error, int tam_error)
     /* P y BIOS: mismo orden de bytes que los .p de MAME; la vista del 68000 es la intercambiada. */
     intercambiar_bytes(d[0], ARCHIVOS[0].tam);
     intercambiar_bytes(d[1], ARCHIVOS[1].tam);
-    r->p = d[0]; r->p_tam = ARCHIVOS[0].tam;
+    r->p = d[0]; r->p_size = ARCHIVOS[0].tam;
     r->bios = d[1];
-    r->fix_juego = d[2];
+    r->fix_game = d[2];
     r->fix_bios = d[3];
     r->tiles = d[4]; r->n_tiles = ARCHIVOS[4].tam / 128;
     r->zoom = d[5];
     r->z80 = d[6];
-    r->adpcm = d[7]; r->adpcm_tam = ARCHIVOS[7].tam;
+    r->adpcm = d[7]; r->adpcm_size = ARCHIVOS[7].tam;
     return 0;
 }
 
-void ng_roms_liberar(NgRoms *r)
+void ng_roms_free(NgRoms *r)
 {
-    free(r->p); free(r->bios); free(r->fix_juego); free(r->fix_bios); free(r->tiles); free(r->zoom);
+    free(r->p); free(r->bios); free(r->fix_game); free(r->fix_bios); free(r->tiles); free(r->zoom);
     free(r->z80); free(r->adpcm);
     memset(r, 0, sizeof *r);
 }

@@ -1,4 +1,4 @@
-"""Verifica las reglas de muestreo de interrupciones (src/cpu/cycles68k.h, clase_acceso) contra el
+"""Verifica las reglas de muestreo de interrupciones (src/cpu/cycles68k.h, access_class) contra el
 análisis del microcódigo del 68000 (tools/sampling_queues.py sobre la descripción de MAME,
 usada solo como documentación).
 
@@ -18,22 +18,22 @@ import sys
 
 def main() -> int:
     consultas, esperado = [], []
-    for linea in open(sys.argv[1], encoding="utf-8"):
-        m = re.match(r"(\S+)\s+([0-9A-F]{4})/([0-9A-F]{4}) (.*)$", linea.strip())
+    for line in open(sys.argv[1], encoding="utf-8"):
+        m = re.match(r"(\S+)\s+([0-9A-F]{4})/([0-9A-F]{4}) (.*)$", line.strip())
         if not m:
             continue
-        nombre = m.group(1)
-        if re.match(r"(movem|chk|div|reset|trapv|stop|movep)", nombre):
+        name = m.group(1)
+        if re.match(r"(movem|chk|div|reset|trapv|stop|movep)", name):
             continue
         op = int(m.group(2), 16)
-        if re.match(r"b\w*_rel8", nombre):
+        if re.match(r"b\w*_rel8", name):
             op |= 0x02                         # Bcc corto: el desplazamiento nunca es 0
         for dur, l, u in ast.literal_eval(m.group(4)):
             consultas.append(f"{op:04X} {dur}")
-            esperado.append((nombre, dur, "N" if l is None else str(l), str(u)))
-    salida = subprocess.run([sys.argv[2]], input="\n".join(consultas), capture_output=True, text=True).stdout.split("\n")
+            esperado.append((name, dur, "N" if l is None else str(l), str(u)))
+    output = subprocess.run([sys.argv[2]], input="\n".join(consultas), capture_output=True, text=True).stdout.split("\n")
     mal = 0
-    for (n, d, l, u), r in zip(esperado, salida):
+    for (n, d, l, u), r in zip(esperado, output):
         if r.split() != [l, u]:
             mal += 1
             if mal <= 20:

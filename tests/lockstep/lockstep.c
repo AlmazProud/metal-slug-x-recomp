@@ -1,16 +1,16 @@
 /* Lockstep del programa recompilado contra Musashi puro, desde el reset y con la misma máquina.
  *
- * 1) Corre el programa recompilado (con respaldo en Musashi) hasta N ciclos y registra un punto
- *    de control en cada despacho: (ciclos, PC, hash de registros).
+ * 1) Corre el programa recompilado (con respaldo en Musashi) hasta N cycles y registra un punto
+ *    de control en cada despacho: (cycles, PC, hash de registros).
  * 2) Corre Musashi puro desde el mismo reset, instrucción por instrucción, y en cada punto de
  *    control exige el mismo PC y los mismos registros en el mismo ciclo.
- * 3) Compara la memoria final (RAM, SRAM, paleta, VRAM).
+ * 3) Compara la memoria final (RAM, SRAM, palette, VRAM).
  *
  * VBlank (IRQ1, autovector) cada cuadro en la línea 248. El lado recompilado la entrega en un
  * punto de despacho y registra (ciclo, PC); Musashi la recibe exactamente en ese mismo punto.
- * La entrada a la interrupción se emula igual en ambos lados (44 ciclos, como Musashi).
+ * La entrada a la interrupción se emula igual en ambos lados (44 cycles, como Musashi).
  *
- * Uso: lockstep <mslugx_game_m68k> <mslugx_bios_m68k> [ciclos] [volcado de MAME]
+ * Uso: lockstep <mslugx_game_m68k> <mslugx_bios_m68k> [cycles] [volcado de MAME]
  * Con un volcado (tools/mame/dump_state.lua) ambos lados arrancan desde ese estado
  * del juego en lugar del reset.
  */
@@ -25,7 +25,7 @@
 #include "m68k.h"
 #include "machine.h"
 
-void programa_registrar(void);
+void program_register(void);
 void ref_reset(void);
 void ref_despertar(void);
 int ref_ciclos_base(unsigned pc);
@@ -33,13 +33,13 @@ int ref_ejecutar_una(void);
 int ref_detenido(void);
 unsigned ref_reg(int r);
 
-typedef struct { int64_t ciclos; uint32_t pc, hash; } Punto;
+typedef struct { int64_t cycles; uint32_t pc, hash; } Punto;
 
-/* Volcado de MAME: 19 registros, vectores, ventana de P2, RAM, SRAM, paleta. */
+/* Volcado de MAME: 19 registros, vectors, window de P2, RAM, SRAM, palette. */
 typedef struct {
     uint32_t r[19];             /* D0-D7, A0-A6, SP, USP, SR, PC */
-    uint8_t vectores[128], ventana[16];
-    uint8_t ram[0x10000], sram[0x10000], paleta[0x2000];
+    uint8_t vectors[128], window[16];
+    uint8_t ram[0x10000], sram[0x10000], palette[0x2000];
 } Volcado;
 static Volcado vol;
 static int con_volcado;
@@ -54,9 +54,9 @@ static void cargar_volcado(const char *ruta)
         if (fread(b, 1, 4, f) != 4) exit(2);
         vol.r[i] = (uint32_t)b[0] << 24 | b[1] << 16 | b[2] << 8 | b[3];
     }
-    if (fread(vol.vectores, 1, 128, f) != 128 || fread(vol.ventana, 1, 16, f) != 16 ||
+    if (fread(vol.vectors, 1, 128, f) != 128 || fread(vol.window, 1, 16, f) != 16 ||
         fread(vol.ram, 1, sizeof vol.ram, f) != sizeof vol.ram || fread(vol.sram, 1, sizeof vol.sram, f) != sizeof vol.sram ||
-        fread(vol.paleta, 1, sizeof vol.paleta, f) != sizeof vol.paleta) { fprintf(stderr, "volcado corto\n"); exit(2); }
+        fread(vol.palette, 1, sizeof vol.palette, f) != sizeof vol.palette) { fprintf(stderr, "volcado corto\n"); exit(2); }
     fclose(f);
     con_volcado = 1;
 }
@@ -76,19 +76,19 @@ static uint32_t hash_regs(const uint32_t d[8], const uint32_t a[8], uint32_t sr,
     return fnv(fnv(fnv(h, sr & 0xA71F), usp), ssp);
 }
 
-static uint32_t hash_mem(const Maquina *m)
+static uint32_t hash_mem(const Machine *m)
 {
     uint32_t h = 0x811C9DC5u;
     for (size_t i = 0; i < sizeof m->ram; i++) h = (h ^ m->ram[i]) * 0x01000193u;
     for (size_t i = 0; i < sizeof m->sram; i++) h = (h ^ m->sram[i]) * 0x01000193u;
-    for (size_t i = 0; i < sizeof m->paleta; i++) h = (h ^ m->paleta[i]) * 0x01000193u;
+    for (size_t i = 0; i < sizeof m->palette; i++) h = (h ^ m->palette[i]) * 0x01000193u;
     for (size_t i = 0; i < 0x10000; i++) h = fnv(h, m->vram[i]);
     return h;
 }
 
 #define CUADRO (768 * 264)
 #define LINEA_VBLANK 248
-typedef struct { int64_t ciclos; uint32_t pc; } Irq;
+typedef struct { int64_t cycles; uint32_t pc; } Irq;
 static Irq *irqs;
 static size_t n_irqs, cap_irqs;
 static uint8_t *visto;            /* direcciones de instrucción ejecutadas (lado Musashi) */
@@ -99,32 +99,32 @@ static int irq_pendiente;
 
 static void programar(const Cpu68k *c)
 {
-    /* Además de VBlank y el final, un punto de control cada ~1000 ciclos: con los puntos de
+    /* Además de VBlank y el final, un punto de control cada ~1000 cycles: con los puntos de
      * control por instrucción del código generado, así se verifica el estado con frecuencia
      * (un número primo para no sincronizarse con los bucles del programa). */
-    int64_t t = c->ciclos + 997;
+    int64_t t = c->cycles + 997;
     if (proxima_vblank < t) t = proxima_vblank;
     if (limite < t) t = limite;
-    rc_limite_ciclos = t;
-    rc_irq_nivel = irq_pendiente;     /* el despachador vuelve a rc_evento si la máscara baja */
+    rc_cycle_limit = t;
+    rc_irq_level = irq_pendiente;     /* el despachador vuelve a rc_event si la máscara baja */
 }
 
-void rc_evento(Cpu68k *c)
+void rc_event(Cpu68k *c)
 {
-    if (c->ciclos >= limite) { rc_salir = 1; return; }
-    if (c->ciclos >= proxima_vblank) { irq_pendiente = 1; proxima_vblank += CUADRO; }
-    if (c->detenido && c->ciclos < proxima_vblank && !irq_pendiente) c->ciclos = proxima_vblank;
+    if (c->cycles >= limite) { rc_exit = 1; return; }
+    if (c->cycles >= proxima_vblank) { irq_pendiente = 1; proxima_vblank += CUADRO; }
+    if (c->stopped && c->cycles < proxima_vblank && !irq_pendiente) c->cycles = proxima_vblank;
     if (irq_pendiente && c->imask < 1) {
         if (n_irqs == cap_irqs) { cap_irqs = cap_irqs ? cap_irqs * 2 : 1024; irqs = realloc(irqs, cap_irqs * sizeof *irqs); }
-        irqs[n_irqs++] = (Irq){c->ciclos, c->pc};
+        irqs[n_irqs++] = (Irq){c->cycles, c->pc};
         uint32_t sr = cpu_get_sr(c);
         if (!c->s) { c->usp = c->a[7]; c->a[7] = c->ssp; c->s = 1; }
         c->t = 0; c->imask = 1;
         c->a[7] -= 4; bus_w32(c->a[7], c->pc);
         c->a[7] -= 2; bus_w16(c->a[7], sr);
         c->pc = bus_r32(25 * 4) & 0xFFFFFF;
-        c->ciclos += 44;
-        c->detenido = 0;
+        c->cycles += 44;
+        c->stopped = 0;
         irq_pendiente = 0;
     }
     programar(c);
@@ -152,27 +152,27 @@ static void traza(const Cpu68k *c)
         if (!puntos) { fprintf(stderr, "sin memoria\n"); exit(3); }
     }
     uint32_t usp = c->s ? c->usp : c->a[7], ssp = c->s ? c->a[7] : c->ssp;
-    puntos[n_puntos++] = (Punto){c->ciclos, c->pc, hash_regs(c->d, c->a, cpu_get_sr(c), usp, ssp)};
+    puntos[n_puntos++] = (Punto){c->cycles, c->pc, hash_regs(c->d, c->a, cpu_get_sr(c), usp, ssp)};
 }
 
 int main(int argc, char **argv)
 {
-    if (argc < 3) { fprintf(stderr, "uso: %s <mslugx_game_m68k> <mslugx_bios_m68k> [ciclos]\n", argv[0]); return 2; }
+    if (argc < 3) { fprintf(stderr, "uso: %s <mslugx_game_m68k> <mslugx_bios_m68k> [cycles]\n", argv[0]); return 2; }
     limite = argc > 3 ? strtoll(argv[3], NULL, 10) : 20000000;
     if (argc > 4) cargar_volcado(argv[4]);
-    maq_cargar_roms(argv[1], argv[2]);
+    mach_load_roms(argv[1], argv[2]);
     setvbuf(stdout, NULL, _IONBF, 0);
 
     /* ---- 1) programa recompilado */
-    static Maquina mb, ma;
+    static Machine mb, ma;
     static Cpu68k c;
-    maq_iniciar(&mb, &c.ciclos);
-    maq_usar(&mb);
-    rc_interprete_iniciar();
-    programa_registrar();
+    mach_init(&mb, &c.cycles);
+    mach_use(&mb);
+    rc_interpreter_init();
+    program_register();
     memset(&c, 0, sizeof c);
     if (con_volcado) {
-        maq_desde_volcado(&mb, vol.vectores, vol.ventana, vol.ram, vol.sram, vol.paleta);
+        mach_from_dump(&mb, vol.vectors, vol.window, vol.ram, vol.sram, vol.palette);
         for (int i = 0; i < 8; i++) c.d[i] = vol.r[i];
         for (int i = 0; i < 7; i++) c.a[i] = vol.r[8 + i];
         uint32_t sr = vol.r[17];
@@ -187,22 +187,22 @@ int main(int argc, char **argv)
     }
     proxima_vblank = (int64_t)LINEA_VBLANK * 768;
     programar(&c);
-    rc_traza = traza;
+    rc_trace = traza;
     clock_t t0 = clock();
-    rc_ejecutar(&c);
+    rc_run(&c);
     double seg_b = (double)(clock() - t0) / CLOCKS_PER_SEC;
     uint32_t mem_b = hash_mem(&mb);
-    printf("Recompilado: %" PRId64 " ciclos, %zu despachos (%" PRIu64 " recompilados, %" PRIu64
-           " interpretados), %.2f s, pc final %06X, detenido=%d\n",
-           c.ciclos, n_puntos, rc_pasos_recompilados, rc_pasos_interpretados, seg_b, c.pc, c.detenido);
+    printf("Recompilado: %" PRId64 " cycles, %zu despachos (%" PRIu64 " recompilados, %" PRIu64
+           " interpretados), %.2f s, pc final %06X, stopped=%d\n",
+           c.cycles, n_puntos, rc_recompiled_steps, rc_interpreted_steps, seg_b, c.pc, c.stopped);
 
     /* ---- 2) Musashi puro */
     int64_t total = 0, vista = 0;
-    maq_iniciar(&ma, &vista);
-    maq_usar(&ma);
+    mach_init(&ma, &vista);
+    mach_use(&ma);
     ref_reset();
     if (con_volcado) {
-        maq_desde_volcado(&ma, vol.vectores, vol.ventana, vol.ram, vol.sram, vol.paleta);
+        mach_from_dump(&ma, vol.vectors, vol.window, vol.ram, vol.sram, vol.palette);
         m68k_set_reg(M68K_REG_SR, vol.r[17]);
         for (int i = 0; i < 8; i++) m68k_set_reg(M68K_REG_D0 + i, vol.r[i]);
         for (int i = 0; i < 7; i++) m68k_set_reg(M68K_REG_A0 + i, vol.r[8 + i]);
@@ -217,17 +217,17 @@ int main(int argc, char **argv)
     t0 = clock();
     while (k < n_puntos) {
         uint32_t pc = ref_reg(M68K_REG_PC) & 0xFFFFFF;
-        if (ki < n_irqs && total == irqs[ki].ciclos && pc == irqs[ki].pc) {
+        if (ki < n_irqs && total == irqs[ki].cycles && pc == irqs[ki].pc) {
             irq_en_musashi();
             total += 44;
             ki++;
             continue;
         }
-        if (ref_detenido() && ki < n_irqs && total < irqs[ki].ciclos) {
-            total = irqs[ki].ciclos;          /* STOP: el tiempo avanza hasta la interrupción */
+        if (ref_detenido() && ki < n_irqs && total < irqs[ki].cycles) {
+            total = irqs[ki].cycles;          /* STOP: el tiempo avanza hasta la interrupción */
             continue;
         }
-        if (total == puntos[k].ciclos) {
+        if (total == puntos[k].cycles) {
             uint32_t d[8], a[8];
             for (int i = 0; i < 8; i++) { d[i] = ref_reg(M68K_REG_D0 + i); a[i] = ref_reg(M68K_REG_A0 + i); }
             uint32_t h = hash_regs(d, a, ref_reg(M68K_REG_SR), ref_reg(M68K_REG_USP), ref_reg(M68K_REG_ISP));
@@ -235,17 +235,17 @@ int main(int argc, char **argv)
                 printf("DIVERGENCIA en el punto %zu (ciclo %" PRId64 "): musashi pc=%06X recompilado pc=%06X; "
                        "registros %s\n", k, total, pc, puntos[k].pc, h == puntos[k].hash ? "iguales" : "DISTINTOS");
                 if (k > 0) printf("  punto anterior correcto: %zu ciclo %" PRId64 " pc=%06X\n",
-                                  k - 1, puntos[k - 1].ciclos, puntos[k - 1].pc);
+                                  k - 1, puntos[k - 1].cycles, puntos[k - 1].pc);
                 ok = 0;
                 break;
             }
             k++;
             continue;
         }
-        if (total > puntos[k].ciclos) {
+        if (total > puntos[k].cycles) {
             printf("DIVERGENCIA DE CICLOS: Musashi pasó del ciclo %" PRId64 " sin llegar al punto %zu "
                    "(pc esperado %06X; musashi en %06X, ciclo %" PRId64 ")\n",
-                   puntos[k].ciclos, k, puntos[k].pc, pc, total);
+                   puntos[k].cycles, k, puntos[k].pc, pc, total);
             ok = 0;
             break;
         }
@@ -271,19 +271,19 @@ int main(int argc, char **argv)
     /* La última sección (desde el último punto hasta el límite) se cubre comparando la memoria
      * después de que Musashi alcance el mismo ciclo final. */
     if (ok) {
-        while (total < c.ciclos) {
+        while (total < c.cycles) {
             uint32_t pc = ref_reg(M68K_REG_PC) & 0xFFFFFF;
-            if (ki < n_irqs && total == irqs[ki].ciclos && pc == irqs[ki].pc) {
+            if (ki < n_irqs && total == irqs[ki].cycles && pc == irqs[ki].pc) {
                 irq_en_musashi(); total += 44; ki++; continue;
             }
-            if (ref_detenido()) { total = c.ciclos; break; }
+            if (ref_detenido()) { total = c.cycles; break; }
             vista = total + ref_ciclos_base(pc);
             total += ref_ejecutar_una();
         }
         uint32_t mem_a = hash_mem(&ma);
-        if (total != c.ciclos) { printf("Ciclo final distinto: musashi %" PRId64 " recompilado %" PRId64 "\n", total, c.ciclos); ok = 0; }
-        if (mem_a != mem_b) { printf("Memoria final DISTINTA (ram/sram/paleta/vram)\n"); ok = 0; }
-        else printf("Memoria final idéntica (RAM, SRAM, paleta, VRAM)\n");
+        if (total != c.cycles) { printf("Ciclo final distinto: musashi %" PRId64 " recompilado %" PRId64 "\n", total, c.cycles); ok = 0; }
+        if (mem_a != mem_b) { printf("Memoria final DISTINTA (ram/sram/palette/vram)\n"); ok = 0; }
+        else printf("Memoria final idéntica (RAM, SRAM, palette, VRAM)\n");
     }
     printf("%s\n", ok ? "LOCKSTEP OK" : "LOCKSTEP FALLA");
     return ok ? 0 : 1;

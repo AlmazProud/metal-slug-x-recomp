@@ -1,15 +1,15 @@
 """Reconstruye el set de MAME (mslugx + neogeo) a partir de los archivos de DotEmu/GOG.
 
 Uso:
-    python tools/extract_roms.py [--roms DIR] [--salida DIR] [--mame EXE]
+    python tools/extract_roms.py [--roms DIR] [--output DIR] [--mame EXE]
 
 - Lee los archivos mslugx_* de --roms (por defecto %PD_ROMS%).
-- Escribe <salida>/mslugx/*.{p1,ep1,s1,m1,v*,c*} y <salida>/neogeo/* (por defecto <roms>/mame).
+- Escribe <output>/mslugx/*.{p1,ep1,s1,m1,v*,c*} y <output>/neogeo/* (por defecto <roms>/mame).
 - Obtiene los nombres y hashes esperados de `mame -listxml` (MAME es el oráculo),
   verifica CRC32 y SHA1 de cada archivo reconstruido y muestra un reporte.
 
 Los formatos y transformaciones están documentados en docs/ROM_MAP.md.
-Este script no contiene datos de los ROMs: solo transformaciones.
+Este script no contiene data de los ROMs: solo transformaciones.
 """
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def esperados_de_mame(mame: Path) -> dict[str, dict]:
 # ---------------------------------------------------------------- reconstrucción
 
 def reconstruir(roms: Path) -> dict[str, tuple[str, bytes]]:
-    """Devuelve {nombre_mame: (carpeta, datos)}."""
+    """Devuelve {nombre_mame: (carpeta, data)}."""
     leer = lambda n: (roms / n).read_bytes()
     out: dict[str, tuple[str, bytes]] = {}
 
@@ -124,34 +124,34 @@ def main() -> int:
     pd_roms = os.environ.get("PD_ROMS")
     pd_tools = os.environ.get("PD_TOOLS")
     ap.add_argument("--roms", type=Path, default=Path(pd_roms) if pd_roms else None)
-    ap.add_argument("--salida", type=Path)
+    ap.add_argument("--output", type=Path)
     ap.add_argument("--mame", type=Path, default=Path(pd_tools, "mame", "mame.exe") if pd_tools else None)
     a = ap.parse_args()
     if not a.roms or not a.mame:
-        ap.error("activa el entorno (env.ps1) o indica --roms y --mame")
-    salida = a.salida or (a.roms / "mame")
+        ap.error("active el entorno (env.ps1) o indica --roms y --mame")
+    output = a.output or (a.roms / "mame")
 
     esperado = esperados_de_mame(a.mame)
-    datos = reconstruir(a.roms)
+    data = reconstruir(a.roms)
     sustituidos = set()
-    for nombre, (carpeta, origen) in SUSTITUTOS.items():
-        real = salida / carpeta / nombre
-        if real.is_file() and f"{zlib.crc32(real.read_bytes()):08x}" == esperado[nombre]["crc"]:
+    for name, (carpeta, origen) in SUSTITUTOS.items():
+        real = output / carpeta / name
+        if real.is_file() and f"{zlib.crc32(real.read_bytes()):08x}" == esperado[name]["crc"]:
             continue                                  # el usuario aportó el archivo auténtico
-        datos[nombre] = (carpeta, datos[origen][1])
-        sustituidos.add(nombre)
+        data[name] = (carpeta, data[origen][1])
+        sustituidos.add(name)
 
     print(f"{'archivo':<14} {'carpeta':<7} {'bytes':>9}  {'crc32':<8}  estado")
     fallas = 0
-    for nombre, (carpeta, b) in datos.items():
-        destino = salida / carpeta
+    for name, (carpeta, b) in data.items():
+        destino = output / carpeta
         destino.mkdir(parents=True, exist_ok=True)
-        (destino / nombre).write_bytes(b)
+        (destino / name).write_bytes(b)
         crc = f"{zlib.crc32(b):08x}"
         sha1 = hashlib.sha1(b).hexdigest()
-        e = esperado.get(nombre)
-        if nombre in sustituidos:
-            estado = f"SUSTITUTO ({SUSTITUTOS[nombre][1]}; MAME avisará checksum)"
+        e = esperado.get(name)
+        if name in sustituidos:
+            estado = f"SUSTITUTO ({SUSTITUTOS[name][1]}; MAME avisará checksum)"
         elif e is None:
             estado = "SIN REFERENCIA EN MAME"
         elif crc == e["crc"] and sha1 == e["sha1"] and len(b) == e["size"]:
@@ -159,15 +159,15 @@ def main() -> int:
         else:
             estado = f"DISTINTO (MAME espera crc {e['crc']})"
         fallas += not (estado.startswith("OK") or estado.startswith("SUSTITUTO")
-                       or nombre == "250-p1.p1")       # P1 de GOG: diferencia conocida (ROM_MAP.md)
-        print(f"{nombre:<14} {carpeta:<7} {len(b):>9}  {crc}  {estado}")
+                       or name == "250-p1.p1")       # P1 de GOG: diferencia conocida (ROM_MAP.md)
+        print(f"{name:<14} {carpeta:<7} {len(b):>9}  {crc}  {estado}")
 
     faltan = sorted(n for n, e in esperado.items()
-                    if n not in datos and (e["maquina"] == "mslugx" and "bios" not in e["region"]
+                    if n not in data and (e["maquina"] == "mslugx" and "bios" not in e["region"]
                                            or e["region"] in ("audiobios", "fixedbios", "spritegen:zoomy")))
     if faltan:
         print("\nMAME también requiere (GOG no los incluye): " + ", ".join(faltan))
-    print(f"\nSalida: {salida}")
+    print(f"\nSalida: {output}")
     return 1 if fallas else 0
 
 

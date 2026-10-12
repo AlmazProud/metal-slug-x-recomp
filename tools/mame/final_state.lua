@@ -1,6 +1,6 @@
 -- Al terminar la máquina: imprime el número de frame y un hash de la RAM de trabajo del 68000
 -- (0x100000-0x10FFFF) y guarda una captura. Sirve para verificar que una reproducción de
--- entradas (-playback) es determinista: dos corridas deben dar el mismo hash.
+-- inputs (-playback) es determinista: dos corridas deben dar el mismo hash.
 
 local mem = manager.machine.devices[":maincpu"].spaces["program"]
 

@@ -10,9 +10,9 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 # El programa recompilado se genera al compilar a partir de la copia del usuario (PD_ROMS) y del
-# análisis de la Fase 1 (PD_ANALISIS). Nada de eso entra al repo.
+# análisis de la Fase 1 (PD_ANALYSIS). Nada de eso entra al repo.
 set(PD_ROMS "$ENV{PD_ROMS}" CACHE PATH "Carpeta con los ROMs del usuario (mslugx_*)")
-set(PD_ANALISIS "$ENV{PD_ROOT}/analysis" CACHE PATH "Carpeta de salida del análisis (listing_p1.txt)")
+set(PD_ANALYSIS "$ENV{PD_ROOT}/analysis" CACHE PATH "Carpeta de output del análisis (listing_p1.txt)")
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 enable_testing()

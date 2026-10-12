@@ -15,10 +15,10 @@ public class SembrarRaices extends GhidraScript {
     protected void run() throws Exception {
         String[] args = getScriptArgs();
         int n = 0;
-        for (String linea : Files.readAllLines(Path.of(args[0]))) {
-            linea = linea.trim();
-            if (linea.isEmpty()) continue;
-            Address a = toAddr(Long.parseLong(linea, 16));
+        for (String line : Files.readAllLines(Path.of(args[0]))) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
+            Address a = toAddr(Long.parseLong(line, 16));
             new DisassembleCommand(a, null, true).applyTo(currentProgram, monitor);
             if (getFunctionAt(a) == null) createFunction(a, null);
             n++;

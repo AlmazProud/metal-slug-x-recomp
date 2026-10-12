@@ -31,7 +31,7 @@ Doble clic en `INSTALL.bat`, o desde una consola:
 - Después pregunta si quieres copiar los ROMs desde GOG a `roms\`. La respuesta por defecto
   es **No**.
 
-Opciones:
+Options:
 
 | Opción | Efecto |
 |---|---|

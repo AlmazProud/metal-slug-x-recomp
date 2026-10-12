@@ -1,5 +1,5 @@
--- Capturas de pantalla de MAME en cuadros concretos, para compararlas con el port.
--- Variables de entorno: PD_CUADROS = lista separada por comas; PD_PREFIJO = prefijo del nombre
+-- Capturas de screen de MAME en frames concretos, para compararlas con el port.
+-- Variables de entorno: PD_CUADROS = lista separada por comas; PD_PREFIJO = prefijo del name
 -- (las imágenes quedan en el -snapshot_directory como <prefijo>_NNNNNN.png).
 
 local scr = manager.machine.screens[":screen"]

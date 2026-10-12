@@ -1,9 +1,9 @@
 /* Generado por tools/sound_catalog.py: no editar a mano.
- * Sonidos de Metal Slug X: modo del driver (00 música, 10 efectos, 11 voces), comando,
- * duración en décimas de segundo (0xFFFF = en bucle) y nombre. */
+ * Sonidos de Metal Slug X: mode del driver (00 música, 10 efectos, 11 voces), command,
+ * duración en décimas de second (0xFFFF = en bucle) y name. */
 #include "sounds.h"
 
-const Sonido PERFIL_SONIDOS[] = {
+const Sound PROFILE_SOUNDS[] = {
     {0x00, 0x20, 71, "Mision cumplida (fanfarria)"},
     {0x00, 0x21, 65535, "Mision 1"},
     {0x00, 0x22, 65535, "Mision 2"},
@@ -269,4 +269,4 @@ const Sonido PERFIL_SONIDOS[] = {
     {0x11, 0x6D, 4, "Voz 6D"},
     {0x11, 0x6E, 2, "Voz 6E"},
 };
-const int PERFIL_N_SONIDOS = (int)(sizeof PERFIL_SONIDOS / sizeof PERFIL_SONIDOS[0]);
+const int PROFILE_SOUND_COUNT = (int)(sizeof PROFILE_SOUNDS / sizeof PROFILE_SOUNDS[0]);

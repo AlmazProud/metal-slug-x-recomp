@@ -1,33 +1,33 @@
-/* Port nativo: piezas compartidas entre main.c, el modo con ventana y el modo sin ventana. */
+/* Port nativo: piezas compartidas entre main.c, el mode con window y el mode sin window. */
 #ifndef PORT_H
 #define PORT_H
 
-#define NS_POR_CUADRO 16896000LL         /* 202 752 ciclos a 12 MHz: 59,1856 Hz */
+#define NS_PER_FRAME 16896000LL         /* 202 752 cycles a 12 MHz: 59,1856 Hz */
 
 typedef struct {
     const char *roms;
-    int escala, sin_ventana, sram_vacia;
+    int scale, headless, empty_sram;
     int turbo;                           /* -1 = el de la configuración */
-    long cuadros;
-    const char *capturas, *salida, *guion, *wav, *entradas, *huellas, *volcar;
-    int sin_audio;
-    int probar_estado;                   /* cuadros a comparar tras cargar un estado (0 = no) */
-    const char *catalogo;                /* --catalogo-sonido: tabla de los comandos de sonido */
-    int probar_sonidos;                  /* --probar-sonidos: prueba del menú de sonido */
-    int sangre;                          /* --sangre: opción BLOOD del juego encendida */
-    int fecha[7], con_fecha;
-} Opciones;
+    long frames;
+    const char *screenshots, *output, *script, *wav, *inputs, *fingerprints, *dump;
+    int no_audio;
+    int test_state;                   /* frames a comparar tras cargar un estado (0 = no) */
+    const char *catalog;                /* --catalog-sonido: tabla de los comandos de sonido */
+    int test_sounds;                  /* --probar-sonidos: prueba del menú de sonido */
+    int blood;                          /* --blood: opción BLOOD del juego encendida */
+    int date[7], has_date;
+} Options;
 
 /* headless.c */
-int guardar_bmp(const char *ruta);
-int sin_ventana_preparar(const Opciones *o);
-int sin_ventana_correr(const Opciones *o);
+int save_bmp(const char *ruta);
+int headless_prepare(const Options *o);
+int headless_run(const Options *o);
 
 /* window.c */
-int ventana_correr(const Opciones *o);
+int window_run(const Options *o);
 
 /* gog.c: carpeta resources\game de una instalación de Metal Slug X de GOG (registro de Windows y
  * carpetas habituales). Devuelve 1 si encontró una cuyos archivos validan. */
-int gog_buscar(char *carpeta, int tam);
+int gog_find(char *carpeta, int tam);
 
 #endif

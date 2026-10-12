@@ -1,14 +1,14 @@
-"""Genera las pruebas diferenciales del recompilador (una función C por instrucción).
+"""Genera las tests diferenciales del recompilador (una función C por instrucción).
 
 Toma las instrucciones de P1 del listado del análisis (Fase 1), elige hasta N instancias reales
 por cada opcode distinto (palabras de extensión distintas) y emite, para cada una, el C del
 generador envuelto en una función. El arnés (differential.c) ejecuta cada instrucción en Musashi
 y en el C generado desde estados aleatorios y compara el resultado.
 
-La salida contiene código derivado del juego: se escribe en el directorio de compilación y
+La output contiene código derivado del juego: se escribe en el directorio de compilación y
 nunca se versiona.
 
-Uso: python generate_tests.py --roms DIR --listado ARCHIVO --salida ARCHIVO.c [--por-opcode N]
+Uso: python generate_tests.py --roms DIR --listado ARCHIVO --output ARCHIVO.c [--por-opcode N]
 """
 from __future__ import annotations
 
@@ -36,11 +36,11 @@ CABECERA = r"""/* GENERADO por tests/differential/generate_tests.py: NO EDITAR, 
 #define PD_LLAMADA(d, r)       PD_SALTO(d)
 #define PD_LLAMADA_DIN(e, r)   PD_SALTO_DIN(e)
 #define PD_RETORNO(e)          PD_SALTO_DIN(e)
-#define PD_EXCEPCION(v, pc)    do { cpu_excepcion(c, (v), (pc)); return; } while (0)
+#define PD_EXCEPCION(v, pc)    do { cpu_exception(c, (v), (pc)); return; } while (0)
 #define PD_SR_CAMBIADO(d)      PD_SIGUIENTE(d)
 #define PD_STOP(d)             PD_SIGUIENTE(d)
 #define PD_RESET_EXTERNO()     ((void)0)
-#define PD_INI(o)              do { c->op = (o); c->ini = c->ciclos; } while (0)
+#define PD_INI(o)              do { c->op = (o); c->start_cycle = c->cycles; } while (0)
 
 """
 
@@ -49,12 +49,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--roms", type=Path, required=True)
     ap.add_argument("--listado", type=Path, required=True)
-    ap.add_argument("--salida", type=Path, required=True)
+    ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--por-opcode", type=int, default=2)
-    ap.add_argument("--ciclos", type=Path, help="tabla de ciclos base (volcar_ciclos)")
+    ap.add_argument("--cycles", type=Path, help="tabla de cycles base (volcar_ciclos)")
     a = ap.parse_args()
-    if a.ciclos:
-        generator.cargar_ciclos(a.ciclos)
+    if a.cycles:
+        generator.cargar_ciclos(a.cycles)
 
     raw = (a.roms / "mslugx_game_m68k").read_bytes()[:1 << 20]
     cpu = bytearray(len(raw))
@@ -63,8 +63,8 @@ def main() -> int:
 
     elegidas: dict[int, list] = defaultdict(list)
     vistas_ext: set[bytes] = set()
-    for linea in a.listado.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"^([0-9A-F]{6})", linea)
+    for line in a.listado.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^([0-9A-F]{6})", line)
         if not m:
             continue
         d = int(m.group(1), 16)
@@ -85,15 +85,15 @@ def main() -> int:
             except NoSoportada as e:
                 no_soportadas[str(e)] += 1
                 continue
-            nombre = f"i_{i.dir:06X}"
-            funciones.append(f"static void {nombre}(Cpu68k *c)\n{{\n    " + "\n    ".join(cuerpo) + "\n}\n")
-            tabla.append(f'    {{0x{i.dir:06X}u, {nombre}, "{i.texto()}"}},')
+            name = f"i_{i.dir:06X}"
+            funciones.append(f"static void {name}(Cpu68k *c)\n{{\n    " + "\n    ".join(cuerpo) + "\n}\n")
+            tabla.append(f'    {{0x{i.dir:06X}u, {name}, "{i.text()}"}},')
 
-    a.salida.parent.mkdir(parents=True, exist_ok=True)
-    a.salida.write_text(CABECERA + "\n".join(funciones) +
-                        "\nconst Prueba pruebas[] = {\n" + "\n".join(tabla) + "\n};\n" +
-                        f"const int n_pruebas = {len(tabla)};\n", encoding="utf-8")
-    print(f"pruebas generadas: {len(tabla)} (opcodes distintos: {len(elegidas)})")
+    a.output.parent.mkdir(parents=True, exist_ok=True)
+    a.output.write_text(CABECERA + "\n".join(funciones) +
+                        "\nconst Test tests[] = {\n" + "\n".join(tabla) + "\n};\n" +
+                        f"const int n_tests = {len(tabla)};\n", encoding="utf-8")
+    print(f"tests generadas: {len(tabla)} (opcodes distintos: {len(elegidas)})")
     for k, n in no_soportadas.most_common():
         print(f"  NO SOPORTADA: {k} x{n}")
     return 0

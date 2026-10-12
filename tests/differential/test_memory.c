@@ -6,7 +6,7 @@
 static uint8_t p1[0x100000];
 static uint8_t bios[0x20000];
 static uint32_t semilla_actual;
-static Capa *capa_actual;
+static Layer *capa_actual;
 
 static void cargar(const char *ruta, uint8_t *dst, size_t n)
 {
@@ -21,14 +21,14 @@ static void cargar(const char *ruta, uint8_t *dst, size_t n)
     }
 }
 
-void mem_cargar_roms(const char *ruta_p, const char *ruta_bios)
+void mem_load_roms(const char *path_p, const char *path_bios)
 {
-    cargar(ruta_p, p1, sizeof p1);
-    cargar(ruta_bios, bios, sizeof bios);
+    cargar(path_p, p1, sizeof p1);
+    cargar(path_bios, bios, sizeof bios);
 }
 
-void mem_semilla(uint32_t semilla) { semilla_actual = semilla; }
-void mem_usar_capa(Capa *capa) { capa_actual = capa; }
+void mem_seed(uint32_t seed) { semilla_actual = seed; }
+void mem_use_layer(Layer *layer) { capa_actual = layer; }
 
 static uint8_t base(uint32_t a)
 {
@@ -40,20 +40,20 @@ static uint8_t base(uint32_t a)
     return (uint8_t)h;
 }
 
-uint8_t mem_leer8_en(const Capa *capa, uint32_t a)
+uint8_t mem_read8_in(const Layer *layer, uint32_t a)
 {
     a &= 0xFFFFFF;
-    for (int i = capa->n - 1; i >= 0; i--)
-        if (capa->dir[i] == a) return capa->val[i];
+    for (int i = layer->n - 1; i >= 0; i--)
+        if (layer->dir[i] == a) return layer->val[i];
     return base(a);
 }
 
-uint8_t mem_leer8(uint32_t a) { return mem_leer8_en(capa_actual, a); }
+uint8_t mem_read8(uint32_t a) { return mem_read8_in(capa_actual, a); }
 
-void mem_escribir8(uint32_t a, uint8_t v)
+void mem_write8(uint32_t a, uint8_t v)
 {
     a &= 0xFFFFFF;
-    if (capa_actual->n >= MAX_ESCRITURAS) {
+    if (capa_actual->n >= MAX_WRITES) {
         fprintf(stderr, "Demasiadas escrituras en una prueba\n");
         exit(3);
     }
@@ -63,7 +63,7 @@ void mem_escribir8(uint32_t a, uint8_t v)
 }
 
 /* Bus del código recompilado (cpu68k.h). */
-uint32_t bus_r8(uint32_t a)  { return mem_leer8(a); }
-uint32_t bus_r16(uint32_t a) { return (uint32_t)mem_leer8(a) << 8 | mem_leer8(a + 1); }
-void bus_w8(uint32_t a, uint32_t v)  { mem_escribir8(a, (uint8_t)v); }
-void bus_w16(uint32_t a, uint32_t v) { mem_escribir8(a, (uint8_t)(v >> 8)); mem_escribir8(a + 1, (uint8_t)v); }
+uint32_t bus_r8(uint32_t a)  { return mem_read8(a); }
+uint32_t bus_r16(uint32_t a) { return (uint32_t)mem_read8(a) << 8 | mem_read8(a + 1); }
+void bus_w8(uint32_t a, uint32_t v)  { mem_write8(a, (uint8_t)v); }
+void bus_w16(uint32_t a, uint32_t v) { mem_write8(a, (uint8_t)(v >> 8)); mem_write8(a + 1, (uint8_t)v); }

@@ -1,4 +1,4 @@
-"""Compara trazas de ciclos por instrucción del 68000: MAME (tools/mame/cycles.lua) contra
+"""Compara trazas de cycles por instrucción del 68000: MAME (tools/mame/cycles.lua) contra
 el port (variable PD_TRAZA_INSTR). Cada línea útil empieza por "C=<ciclo> <PC>:".
 
 Uso:
@@ -6,7 +6,7 @@ Uso:
 
 Alinea ambas trazas en la primera instrucción de MAME (mismo PC, ciclo más cercano) y las recorre
 a la par. Informa el desfase inicial, cada instrucción cuya duración difiere (con su
-desensamblado de MAME) y la primera divergencia de flujo (PC distinto). Las entradas a
+desensamblado de MAME) y la primera divergencia de flujo (PC distinto). Las inputs a
 interrupciones se reconocen por la línea "(interrupted at ...)" de MAME.
 """
 from __future__ import annotations
@@ -42,7 +42,7 @@ def main() -> int:
         print("el PC inicial de MAME no aparece en la traza del port")
         return 1
     j = min(cand, key=lambda i: abs(p[i][0] - c0))
-    print(f"alineado: MAME C={c0} PC={pc0:06X}; port C={p[j][0]} (desfase port-MAME {p[j][0] - c0:+d} ciclos)")
+    print(f"alineado: MAME C={c0} PC={pc0:06X}; port C={p[j][0]} (desfase port-MAME {p[j][0] - c0:+d} cycles)")
     distintas = Counter()
     ejemplos = {}
     n = 0
@@ -60,7 +60,7 @@ def main() -> int:
             clave = (txt.split()[0] if txt else "?", pcm)
             distintas[clave] += 1
             if clave not in ejemplos:
-                ejemplos[clave] = f"{pcm:06X} {txt:<32} MAME {dm} ciclos, port {dp} (siguiente {pcm2:06X})"
+                ejemplos[clave] = f"{pcm:06X} {txt:<32} MAME {dm} cycles, port {dp} (siguiente {pcm2:06X})"
         n += 1
         j += 1
     print(f"instrucciones recorridas a la par: {n}")

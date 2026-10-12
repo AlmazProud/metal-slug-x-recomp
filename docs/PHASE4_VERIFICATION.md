@@ -65,7 +65,7 @@ Notas de medición aprendidas:
    | `MULS` | perdía la última transición | `38 + 2n`, con n = pares 01/10 de la fuente de 17 bits |
    | `DIVU/DIVS` | fijo (140/158) | según los datos, con el algoritmo publicado de temporización de la división |
 
-   El intérprete de respaldo y las pruebas aplican el mismo ajuste (`ciclos_ajuste_previo`).
+   El intérprete de respaldo y las pruebas aplican el mismo ajuste (`cycles_adjust_previous`).
 5. **Respuesta del Z80 que se ve a mitad de instrucción:** la lectura de bus ocurre cerca del
    final de la instrucción. Si antes cae un límite de tramo, el Z80 ya corrió hasta él.
 6. **Entradas:** se registran por tiempo y no por número de cuadro (punto 3 del método). Esto,
@@ -82,7 +82,7 @@ Notas de medición aprendidas:
 
 ## Diferencias residuales conocidas
 
-- **Sonido, a nivel de muestra.**
+- **Sound, a nivel de muestra.**
   - El Z80 del port atiende a veces la IRQ del YM2610 una instrucción antes que el de MAME. El
     primer caso aparece a los 15,1 s.
   - Algunos sonidos arrancan de 0 a 3 muestras corridos (menos de 0,1 ms). La energía de la

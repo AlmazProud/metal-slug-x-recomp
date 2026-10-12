@@ -1,8 +1,8 @@
 """Análisis estático del código 68000 de mslugx (Fase 1).
 
 Desensamblado recursivo (Capstone) sobre la vista CPU de P1 y del BIOS, con raíces en:
-  - los vectores del 68000 de P1 (0x000-0x0FF),
-  - las entradas que la cabecera Neo Geo expone al BIOS (JMP en 0x122/0x128/0x12E/0x134),
+  - los vectors del 68000 de P1 (0x000-0x0FF),
+  - las inputs que la cabecera Neo Geo expone al BIOS (JMP en 0x122/0x128/0x12E/0x134),
   - las direcciones ejecutadas que registró la cobertura dinámica (tools/coverage.py),
   - los destinos observados de saltos indirectos.
 
@@ -59,9 +59,9 @@ class Memoria:
                          (0xC00000, vista_cpu((roms / "mslugx_bios_m68k").read_bytes()), "bios")]
 
     def region(self, addr: int):
-        for base, datos, nombre in self.regiones:
-            if base <= addr < base + len(datos):
-                return base, datos, nombre
+        for base, data, name in self.regiones:
+            if base <= addr < base + len(data):
+                return base, data, name
         return None
 
     def u32(self, addr: int) -> int:
@@ -78,12 +78,12 @@ class Analizador:
         self.ins: dict[int, object] = {}            # dirección -> instrucción
         self.sucesores: dict[int, list[int]] = {}   # flujo intraprocedural
         self.llamadas: dict[int, list[int]] = defaultdict(list)
-        self.entradas: dict[int, set[str]] = defaultdict(set)
+        self.inputs: dict[int, set[str]] = defaultdict(set)
         self.indirectos_sin_resolver: set[int] = set()
         self.refs_datos: Counter = Counter()
         self.invalidos: set[int] = set()
         self.origen: dict[int, str] = {}           # dirección -> motivo de la raíz que la alcanzó
-        self.datos_prohibidos: set[int] = set()    # palabras que MAME leyó como datos
+        self.datos_prohibidos: set[int] = set()    # palabras que MAME leyó como data
         self.cortes_por_datos = 0
 
     def decodificar(self, addr: int):
@@ -119,7 +119,7 @@ class Analizador:
         pendientes = []
         for a, motivo in raices.items():
             if motivo != "dinamica":          # lo ejecutado es raíz de exploración, no inicio de función
-                self.entradas[a].add(motivo)
+                self.inputs[a].add(motivo)
             pendientes.append((a, motivo))
         while pendientes:
             a, motivo = pendientes.pop()
@@ -130,7 +130,7 @@ class Analizador:
                     break
                 if motivo in HEURISTICAS and any(o in self.datos_prohibidos
                                                  for o in range(a & ~1, a + i.size, 2)):
-                    self.cortes_por_datos += 1        # la heurística pisaría datos demostrados
+                    self.cortes_por_datos += 1        # la heurística pisaría data demostrados
                     break
                 self.ins[a] = i
                 self.origen[a] = motivo
@@ -145,7 +145,7 @@ class Analizador:
                         self.indirectos_sin_resolver.add(a)
                     for t in objetivos:
                         self.llamadas[a].append(t)
-                        self.entradas[t].add("llamada")
+                        self.inputs[t].add("llamada")
                         pendientes.append((t, motivo))
                     suc.append(sig)
                 elif mn == "jmp" or mn in SALTOS_COND or mn.startswith("db"):
@@ -166,7 +166,7 @@ class Analizador:
                 a = sig
 
     def _refs(self, i) -> None:
-        """Referencias absolutas a datos en P1 (lea/move/etc. con direcciones absolutas)."""
+        """Referencias absolutas a data en P1 (lea/move/etc. con direcciones absolutas)."""
         mn = base_mn(i)
         if mn in ("jmp", "jsr", "bsr") or mn in SALTOS_COND or mn.startswith("db"):
             return
@@ -269,7 +269,7 @@ class Analizador:
     # ---------------------------------------------------------------- funciones
     def funciones(self, desde: int = 0, hasta: int = MB) -> list[dict]:
         out = []
-        for e in sorted(x for x in self.entradas if x in self.ins and desde <= x < hasta):
+        for e in sorted(x for x in self.inputs if x in self.ins and desde <= x < hasta):
             visto, pila = set(), [e]
             while pila:
                 a = pila.pop()
@@ -281,7 +281,7 @@ class Analizador:
             out.append({"inicio": e, "fin": max(a + self.ins[a].size for a in visto),
                         "bytes_codigo": tamaño, "instrucciones": len(visto),
                         "llamadas": sum(len(self.llamadas.get(a, ())) for a in visto),
-                        "motivos": sorted(self.entradas[e])})
+                        "motivos": sorted(self.inputs[e])})
         return out
 
 
@@ -313,14 +313,14 @@ def main() -> int:
         indirectos_obs[src].add(dst)
 
     raices: dict[int, str] = {}
-    for n, nombre in VECTORES.items():
+    for n, name in VECTORES.items():
         if n == 0:
             continue
         v = mem.u32(n * 4)
         if v < MB:
-            raices[v] = f"vector_{nombre}"
-    for off, nombre in CABECERA.items():
-        raices.setdefault(off, f"cabecera_{nombre}")
+            raices[v] = f"vector_{name}"
+    for off, name in CABECERA.items():
+        raices.setdefault(off, f"cabecera_{name}")
     raices_estaticas = dict(raices)
     for pc in dyn_p1 | dyn_bios:
         raices.setdefault(pc, "dinamica")
@@ -333,7 +333,7 @@ def main() -> int:
     solo_sin_heur.explorar(raices_estaticas, {})
     recall_sin_heur = (sum(1 for pc in dyn_p1 if pc in solo_sin_heur.ins) / len(dyn_p1)) if dyn_p1 else 0.0
 
-    # Verdad de MAME: bytes leídos como datos. Son las lecturas sobre P1 menos los bytes de
+    # Verdad de MAME: bytes leídos como data. Son las lecturas sobre P1 menos los bytes de
     # instrucciones ejecutadas, con una holgura de 4 bytes tras cada una (precarga del 68000).
     datos_leidos: set[int] = set()
     if cov.get("lecturas_p1"):
@@ -344,7 +344,7 @@ def main() -> int:
                 ejecutado.update(range(pc, pc + i.size + 4))
         datos_leidos = {w for w in cov["lecturas_p1"] if w not in ejecutado and w + 1 not in ejecutado}
 
-    # 2) Análisis combinado: raíces + cobertura dinámica + heurísticas que no pisen esos datos.
+    # 2) Análisis combinado: raíces + cobertura dinámica + heurísticas que no pisen esos data.
     an = Analizador(mem)
     an.datos_prohibidos = datos_leidos
     an.explorar_con_heuristicas(raices, indirectos_obs, usar_heuristicas=True)
@@ -368,7 +368,7 @@ def main() -> int:
     datos_o_desconocido = MB - est_bytes - relleno
 
     def falsos_positivos(instrucciones) -> int:
-        """Bytes de instrucciones que MAME demostró que son datos (en palabras de 2 bytes)."""
+        """Bytes de instrucciones que MAME demostró que son data (en palabras de 2 bytes)."""
         return 2 * sum(1 for a_, n in instrucciones for o in range(a_ & ~1, a_ + n, 2) if o in datos_leidos)
 
     fp = Counter()
@@ -383,8 +383,8 @@ def main() -> int:
     gcsv = raiz / "analisis" / "ghidra" / "instrucciones_ghidra.csv"
     if gcsv.exists():
         g_ins = {}
-        for linea in gcsv.read_text().split():
-            d, n = linea.split(",")
+        for line in gcsv.read_text().split():
+            d, n = line.split(",")
             g_ins[int(d, 16)] = int(n)
         g_bytes = sum(g_ins.values())
         g_recall = sum(1 for pc in dyn_p1 if pc in g_ins) / len(dyn_p1) if dyn_p1 else 0
@@ -395,19 +395,19 @@ def main() -> int:
             g_cubre[d:d + n] = b"\x01" * n
         conflicto = sum(1 for a_ in nuestras if a_ not in g_ins and g_cubre[a_])
         g_fp = falsos_positivos(g_ins.items())
-        ghidra_txt = f"""Ghidra 12.1.4 headless, P1 como binario crudo de 68000 big-endian, solo con las raíces
-estáticas (vectores y cabecera) y su análisis automático (`tools/ghidra/`).
+        ghidra_txt = f"""Ghidra 12.1.4 headless, P1 como binario raw de 68000 big-endian, solo con las raíces
+estáticas (vectors y cabecera) y su análisis automático (`tools/ghidra/`).
 
 | Medida | Este análisis (combinado) | Ghidra |
 |---|---:|---:|
 | Bytes de instrucciones | {est_bytes:,} | {g_bytes:,} |
 | Direcciones ejecutadas en MAME que reconoce | {100 * sum(1 for pc in dyn_p1 if pc in an.ins) / max(1, len(dyn_p1)):.1f} % | {100 * g_recall:.1f} % |
-| Bytes marcados como código que MAME leyó como datos (falsos positivos seguros) | {sum(fp.values()):,} | {g_fp:,} |
+| Bytes marcados como código que MAME leyó como data (falsos positivos seguros) | {sum(fp.values()):,} | {g_fp:,} |
 
 - Inicios de instrucción en común: {len(ambos):,}.
 - Instrucciones nuestras que caen a mitad de una instrucción de Ghidra (desalineación; uno
   de los dos se equivoca): {conflicto:,}.
-- Sin datos de MAME, este análisis reconoce el {100 * recall:.1f} % de lo ejecutado; Ghidra,
+- Sin data de MAME, este análisis reconoce el {100 * recall:.1f} % de lo ejecutado; Ghidra,
   también sin MAME, el {100 * g_recall:.1f} %."""
 
     funcs = an.funciones()
@@ -423,7 +423,7 @@ estáticas (vectores y cabecera) y su análisis automático (`tools/ghidra/`).
     with listado.open("w", encoding="utf-8") as f:
         for addr in sorted(x for x in an.ins if x < MB):
             if addr in inicios:
-                f.write(f"\n; ---- funcion {addr:06X}  ({', '.join(sorted(an.entradas[addr]))})\n")
+                f.write(f"\n; ---- funcion {addr:06X}  ({', '.join(sorted(an.inputs[addr]))})\n")
             i = an.ins[addr]
             marca = "*" if addr in dyn_p1 else " "
             f.write(f"{addr:06X}{marca} {i.mnemonic:<8} {i.op_str}\n")
@@ -433,7 +433,7 @@ estáticas (vectores y cabecera) y su análisis automático (`tools/ghidra/`).
     with (raiz / "analisis" / "listing_bios.txt").open("w", encoding="utf-8") as f:
         for addr in sorted(x for x in an.ins if 0xC00000 <= x < 0xC20000):
             if addr in funcs_bios:
-                f.write(f"\n; ---- funcion {addr:06X}  ({', '.join(sorted(an.entradas[addr]))})\n")
+                f.write(f"\n; ---- funcion {addr:06X}  ({', '.join(sorted(an.inputs[addr]))})\n")
             i = an.ins[addr]
             marca = "*" if addr in dyn_bios else " "
             f.write(f"{addr:06X}{marca} {i.mnemonic:<8} {i.op_str}\n")
@@ -445,11 +445,11 @@ estáticas (vectores y cabecera) y su análisis automático (`tools/ghidra/`).
             w.writerow([f"{fn['inicio']:06X}", f"{fn['fin']:06X}", fn["bytes_codigo"], fn["instrucciones"],
                         fn["llamadas"], " ".join(fn["motivos"])])
 
-    vec_txt = "\n".join(f"| {n} | `{n * 4:#05x}` | {nombre} | `{mem.u32(n * 4):06X}` |"
-                        for n, nombre in VECTORES.items())
-    cab_txt = "\n".join(f"| `{off:#05x}` | {nombre} | `{an.ins[off].mnemonic} {an.ins[off].op_str}` |"
-                        if off in an.ins else f"| `{off:#05x}` | {nombre} | (no decodifica) |"
-                        for off, nombre in CABECERA.items())
+    vec_txt = "\n".join(f"| {n} | `{n * 4:#05x}` | {name} | `{mem.u32(n * 4):06X}` |"
+                        for n, name in VECTORES.items())
+    cab_txt = "\n".join(f"| `{off:#05x}` | {name} | `{an.ins[off].mnemonic} {an.ins[off].op_str}` |"
+                        if off in an.ins else f"| `{off:#05x}` | {name} | (no decodifica) |"
+                        for off, name in CABECERA.items())
     bios_txt = "\n".join(f"| `{t:06X}` | {n} | {saltos_bios.get(t, 0)} |"
                          for t, n in sorted((llamadas_bios + Counter()).items()))
     for t, n in saltos_bios.items():
@@ -469,7 +469,7 @@ usuario y de la cobertura dinámica de MAME (`tools/coverage.py`,
 | Medida | Bytes | % |
 |---|---:|---:|
 | Código (total) | {est_bytes:,} | {100 * est_bytes / MB:.1f} |
-| ...confirmado: alcanzado desde vectores, cabecera, llamadas directas o ejecución en MAME | {por_evidencia['confirmado']:,} | {100 * por_evidencia['confirmado'] / MB:.1f} |
+| ...confirmado: alcanzado desde vectors, cabecera, llamadas directas o ejecución en MAME | {por_evidencia['confirmado']:,} | {100 * por_evidencia['confirmado'] / MB:.1f} |
 | ...heurística A: puntero cargado como constante por código confirmado | {por_evidencia['puntero_en_codigo']:,} | {100 * por_evidencia['puntero_en_codigo'] / MB:.1f} |
 | ...heurística B: tabla de 3 o más punteros a código válido | {por_evidencia['tabla_punteros']:,} | {100 * por_evidencia['tabla_punteros'] / MB:.1f} |
 | ...del total, ejecutado en MAME (cobertura dinámica) | {dyn_bytes:,} | {100 * dyn_bytes / MB:.1f} |
@@ -478,10 +478,10 @@ usuario y de la cobertura dinámica de MAME (`tools/coverage.py`,
 
 - Funciones detectadas: **{len(funcs)}** (lista completa en `docs/functions_p1.csv`).
 - **Validación de las heurísticas contra MAME:** de las {len(dyn_p1):,} direcciones de P1 que
-  MAME ejecutó, el análisis puramente estático (sin datos de MAME) encuentra el
+  MAME ejecutó, el análisis puramente estático (sin data de MAME) encuentra el
   **{100 * recall:.1f} %** con heurísticas y el {100 * recall_sin_heur:.1f} % sin ellas.
 - Instrucciones decodificadas: {sum(1 for x in an.ins if x < MB):,}.
-- Direcciones de datos referenciadas fuera del código: {ref_dentro:,}.
+- Direcciones de data referenciadas fuera del código: {ref_dentro:,}.
 - Saltos o llamadas indirectos en P1 **sin resolver** (sin destino observado en MAME):
   {len(sin_res_p1)}. Primeros: {', '.join(f'`{x:06X}`' for x in sin_res_p1[:15])}
 - Direcciones ejecutadas en MAME que el análisis estático no alcanza: {len(no_cubiertos)}
@@ -490,7 +490,7 @@ usuario y de la cobertura dinámica de MAME (`tools/coverage.py`,
 
 ## Precisión: código que MAME demostró que es dato
 
-MAME registró {len(datos_leidos):,} palabras de P1 leídas como datos, y no como instrucciones.
+MAME registró {len(datos_leidos):,} palabras de P1 leídas como data, y no como instrucciones.
 Bytes marcados como código que caen sobre esas palabras, según la evidencia:
 
 | Evidencia | Bytes de código | Falsos positivos seguros |
@@ -499,8 +499,8 @@ Bytes marcados como código que caen sobre esas palabras, según la evidencia:
 | Heurística A (puntero en código) | {por_evidencia['puntero_en_codigo']:,} | {fp['puntero_en_codigo']:,} |
 | Heurística B (tabla de punteros) | {por_evidencia['tabla_punteros']:,} | {fp['tabla_punteros']:,} |
 
-Es una cota inferior: solo detecta los datos que el juego leyó durante la traza. En el análisis
-combinado, las rutas heurísticas que pisarían esos datos se cortan ({an.cortes_por_datos} cortes),
+Es una cota inferior: solo detecta los data que el juego leyó durante la traza. En el análisis
+combinado, las rutas heurísticas que pisarían esos data se cortan ({an.cortes_por_datos} cortes),
 así que aquí deberían quedar en 0. La validación puramente estática no usa esta información.
 
 ## Verificación cruzada con Ghidra

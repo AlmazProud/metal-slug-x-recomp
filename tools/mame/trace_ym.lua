@@ -1,5 +1,5 @@
--- Escrituras del Z80 en sus puertos (YM2610 y respuesta al 68000) dentro de una ventana de tiempo:
--- hora (us), puerto (byte bajo) y dato. Mismo formato que PD_TRAZA_YM del port.
+-- Escrituras del Z80 en sus puertos (YM2610 y respuesta al 68000) dentro de una window de tiempo:
+-- hour (us), puerto (byte bajo) y dato. Mismo formato que PD_TRAZA_YM del port.
 -- Variables: PD_DESDE_US, PD_HASTA_US, PD_TRAZA.
 local z80 = manager.machine.devices[":audiocpu"]
 local io_z = z80.spaces["io"]

@@ -1,8 +1,8 @@
 -- Traza de la comunicación 68000 <-> Z80 (latch de sonido en 0x320000) para documentar qué
 -- espera el BIOS y el juego. Uso:
 --   mame mslugx -bios us -autoboot_script tools/mame/trace_sound.lua ...
--- Escribe en PD_TRAZA (por defecto traza_sonido.txt): cada comando escrito por el 68000 y cada
--- cambio del valor que el 68000 lee como respuesta (byte alto de 0x320000), con cuadro y PC.
+-- Escribe en PD_TRAZA (por defecto traza_sonido.txt): cada command escrito por el 68000 y cada
+-- cambio del value que el 68000 lee como respuesta (byte alto de 0x320000), con cuadro y PC.
 
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]

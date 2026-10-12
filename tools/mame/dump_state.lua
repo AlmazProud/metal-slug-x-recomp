@@ -1,16 +1,16 @@
 -- Vuelca el estado del 68000 y de la memoria de trabajo en un frame dado y cierra MAME.
 -- Lo usa la prueba de lockstep para arrancar desde un punto real del juego (en vez del reset).
 --
--- Variables de entorno: PD_FRAME (frame en el que volcar), PD_ESTADO (archivo de salida).
+-- Variables de entorno: PD_FRAME (frame en el que dump), PD_ESTADO (archivo de output).
 -- Formato (big-endian): "PDEST1", 19 u32 (D0-D7, A0-A6, SP, USP, SR, PC), 128 bytes de la zona
--- de vectores (0x000000), 16 bytes de la ventana de P2 (0x200000, para deducir el banco),
--- 64 KB de RAM (0x100000), 64 KB de SRAM (0xD00000), 8 KB de paleta (0x400000).
+-- de vectors (0x000000), 16 bytes de la window de P2 (0x200000, para deducir el bank),
+-- 64 KB de RAM (0x100000), 64 KB de SRAM (0xD00000), 8 KB de palette (0x400000).
 
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
-local pantalla = manager.machine.screens[":screen"]
+local screen = manager.machine.screens[":screen"]
 local objetivo = tonumber(os.getenv("PD_FRAME") or "3000")
-local salida = os.getenv("PD_ESTADO") or "estado.bin"
+local output = os.getenv("PD_ESTADO") or "estado.bin"
 
 local function bloque(base, n)
     local t = {}
@@ -19,8 +19,8 @@ local function bloque(base, n)
 end
 
 sub_volcado = emu.add_machine_frame_notifier(function()
-    if pantalla:frame_number() ~= objetivo then return end
-    local f = io.open(salida, "wb")
+    if screen:frame_number() ~= objetivo then return end
+    local f = io.open(output, "wb")
     f:write("PDEST1")
     for _, r in ipairs({"D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
                         "A0", "A1", "A2", "A3", "A4", "A5", "A6", "SP", "USP", "SR", "PC"}) do

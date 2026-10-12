@@ -6,13 +6,13 @@
 --   PD_FRAMES     frames por archivo de traza (por defecto 300)
 --   PD_JUGAR      1 = bot simple que inserta monedas y juega (por defecto 1)
 --
--- Cada cambio de banco de P2 (escritura en 0x2FFFF0) se anota en la traza como
--- "BANK n" con tracelog, para que el analizador sepa qué banco está activo.
+-- Cada cambio de bank de P2 (escritura en 0x2FFFF0) se anota en la traza como
+-- "BANK n" con tracelog, para que el analizador sepa qué bank está active.
 
 local dbg = manager.machine.debugger
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
-local pantalla = manager.machine.screens[":screen"]
+local screen = manager.machine.screens[":screen"]
 local dir = os.getenv("PD_TRAZA_DIR")
 local por_archivo = tonumber(os.getenv("PD_FRAMES") or "300")
 local jugar = (os.getenv("PD_JUGAR") or "1") == "1"
@@ -28,7 +28,7 @@ banco_tap = mem:install_write_tap(0x2FFFF0, 0x2FFFFF, "pd_cov_bank", function(of
 end)
 
 -- Lecturas sobre P1. Incluyen las búsquedas de instrucciones; coverage.py les resta los bytes
--- de las instrucciones ejecutadas para quedarse con las lecturas de datos.
+-- de las instrucciones ejecutadas para quedarse con las lecturas de data.
 local leidas = {}
 lectura_tap = mem:install_read_tap(0x000000, 0x0FFFFF, "pd_cov_rd", function(offset, data, mask)
     leidas[offset & 0xFFFFE] = true
@@ -37,12 +37,12 @@ end)
 -- Bot de entrada: no busca jugar bien, solo recorrer la mayor cantidad de código posible.
 local campos = {}
 for _, puerto in pairs(manager.machine.ioport.ports) do
-    for nombre, campo in pairs(puerto.fields) do campos[nombre] = campo end
+    for name, campo in pairs(puerto.fields) do campos[name] = campo end
 end
-local function poner(nombre, v) if campos[nombre] then campos[nombre]:set_value(v) end end
+local function poner(name, v) if campos[name] then campos[name]:set_value(v) end end
 
 cuadro_sub = emu.add_machine_frame_notifier(function()
-    local f = pantalla:frame_number()
+    local f = screen:frame_number()
     if f % por_archivo == 0 then nueva_traza() end
     if not jugar or f < 600 then return end
     local c = f % 900                                  -- cada 15 s: moneda + START (continúa)

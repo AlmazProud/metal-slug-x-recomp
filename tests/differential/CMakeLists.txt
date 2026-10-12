@@ -1,13 +1,13 @@
 # Pruebas diferenciales del recompilador contra Musashi.
-# Requieren los ROMs del usuario (PD_ROMS) y el listado del análisis de la Fase 1 (PD_ANALISIS).
-# El C de las pruebas se genera aquí, en el directorio de compilación, y nunca se versiona.
+# Requieren los ROMs del usuario (PD_ROMS) y el listado del análisis de la Fase 1 (PD_ANALYSIS).
+# El C de las tests se genera aquí, en el directorio de compilación, y nunca se versiona.
 
-if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALISIS}/listing_p1.txt")
-    message(STATUS "Pruebas diferenciales desactivadas: faltan ROMs (${PD_ROMS}) o listado (${PD_ANALISIS})")
+if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALYSIS}/listing_p1.txt")
+    message(STATUS "Pruebas diferenciales desactivadas: faltan ROMs (${PD_ROMS}) o listado (${PD_ANALYSIS})")
     return()
 endif()
 
-# Tabla de ciclos base de Musashi (el ejecutable volcar_ciclos se define en src/).
+# Tabla de cycles base de Musashi (el ejecutable volcar_ciclos se define en src/).
 set(CICLOS ${CMAKE_CURRENT_BINARY_DIR}/ciclos_68000.bin)
 add_custom_command(OUTPUT ${CICLOS} COMMAND volcar_ciclos ${CICLOS} DEPENDS volcar_ciclos VERBATIM)
 set(GEN ${CMAKE_CURRENT_BINARY_DIR}/pruebas_gen.c)
@@ -15,9 +15,9 @@ file(GLOB RECOMP_PY ${PROJECT_SOURCE_DIR}/tools/recomp68k/*.py)
 add_custom_command(
     OUTPUT ${GEN}
     COMMAND Python3::Interpreter -I ${CMAKE_CURRENT_SOURCE_DIR}/generate_tests.py
-            --roms ${PD_ROMS} --listado ${PD_ANALISIS}/listing_p1.txt --salida ${GEN} --ciclos ${CICLOS}
+            --roms ${PD_ROMS} --listado ${PD_ANALYSIS}/listing_p1.txt --output ${GEN} --cycles ${CICLOS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/generate_tests.py ${RECOMP_PY} ${CICLOS}
-    COMMENT "Generando pruebas diferenciales desde los ROMs del usuario"
+    COMMENT "Generando tests diferenciales desde los ROMs del usuario"
     VERBATIM)
 
 add_executable(diferencial differential.c test_memory.c musashi_side.c ${GEN})
