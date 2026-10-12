@@ -73,7 +73,21 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 6C. Remaster: modern start menu | **Closed** (2026-10-12). `ctest`: 6/6. |
 | 6D. Remaster: widescreen | **Dropped** by the user (2026-10-12): it takes away the essence of the game. |
 | 7A. V-sync and red blood | **Closed** (2026-10-12), pending approval. See `docs/PHASE7_TWEAKS.md`. `ctest`: 6/6. |
-| 7I. English translation and GitHub preparation | In progress (2026-10-12). |
+| 7I. English translation | **Closed** (2026-10-12), pending approval. `ctest`: 6/6. Publishing on GitHub (license, plug-and-play release) comes at the end. |
+
+### Phase 7I: result
+
+- Everything in the repo is English: directories (`tools/`, `setup/`, `external/`,
+  `tests/differential/`), files, identifiers, comments, docs, env vars (`PD_*`), command-line
+  options and test names. Workspace analysis data moved to `analysis\` with English names.
+- User data stays compatible: `mslugx.ini` and the sound names file still load their old Spanish
+  keys (written back in English); `sonidos.ini` -> `sounds.ini` and `estado_N.bin` ->
+  `state_N.bin` are renamed automatically; headless scripts accept the old Spanish tokens.
+- Frontend language option (`src/port/lang.c`, `T()`): English by default, Spanish with
+  `language=es` (Settings -> Language, first item).
+- Release idea for later (GitHub phase): ship an executable without game code that runs the
+  interpreter only (483 frames/s measured, 8x real time) and finds the GOG install or accepts a
+  dropped folder; the recompiled build stays a build-from-source option.
 
 ### Phase 7A: result
 
@@ -350,7 +364,7 @@ ROMs: 13 `mslugx_*` files copied from GOG to `roms\`, with `roms\MANIFEST.sha256
 
 ## To do
 
-- [ ] **Next phase** after 7A approval and the 7I translation: 7B, debug mode (short plan and OK
+- [ ] **Next phase** after 7I approval: 7B, debug mode (short plan and OK
       before writing code).
 - [ ] **Roadmap requested by the user** (for the final result):
   - [ ] **Sonic-style debug (7B):** pick mission, character, spawn weapons. A hidden developer
