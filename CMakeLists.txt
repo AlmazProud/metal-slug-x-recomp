@@ -12,3 +12,4 @@ set(CMAKE_C_EXTENSIONS OFF)
 enable_testing()
 
 add_subdirectory(externo/musashi)
+add_subdirectory(tests/diferencial)

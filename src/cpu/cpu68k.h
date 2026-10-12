@@ -60,6 +60,19 @@ static inline void cpu_set_sr(Cpu68k *c, uint32_t sr)
     cpu_set_ccr(c, sr);
 }
 
+/* ------------------------------------------------------------------ excepciones */
+/* Excepción de grupo 1/2 del 68000 (TRAP, división por cero, CHK, TRAPV, privilegio, ilegal):
+ * pasa a supervisor, apila PC y SR (6 bytes) y salta al vector. */
+static inline void cpu_excepcion(Cpu68k *c, int vector, uint32_t pc_retorno)
+{
+    uint32_t sr = cpu_get_sr(c);
+    if (!c->s) { c->usp = c->a[7]; c->a[7] = c->ssp; c->s = 1; }
+    c->t = 0;
+    c->a[7] -= 4; bus_w32(c->a[7], pc_retorno);
+    c->a[7] -= 2; bus_w16(c->a[7], sr);
+    c->pc = bus_r32((uint32_t)vector * 4);
+}
+
 /* ------------------------------------------------------------------ tamaños */
 #define MASK_B 0xFFu
 #define MASK_W 0xFFFFu
@@ -159,6 +172,101 @@ static inline uint32_t op_neg(Cpu68k *c, uint32_t d, uint32_t mask, uint32_t msb
 static inline uint32_t op_negx(Cpu68k *c, uint32_t d, uint32_t mask, uint32_t msb)
 {
     return op_subx(c, d, 0, mask, msb);
+}
+
+/* ------------------------------------------------------------------ desplazamientos */
+enum { SH_AS, SH_LS, SH_ROX, SH_RO };
+
+/* ASx/LSx/ROXx/ROx de `cnt` posiciones (0-63), bit a bit: exacto por definición.
+ * cnt = 0: C = 0 (ROX: C = X), X intacto, V = 0, N y Z según el operando. */
+static inline uint32_t op_shift(Cpu68k *c, int tipo, int izq, uint32_t cnt, uint32_t v,
+                                uint32_t mask, uint32_t msb)
+{
+    v &= mask;
+    uint32_t sale = 0;
+    int vflag = 0;
+    for (uint32_t k = 0; k < cnt; k++) {
+        if (izq) {
+            sale = v & msb;
+            uint32_t entra = tipo == SH_RO ? (sale != 0) : tipo == SH_ROX ? c->x : 0;
+            uint32_t nv = ((v << 1) | entra) & mask;
+            if (tipo == SH_AS && ((nv ^ v) & msb)) vflag = 1;   /* el MSB cambió en algún paso */
+            v = nv;
+        } else {
+            sale = v & 1;
+            uint32_t entra = tipo == SH_AS ? (v & msb)
+                           : tipo == SH_RO ? (sale ? msb : 0)
+                           : tipo == SH_ROX ? (c->x ? msb : 0) : 0;
+            v = (v >> 1) | entra;
+        }
+        if (tipo == SH_ROX) c->x = sale != 0;
+    }
+    if (cnt == 0) {
+        c->c = tipo == SH_ROX ? c->x : 0;
+    } else {
+        c->c = sale != 0;
+        if (tipo == SH_AS || tipo == SH_LS) c->x = c->c;
+    }
+    c->v = (uint8_t)vflag;
+    flags_nz(c, v, mask, msb);
+    return v;
+}
+
+/* ------------------------------------------------------------------ división */
+/* DIVU.W: d[r] (32 bits) / s (16 bits, no cero). Desbordamiento: solo V = 1 y el registro
+ * no cambia (N y Z quedan como estaban: indefinidos en el manual; así lo hace Musashi,
+ * pendiente de confirmar contra MAME). C = 0 si no desborda. */
+static inline void op_divu(Cpu68k *c, int r, uint32_t s)
+{
+    uint32_t q = c->d[r] / s, resto = c->d[r] % s;
+    if (q > 0xFFFF) { c->v = 1; return; }
+    c->d[r] = (q & 0xFFFF) | resto << 16;
+    c->n = (q & 0x8000) != 0; c->z = q == 0; c->v = 0; c->c = 0;
+}
+
+/* DIVS.W con signo. 0x80000000 / -1 desborda (V = 1) como en el hardware. */
+static inline void op_divs(Cpu68k *c, int r, uint32_t s)
+{
+    int32_t dividendo = (int32_t)c->d[r], divisor = (int16_t)s;
+    if (dividendo == INT32_MIN && divisor == -1) { c->v = 1; return; }
+    int32_t q = dividendo / divisor, resto = dividendo % divisor;
+    if (q < -32768 || q > 32767) { c->v = 1; return; }
+    c->d[r] = ((uint32_t)q & 0xFFFF) | (uint32_t)resto << 16;
+    c->n = (q & 0x8000) != 0; c->z = (q & 0xFFFF) == 0; c->v = 0; c->c = 0;
+}
+
+/* ------------------------------------------------------------------ BCD */
+/* ABCD / SBCD: resultado, C, X y Z según el manual (Z solo se borra). N y V son indefinidos en
+ * el manual; se reproducen las fórmulas de Musashi 4.60 (MIT, Karl Stenerud) hasta confirmarlas
+ * contra MAME. */
+static inline uint32_t op_abcd(Cpu68k *c, uint32_t s, uint32_t d)
+{
+    uint32_t res = (s & 0x0F) + (d & 0x0F) + c->x;
+    uint32_t v = ~res;
+    if (res > 9) res += 6;
+    res += (s & 0xF0) + (d & 0xF0);
+    c->c = c->x = res > 0x99;
+    if (c->c) res -= 0xA0;
+    c->v = ((v & res) & 0x80) != 0;
+    c->n = (res & 0x80) != 0;
+    res &= 0xFF;
+    if (res) c->z = 0;
+    return res;
+}
+
+static inline uint32_t op_sbcd(Cpu68k *c, uint32_t s, uint32_t d)
+{
+    uint32_t res = (d & 0x0F) - (s & 0x0F) - c->x;
+    uint32_t v = ~res;
+    if (res > 9) res -= 6;
+    res += (d & 0xF0) - (s & 0xF0);
+    c->c = c->x = res > 0x99;
+    if (c->c) res += 0xA0;
+    res &= 0xFF;
+    c->v = ((v & res) & 0x80) != 0;
+    c->n = (res & 0x80) != 0;
+    if (res) c->z = 0;
+    return res;
 }
 
 /* ------------------------------------------------------------------ condiciones */
