@@ -88,6 +88,8 @@ def main() -> int:
     ap.add_argument("--segundos", type=int, default=180, help="segundos emulados")
     ap.add_argument("--salida", type=Path, default=raiz / "analisis" / "cobertura.json")
     ap.add_argument("--sin-bot", action="store_true")
+    ap.add_argument("--playback", type=Path,
+                    help="reproduce una grabación .inp de MAME (ignora --segundos y desactiva el bot)")
     a = ap.parse_args()
 
     trabajo = raiz / "tools" / "_verificacion" / "cobertura"
@@ -97,11 +99,22 @@ def main() -> int:
 
     mame = raiz / "tools" / "mame" / "mame.exe"
     lua = Path(__file__).resolve().parent / "mame" / "cobertura.lua"
-    env = dict(os.environ, PD_TRAZA_DIR=ruta_corta(trabajo), PD_JUGAR="0" if a.sin_bot else "1")
+    # Una reproducción exige el mismo estado inicial que la grabación: nvram vacía.
+    nvram = trabajo / "nvram"
+    if nvram.exists():
+        for f in sorted(nvram.rglob("*"), reverse=True):
+            f.unlink() if f.is_file() else f.rmdir()
+    jugar = not (a.sin_bot or a.playback)
+    env = dict(os.environ, PD_TRAZA_DIR=ruta_corta(trabajo), PD_JUGAR="1" if jugar else "0")
     cmd = [str(mame), "mslugx", "-bios", "us", "-rompath", str(raiz / "roms" / "mame"),
-           "-video", "none", "-sound", "none", "-nothrottle", "-seconds_to_run", str(a.segundos),
+           "-video", "none", "-sound", "none", "-nothrottle",
            "-debug", "-debugger", "none", "-autoboot_script", str(lua),
-           "-cfg_directory", str(trabajo / "cfg"), "-nvram_directory", str(trabajo / "nvram")]
+           "-cfg_directory", str(trabajo / "cfg"), "-nvram_directory", str(nvram)]
+    if a.playback:
+        cmd += ["-playback", a.playback.name, "-input_directory", str(a.playback.parent),
+                "-exit_after_playback"]
+    else:
+        cmd += ["-seconds_to_run", str(a.segundos)]
     proc = subprocess.Popen(cmd, cwd=mame.parent, env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
