@@ -1,6 +1,7 @@
 /* Modo con ventana (Fase 5): imagen, audio, controles de 2 jugadores, menú, estados guardados.
+ * Fase 6C: pantalla de inicio y menús con la fuente del juego (menu.c, fuente.c).
  *
- * Teclas fijas: Esc = menú, P = pausa, F5 / F9 = guardar / cargar estado en la ranura activa,
+ * Teclas fijas: Esc = menú de pausa, P = pausa, F5 / F9 = guardar / cargar estado en la ranura activa,
  * F11 o Alt+Enter = pantalla completa, F12 = captura, F2 = botón de test (menú de servicio del
  * BIOS: dificultad, vidas...), F3 = modo debug (debug.c). En el mando: Guide (o Back + Start)
  * abre el menú.
@@ -25,13 +26,16 @@
 #include "config.h"
 #include "debug.h"
 #include "despachador.h"
+#include "frontend.h"
+#include "fuente.h"
+#include "menu.h"
 #include "neogeo.h"
 #include "port.h"
 #include "sonidos.h"
 
 void maquina_arrancar(const Opciones *o);
 
-static Config cfg;
+Config cfg;
 static char dir_pref[1024], ruta_cfg[1100];
 static SDL_Window *ventana;
 static SDL_Renderer *render;
@@ -45,8 +49,9 @@ static Uint64 aviso_hasta;
 static int salir;
 static int avanzar;                          /* F6 en el modo debug: un cuadro */
 static unsigned auto_fase[2];
+static int jugar_cuadro = -1;                /* "Jugar": cuadros desde que se pidió (-1 = no) */
 
-static void avisar(const char *fmt, ...)
+void fe_avisar(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -80,7 +85,7 @@ static void sram_guardar(void)
 /* ------------------------------------------------------------------ estados guardados */
 static void estado_ruta(char *r, size_t n) { snprintf(r, n, "%sestado_%d.bin", dir_pref, cfg.ranura); }
 
-static void estado_guardar(void)
+void fe_estado_guardar(void)
 {
     size_t tam;
     uint8_t *d = ng_estado_guardar(&tam);
@@ -90,18 +95,18 @@ static void estado_guardar(void)
     int ok = f && fwrite(d, 1, tam, f) == tam;
     if (f && fclose(f) != 0) ok = 0;
     free(d);
-    avisar(ok ? "Estado guardado en la ranura %d" : "No se pudo guardar la ranura %d", cfg.ranura);
+    fe_avisar(ok ? "Estado guardado en la ranura %d" : "No se pudo guardar la ranura %d", cfg.ranura);
 }
 
-static void estado_cargar(void)
+void fe_estado_cargar(void)
 {
     char r[1100];
     estado_ruta(r, sizeof r);
     size_t tam;
     void *d = SDL_LoadFile(r, &tam);
-    if (!d) { avisar("La ranura %d esta vacia", cfg.ranura); return; }
-    if (ng_estado_cargar(d, tam) == 0) avisar("Estado de la ranura %d cargado", cfg.ranura);
-    else avisar("La ranura %d es de otra version del port", cfg.ranura);
+    if (!d) { fe_avisar("La ranura %d esta vacia", cfg.ranura); return; }
+    if (ng_estado_cargar(d, tam) == 0) fe_avisar("Estado de la ranura %d cargado", cfg.ranura);
+    else fe_avisar("La ranura %d es de otra version del port", cfg.ranura);
     SDL_free(d);
 }
 
@@ -146,6 +151,11 @@ static void leer_entradas(void)
         ng.joy[j] = joy;
         ng.sistema[j] = sis;
     }
+    if (jugar_cuadro >= 0) {                 /* "Jugar": moneda y, un momento después, START */
+        if (jugar_cuadro < 6) ng.sistema[0] |= NG_MONEDA;
+        else if (jugar_cuadro >= 50 && jugar_cuadro < 56) ng.sistema[0] |= NG_START;
+        if (++jugar_cuadro >= 56) jugar_cuadro = -1;
+    }
     ng.test = (k[SDL_SCANCODE_F2] || test_cuadros > 0) ? 0x00 : 0x80;
     if (test_cuadros > 0) test_cuadros--;
 }
@@ -155,7 +165,7 @@ static void mando_conectado(SDL_JoystickID id)
     for (int j = 0; j < 2; j++)
         if (!mandos[j]) {
             mandos[j] = SDL_OpenGamepad(id);
-            if (mandos[j]) avisar("Mando %d: %s", j + 1, SDL_GetGamepadName(mandos[j]));
+            if (mandos[j]) fe_avisar("Mando %d: %s", j + 1, SDL_GetGamepadName(mandos[j]));
             return;
         }
 }
@@ -166,140 +176,26 @@ static void mando_desconectado(SDL_JoystickID id)
         if (mandos[j] && SDL_GetGamepadID(mandos[j]) == id) {
             SDL_CloseGamepad(mandos[j]);
             mandos[j] = NULL;
-            avisar("Mando %d desconectado", j + 1);
+            fe_avisar("Mando %d desconectado", j + 1);
         }
 }
 
-/* ------------------------------------------------------------------ menú */
-enum {
-    M_CONTINUAR, M_GUARDAR, M_CARGAR, M_TURBO, M_PANTALLA, M_ASPECTO, M_FILTRO, M_SCANLINES,
-    M_VOLUMEN, M_SONIDOS, M_VIBRACION, M_AUTO1, M_AUTO2, M_AUTO_VEL, M_CONTROLES1, M_CONTROLES2,
-    M_SERVICIO, M_DEBUG, M_REINICIAR, M_SALIR, M_N
-};
-static int menu_abierto, menu_sel;
-static int remap_jugador = -1, remap_accion;     /* configuración de controles en curso */
+/* ------------------------------------------------------------------ acciones de los menús */
+void fe_guardar_config(void) { config_guardar(&cfg, ruta_cfg); }
+void fe_aplicar_video(void) { SDL_SetWindowFullscreen(ventana, cfg.pantalla_completa != 0); }
+void fe_aplicar_volumen(void) { if (audio) SDL_SetAudioStreamGain(audio, cfg.volumen / 100.0f); }
+void fe_jugar(void) { jugar_cuadro = 0; }
+void fe_servicio(void) { test_cuadros = 30; }
+void fe_salir(void) { salir = 1; }
 
-static void aplicar_video(void)
+void fe_reiniciar(void)
 {
-    SDL_SetWindowFullscreen(ventana, cfg.pantalla_completa != 0);
-}
-
-static void texto_item(int i, char *b, size_t n)
-{
-    static const char *const ASPECTO[ASPECTO_N] = {"4:3 (monitor)", "pixeles cuadrados"};
-    static const char *const FILTRO[FILTRO_N] = {"nitido", "suave", "pixeles"};
-    switch (i) {
-    case M_CONTINUAR: snprintf(b, n, "Continuar"); break;
-    case M_GUARDAR: snprintf(b, n, "Guardar estado    < ranura %d >", cfg.ranura); break;
-    case M_CARGAR: snprintf(b, n, "Cargar estado     < ranura %d >", cfg.ranura); break;
-    case M_TURBO:
-        if (cfg.turbo) snprintf(b, n, "Ralentizacion     no (68000 x%d)", 1 << cfg.turbo);
-        else snprintf(b, n, "Ralentizacion     si (original)");
-        break;
-    case M_PANTALLA: snprintf(b, n, "Pantalla completa %s", cfg.pantalla_completa ? "si" : "no"); break;
-    case M_ASPECTO: snprintf(b, n, "Aspecto           %s", ASPECTO[cfg.aspecto]); break;
-    case M_FILTRO: snprintf(b, n, "Filtro            %s", FILTRO[cfg.filtro]); break;
-    case M_SCANLINES: snprintf(b, n, "Scanlines         %s", cfg.scanlines ? "si" : "no"); break;
-    case M_VOLUMEN: snprintf(b, n, "Volumen           %d%%", cfg.volumen); break;
-    case M_AUTO1: case M_AUTO2: {
-        static const char *const AUTO[AUTO_N] = {"no", "boton propio", "en el disparo"};
-        snprintf(b, n, "Autodisparo J%d    %s", i - M_AUTO1 + 1, AUTO[cfg.autodisparo[i - M_AUTO1]]);
-        break;
-    }
-    case M_AUTO_VEL: {
-        static const char *const VEL[AUTO_VELOCIDADES] = {"10", "7.5", "5"};
-        snprintf(b, n, "Autodisparo       %s por segundo", VEL[cfg.auto_velocidad]);
-        break;
-    }
-    case M_DEBUG: snprintf(b, n, "Modo debug (F3)   %s", debug_activo() ? "si" : "no"); break;
-    case M_SONIDOS: snprintf(b, n, "Musica y sonidos"); break;
-    case M_VIBRACION:
-        if (cfg.vibracion) snprintf(b, n, "Vibracion         %d%%", cfg.vibracion);
-        else snprintf(b, n, "Vibracion         no");
-        break;
-    case M_CONTROLES1: snprintf(b, n, "Controles del jugador 1"); break;
-    case M_CONTROLES2: snprintf(b, n, "Controles del jugador 2"); break;
-    case M_SERVICIO: snprintf(b, n, "Menu de servicio (dificultad, vidas)"); break;
-    case M_REINICIAR: snprintf(b, n, "Reiniciar la maquina"); break;
-    default: snprintf(b, n, "Salir"); break;
-    }
-}
-
-static int ciclar(int v, int d, int n) { return ((v + d) % n + n) % n; }
-
-/* d = 0: confirmar; -1 / +1: cambiar el valor. */
-static void menu_accion(int i, int d)
-{
-    switch (i) {
-    case M_CONTINUAR: if (!d) menu_abierto = 0; break;
-    case M_GUARDAR: case M_CARGAR:
-        if (d) cfg.ranura = ciclar(cfg.ranura - 1, d, 9) + 1;
-        else { if (i == M_GUARDAR) estado_guardar(); else estado_cargar(); menu_abierto = 0; }
-        break;
-    case M_TURBO:
-        cfg.turbo = ciclar(cfg.turbo, d ? d : 1, 3);
-        cpu_turbo = cfg.turbo;
-        break;
-    case M_PANTALLA: cfg.pantalla_completa = !cfg.pantalla_completa; aplicar_video(); break;
-    case M_ASPECTO: cfg.aspecto = ciclar(cfg.aspecto, d ? d : 1, ASPECTO_N); break;
-    case M_FILTRO: cfg.filtro = ciclar(cfg.filtro, d ? d : 1, FILTRO_N); break;
-    case M_SCANLINES: cfg.scanlines = !cfg.scanlines; break;
-    case M_VOLUMEN:
-        cfg.volumen += (d ? d : 1) * 10;
-        if (cfg.volumen > 100) cfg.volumen = d ? 100 : 0;
-        if (cfg.volumen < 0) cfg.volumen = 0;
-        if (audio) SDL_SetAudioStreamGain(audio, cfg.volumen / 100.0f);
-        break;
-    case M_AUTO1: case M_AUTO2:
-        cfg.autodisparo[i - M_AUTO1] = ciclar(cfg.autodisparo[i - M_AUTO1], d ? d : 1, AUTO_N);
-        break;
-    case M_AUTO_VEL: cfg.auto_velocidad = ciclar(cfg.auto_velocidad, d ? d : 1, AUTO_VELOCIDADES); break;
-    case M_DEBUG: debug_activar(!debug_activo()); cfg.debug = debug_activo(); break;
-    case M_SONIDOS: if (!d) { menu_abierto = 0; sonidos_abrir(); } break;
-    case M_VIBRACION:
-        cfg.vibracion += (d ? d : 1) * 10;
-        if (cfg.vibracion > 100) cfg.vibracion = d ? 100 : 0;
-        if (cfg.vibracion < 0) cfg.vibracion = 0;
-        vibracion_intensidad(cfg.vibracion);
-        break;
-    case M_CONTROLES1: case M_CONTROLES2:
-        if (!d) { remap_jugador = i - M_CONTROLES1; remap_accion = 0; }
-        break;
-    case M_SERVICIO: if (!d) { test_cuadros = 30; menu_abierto = 0; } break;
-    case M_REINICIAR:
-        if (!d) {
-            uint8_t sram[sizeof ng.sram];
-            memcpy(sram, ng.sram, sizeof sram);
-            ng_encender();
-            memcpy(ng.sram, sram, sizeof sram);
-            menu_abierto = 0;
-            avisar("Maquina reiniciada");
-        }
-        break;
-    default: if (!d) salir = 1; break;
-    }
-}
-
-static void remap_siguiente(void)
-{
-    if (++remap_accion >= ACC_N) {
-        remap_jugador = -1;
-        config_guardar(&cfg, ruta_cfg);
-        avisar("Controles guardados");
-    }
-}
-
-/* Teclas de navegación del menú (teclado y mando): 0 = arriba, 1 = abajo, 2 = izq., 3 = der.,
-   4 = confirmar, 5 = volver. */
-static void menu_navegar(int t)
-{
-    if (t == 0) menu_sel = ciclar(menu_sel, -1, M_N);
-    else if (t == 1) menu_sel = ciclar(menu_sel, 1, M_N);
-    else if (t == 2) menu_accion(menu_sel, -1);
-    else if (t == 3) menu_accion(menu_sel, 1);
-    else if (t == 4) menu_accion(menu_sel, 0);
-    else menu_abierto = 0;
-    if (!menu_abierto) config_guardar(&cfg, ruta_cfg);
+    uint8_t sram[sizeof ng.sram];
+    memcpy(sram, ng.sram, sizeof sram);
+    ng_encender();
+    memcpy(ng.sram, sram, sizeof sram);
+    jugar_cuadro = -1;
+    fe_avisar("Maquina reiniciada");
 }
 
 /* ------------------------------------------------------------------ dibujo */
@@ -352,109 +248,82 @@ static SDL_FRect dibujar_juego(int w, int h)
     return d;
 }
 
-static void texto(float x, float y, const char *s, Uint8 r, Uint8 g, Uint8 b)
+static void dibujar_avisos(int w, int h)
 {
-    SDL_SetRenderDrawColor(render, r, g, b, 255);
-    SDL_RenderDebugText(render, x, y, s);
-}
-
-static void dibujar_interfaz(int w, int h)
-{
-    int k = SDL_max(1, SDL_min(w / 360, h / 250));
+    if (!aviso[0] || SDL_GetTicksNS() >= aviso_hasta) return;
+    int k = fuente_factor(w, h);
     SDL_SetRenderScale(render, (float)k, (float)k);
-    float vw = (float)w / k, vh = (float)h / k;
-    const float L = 12;                                  /* alto de línea (fuente de 8x8) */
-    if (menu_abierto) {
-        SDL_SetRenderDrawBlendMode(render, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(render, 0, 0, 0, 190);
-        SDL_RenderFillRect(render, NULL);
-        char b[128];
-        if (remap_jugador >= 0) {
-            float y = vh / 2 - 3 * L;
-            snprintf(b, sizeof b, "Controles del jugador %d", remap_jugador + 1);
-            texto(vw / 2 - strlen(b) * 4.0f, y, b, 255, 210, 80);
-            snprintf(b, sizeof b, "Pulsa la tecla o el boton para: %s", ACCION_TEXTO[remap_accion]);
-            texto(vw / 2 - strlen(b) * 4.0f, y + 2 * L, b, 255, 255, 255);
-            const char *c = SDL_GetScancodeName(cfg.tecla[remap_jugador][remap_accion]);
-            const char *m = SDL_GetGamepadStringForButton(cfg.boton[remap_jugador][remap_accion]);
-            snprintf(b, sizeof b, "Actual: %s / mando %s", *c ? c : "-", m ? m : "-");
-            texto(vw / 2 - strlen(b) * 4.0f, y + 3 * L, b, 170, 170, 170);
-            snprintf(b, sizeof b, "Supr: dejar igual   Esc: terminar");
-            texto(vw / 2 - strlen(b) * 4.0f, y + 5 * L, b, 170, 170, 170);
-        } else {
-            float y = vh / 2 - (M_N + 2) * L / 2;
-            texto(vw / 2 - 52, y, "METAL SLUG X", 255, 210, 80);
-            for (int i = 0; i < M_N; i++) {
-                texto_item(i, b, sizeof b);
-                int sel = i == menu_sel;
-                texto(vw / 2 - 150, y + (i + 2) * L, sel ? ">" : " ", 255, 210, 80);
-                texto(vw / 2 - 138, y + (i + 2) * L, b, sel ? 255 : 190, sel ? 255 : 190, sel ? 255 : 190);
-            }
-        }
-    }
-    if (aviso[0] && SDL_GetTicksNS() < aviso_hasta) {
-        SDL_SetRenderDrawBlendMode(render, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(render, 0, 0, 0, 160);
-        SDL_FRect f = {4, vh - L - 6, strlen(aviso) * 8.0f + 8, L + 2};
-        SDL_RenderFillRect(render, &f);
-        texto(8, vh - L - 3, aviso, 255, 255, 255);
-    }
+    SDL_SetRenderDrawBlendMode(render, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(render, 0, 0, 0, 170);
+    SDL_FRect f = {4, 4, fuente_ancho(aviso, 1) + 8, 14};               /* arriba a la izquierda */
+    SDL_RenderFillRect(render, &f);
+    fuente_texto(render, 8, 7, 1, TINTA_PLATA, aviso);
     SDL_SetRenderScale(render, 1, 1);
 }
 
 /* ------------------------------------------------------------------ eventos */
+/* Navegación común a menús: 0 arriba, 1 abajo, 2 izq., 3 der., 4 elegir, 5 volver, 6 detener,
+   7 renombrar, 8 vibración (los dos últimos, solo en el menú de sonido). */
+static int nav_tecla(SDL_Scancode sc)
+{
+    switch (sc) {
+    case SDL_SCANCODE_UP: return 0;
+    case SDL_SCANCODE_DOWN: return 1;
+    case SDL_SCANCODE_LEFT: return 2;
+    case SDL_SCANCODE_RIGHT: return 3;
+    case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: case SDL_SCANCODE_KP_ENTER: return 4;
+    case SDL_SCANCODE_ESCAPE: return 5;
+    case SDL_SCANCODE_DELETE: case SDL_SCANCODE_BACKSPACE: return 6;
+    case SDL_SCANCODE_F2: case SDL_SCANCODE_R: return 7;
+    case SDL_SCANCODE_V: return 8;
+    default: return -1;
+    }
+}
+
+static int nav_boton(SDL_GamepadButton b)
+{
+    switch (b) {
+    case SDL_GAMEPAD_BUTTON_DPAD_UP: return 0;
+    case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return 1;
+    case SDL_GAMEPAD_BUTTON_DPAD_LEFT: case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return 2;
+    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return 3;
+    case SDL_GAMEPAD_BUTTON_SOUTH: return 4;
+    case SDL_GAMEPAD_BUTTON_EAST: case SDL_GAMEPAD_BUTTON_GUIDE: return 5;
+    case SDL_GAMEPAD_BUTTON_NORTH: return 6;
+    case SDL_GAMEPAD_BUTTON_WEST: return 8;
+    default: return -1;
+    }
+}
+
 static void tecla(const SDL_KeyboardEvent *e, int *pausa, int *capturas)
 {
     SDL_Scancode sc = e->scancode;
-    if (remap_jugador >= 0) {
-        if (e->repeat) return;
-        if (sc == SDL_SCANCODE_ESCAPE) { remap_accion = ACC_N - 1; remap_siguiente(); }
-        else if (sc == SDL_SCANCODE_DELETE) remap_siguiente();
-        else { cfg.tecla[remap_jugador][remap_accion] = sc; remap_siguiente(); }
+    if (menu_capturando()) {
+        if (!e->repeat) menu_capturar_tecla(sc);
         return;
     }
+    if (sonidos_editando()) { sonidos_tecla_edicion(sc); return; }
     if (sc == SDL_SCANCODE_F11 || (sc == SDL_SCANCODE_RETURN && (e->mod & SDL_KMOD_ALT))) {
         cfg.pantalla_completa = !cfg.pantalla_completa;
-        aplicar_video();
+        fe_aplicar_video();
         return;
     }
-    if (sonidos_abierto()) {
-        switch (sc) {
-        case SDL_SCANCODE_UP: sonidos_navegar(0); break;
-        case SDL_SCANCODE_DOWN: sonidos_navegar(1); break;
-        case SDL_SCANCODE_LEFT: sonidos_navegar(2); break;
-        case SDL_SCANCODE_RIGHT: sonidos_navegar(3); break;
-        case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: case SDL_SCANCODE_KP_ENTER: sonidos_navegar(4); break;
-        case SDL_SCANCODE_ESCAPE: sonidos_navegar(5); break;
-        case SDL_SCANCODE_DELETE: case SDL_SCANCODE_BACKSPACE: sonidos_navegar(6); break;
-        default: break;
-        }
-        return;
-    }
-    if (menu_abierto) {
-        switch (sc) {
-        case SDL_SCANCODE_UP: menu_navegar(0); break;
-        case SDL_SCANCODE_DOWN: menu_navegar(1); break;
-        case SDL_SCANCODE_LEFT: menu_navegar(2); break;
-        case SDL_SCANCODE_RIGHT: menu_navegar(3); break;
-        case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: case SDL_SCANCODE_KP_ENTER: menu_navegar(4); break;
-        case SDL_SCANCODE_ESCAPE: menu_navegar(5); break;
-        default: break;
-        }
-        return;
-    }
+    int nav = nav_tecla(sc);
+    if (sonidos_abierto()) { if (nav >= 0) sonidos_navegar(nav); return; }
+    if (menu_abierto()) { if (nav >= 0 && nav <= 5) menu_navegar(nav); return; }
+    if (e->repeat) return;
     int dbg = debug_tecla(e);
     if (dbg == DEBUG_AVANZAR) { *pausa = 1; avanzar = 1; }
     if (dbg != DEBUG_NADA) { cfg.debug = debug_activo(); return; }
     switch (sc) {
-    case SDL_SCANCODE_ESCAPE: menu_abierto = 1; break;
-    case SDL_SCANCODE_P: *pausa = !*pausa; avisar(*pausa ? "Pausa" : "Continuar"); break;
-    case SDL_SCANCODE_F5: estado_guardar(); break;
-    case SDL_SCANCODE_F9: estado_cargar(); break;
+    case SDL_SCANCODE_ESCAPE: menu_pausa(); break;
+    case SDL_SCANCODE_P: *pausa = !*pausa; fe_avisar(*pausa ? "Pausa" : "Continuar"); break;
+    case SDL_SCANCODE_F5: fe_estado_guardar(); break;
+    case SDL_SCANCODE_F9: fe_estado_cargar(); break;
     case SDL_SCANCODE_F12: {
         char r[1100];
         snprintf(r, sizeof r, "%scaptura_%03d.bmp", dir_pref, (*capturas)++);
-        if (guardar_bmp(r) == 0) avisar("Captura: %s", r);
+        if (guardar_bmp(r) == 0) fe_avisar("Captura: %s", r);
         break;
     }
     default: break;
@@ -464,42 +333,19 @@ static void tecla(const SDL_KeyboardEvent *e, int *pausa, int *capturas)
 static void boton(const SDL_GamepadButtonEvent *e)
 {
     SDL_GamepadButton b = (SDL_GamepadButton)e->button;
-    if (remap_jugador >= 0) {
-        cfg.boton[remap_jugador][remap_accion] = b;
-        remap_siguiente();
-        return;
-    }
+    if (menu_capturando()) { menu_capturar_boton(b); return; }
+    if (sonidos_editando()) return;
     SDL_Gamepad *g = SDL_GetGamepadFromID(e->which);
     int combo = g && ((b == SDL_GAMEPAD_BUTTON_START && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_BACK)) ||
                       (b == SDL_GAMEPAD_BUTTON_BACK && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START)));
-    if (sonidos_abierto()) {
-        switch (b) {
-        case SDL_GAMEPAD_BUTTON_DPAD_UP: sonidos_navegar(0); break;
-        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: sonidos_navegar(1); break;
-        case SDL_GAMEPAD_BUTTON_DPAD_LEFT: case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: sonidos_navegar(2); break;
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: sonidos_navegar(3); break;
-        case SDL_GAMEPAD_BUTTON_SOUTH: sonidos_navegar(4); break;
-        case SDL_GAMEPAD_BUTTON_NORTH: sonidos_navegar(6); break;
-        case SDL_GAMEPAD_BUTTON_EAST: case SDL_GAMEPAD_BUTTON_GUIDE: sonidos_navegar(5); break;
-        default: break;
-        }
+    int nav = nav_boton(b);
+    if (sonidos_abierto()) { if (nav >= 0) sonidos_navegar(nav); return; }
+    if (menu_abierto()) {
+        if (combo) menu_navegar(5);
+        else if (nav >= 0 && nav <= 5) menu_navegar(nav);
         return;
     }
-    if (b == SDL_GAMEPAD_BUTTON_GUIDE || combo) {
-        if (menu_abierto) menu_navegar(5);
-        else menu_abierto = 1;
-        return;
-    }
-    if (!menu_abierto) return;
-    switch (b) {
-    case SDL_GAMEPAD_BUTTON_DPAD_UP: menu_navegar(0); break;
-    case SDL_GAMEPAD_BUTTON_DPAD_DOWN: menu_navegar(1); break;
-    case SDL_GAMEPAD_BUTTON_DPAD_LEFT: menu_navegar(2); break;
-    case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: menu_navegar(3); break;
-    case SDL_GAMEPAD_BUTTON_SOUTH: menu_navegar(4); break;
-    case SDL_GAMEPAD_BUTTON_EAST: menu_navegar(5); break;
-    default: break;
-    }
+    if (b == SDL_GAMEPAD_BUTTON_GUIDE || combo) menu_pausa();
 }
 
 /* ------------------------------------------------------------------ ROMs */
@@ -597,7 +443,14 @@ int ventana_correr(const Opciones *o)
     }
     SDL_SetWindowMinimumSize(ventana, NG_ANCHO, NG_ALTO);
     tex = SDL_CreateTexture(render, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NG_ANCHO, NG_ALTO);
-    aplicar_video();
+    fe_aplicar_video();
+    fuente_crear(render);
+    {
+        char r[1100];
+        snprintf(r, sizeof r, "%ssonidos.ini", dir_pref);
+        sonidos_iniciar(ventana, r);
+    }
+    if (cfg.pantalla_inicio) menu_inicio();
 
     /* Audio: SDL convierte de 55 555 Hz a la frecuencia del dispositivo. */
     if (ng_audio_activo) {
@@ -614,26 +467,28 @@ int ventana_correr(const Opciones *o)
     }
     static int16_t muestras[4096 * 2];
     uint64_t audio_cuadros = 0, audio_descartes = 0, audio_vacios = 0, audio_cola_suma = 0;
-    if (cfg.turbo) avisar("Ralentizacion desactivada (68000 x%d). Esc: menu", 1 << cfg.turbo);
-    else avisar("Esc: menu   F5/F9: guardar/cargar estado");
+    if (!cfg.pantalla_inicio) fe_avisar("Esc: menu   F5/F9: guardar/cargar partida");
 
-    /* PD_PRUEBA_VENTANA=N,archivo.png[,menu|sonidos]: tras N cuadros guarda lo que muestra la
-       ventana (con el menú, o con el menú de sonido reproduciendo la segunda música) y sale. */
+    /* PD_PRUEBA_VENTANA=N,archivo.png[,menu|sonidos|jugar]: tras N cuadros guarda lo que muestra la
+       ventana (con el menú, con el menú de sonido reproduciendo la segunda música, o tras elegir
+       "Jugar" en el cuadro 1300) y sale. */
     long prueba_cuadros = 0;
     char prueba_png[1024] = "";
-    int prueba_menu = 0, prueba_sonidos = 0;
+    int prueba_menu = 0, prueba_sonidos = 0, prueba_jugar = 0;
     if (getenv("PD_PRUEBA_VENTANA")) {
         char extra[16] = "";
         sscanf(getenv("PD_PRUEBA_VENTANA"), "%ld,%1023[^,],%15s", &prueba_cuadros, prueba_png, extra);
         prueba_menu = !strcmp(extra, "menu");
         prueba_sonidos = !strcmp(extra, "sonidos");
+        prueba_jugar = !strcmp(extra, "jugar");
     }
     long cuadros_vistos = 0;
 
     int pausa = 0, capturas = 0;
     Uint64 proximo = SDL_GetTicksNS();
     while (!salir) {
-        if (prueba_cuadros && prueba_menu && cuadros_vistos == prueba_cuadros - 1) menu_abierto = 1;
+        if (prueba_cuadros && prueba_menu && cuadros_vistos == prueba_cuadros - 1) menu_pausa();
+        if (prueba_cuadros && prueba_jugar && cuadros_vistos == 1300) menu_navegar(4);   /* "Jugar" */
         if (prueba_cuadros && prueba_sonidos && cuadros_vistos == prueba_cuadros - 60) {
             sonidos_abrir();
             sonidos_navegar(1);
@@ -643,7 +498,8 @@ int ventana_correr(const Opciones *o)
         while (SDL_PollEvent(&e)) {
             switch (e.type) {
             case SDL_EVENT_QUIT: salir = 1; break;
-            case SDL_EVENT_KEY_DOWN: if (!e.key.repeat || menu_abierto) tecla(&e.key, &pausa, &capturas); break;
+            case SDL_EVENT_KEY_DOWN: tecla(&e.key, &pausa, &capturas); break;
+            case SDL_EVENT_TEXT_INPUT: sonidos_texto(e.text.text); break;
             case SDL_EVENT_GAMEPAD_BUTTON_DOWN: boton(&e.gbutton); break;
             case SDL_EVENT_GAMEPAD_ADDED: mando_conectado(e.gdevice.which); break;
             case SDL_EVENT_GAMEPAD_REMOVED: mando_desconectado(e.gdevice.which); break;
@@ -654,7 +510,12 @@ int ventana_correr(const Opciones *o)
         }
         if (sonidos_abierto()) {
             sonidos_cuadro();
-        } else if ((!pausa || avanzar) && !menu_abierto) {
+        } else if (menu_juego_corre()) {         /* pantalla de inicio: el demo sigue, sin entradas */
+            memset(ng.joy, 0, sizeof ng.joy);
+            memset(ng.sistema, 0, sizeof ng.sistema);
+            ng.test = 0x80;
+            ng_ejecutar_cuadro();
+        } else if ((!pausa || avanzar) && !menu_abierto()) {
             leer_entradas();
             ng_ejecutar_cuadro();
             debug_cuadro();
@@ -684,8 +545,9 @@ int ventana_correr(const Opciones *o)
         SDL_RenderClear(render);
         SDL_FRect juego = dibujar_juego(w, h);
         debug_dibujar(render, juego, w, h, cfg.turbo);
-        dibujar_interfaz(w, h);
-        sonidos_dibujar(render, w, h);
+        if (sonidos_abierto()) sonidos_dibujar(render, w, h);
+        else menu_dibujar(render, w, h);
+        dibujar_avisos(w, h);
         if (prueba_cuadros && ++cuadros_vistos >= prueba_cuadros) {
             SDL_Surface *s = SDL_RenderReadPixels(render, NULL);
             if (s) { SDL_SavePNG(s, prueba_png); SDL_DestroySurface(s); }
@@ -709,6 +571,7 @@ int ventana_correr(const Opciones *o)
                 (unsigned long long)audio_vacios, (unsigned long long)audio_descartes);
     if (audio) SDL_DestroyAudioStream(audio);
     for (int j = 0; j < 2; j++) if (mandos[j]) SDL_CloseGamepad(mandos[j]);
+    fuente_destruir();
     if (tex_grande) SDL_DestroyTexture(tex_grande);
     SDL_DestroyTexture(tex);
     SDL_DestroyRenderer(render);

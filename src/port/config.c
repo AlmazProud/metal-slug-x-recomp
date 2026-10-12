@@ -36,6 +36,7 @@ void config_por_defecto(Config *c)
     c->ranura = 1;
     c->autodisparo[0] = c->autodisparo[1] = AUTO_BOTON;
     c->vibracion = 70;
+    c->pantalla_inicio = 1;
     static const SDL_Scancode t1[ACC_N] = {
         SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT,
         SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_C, SDL_SCANCODE_V, SDL_SCANCODE_1, SDL_SCANCODE_5,
@@ -117,6 +118,7 @@ int config_cargar(Config *c, const char *ruta)
                 c->auto_velocidad = buscar(VELOCIDAD_NOMBRE, AUTO_VELOCIDADES, v, c->auto_velocidad);
             else if (!strcmp(k, "debug")) c->debug = entero(v, 0, 1, c->debug);
             else if (!strcmp(k, "vibracion")) c->vibracion = entero(v, 0, 100, c->vibracion);
+            else if (!strcmp(k, "pantalla_inicio")) c->pantalla_inicio = entero(v, 0, 1, c->pantalla_inicio);
         } else if (!strncmp(seccion, "teclado", 7) || !strncmp(seccion, "mando", 5)) {
             int teclado = seccion[0] == 't';
             int j = seccion[teclado ? 7 : 5] - '1';
@@ -152,6 +154,8 @@ int config_guardar(const Config *c, const char *ruta)
     fprintf(f, "; debug: panel de depuración (F3)\ndebug=%d\n", c->debug);
     fprintf(f, "; vibracion: intensidad del mando con explosiones y disparos, 0-100 (0 = apagada)\nvibracion=%d\n",
             c->vibracion);
+    fprintf(f, "; pantalla_inicio: menú de inicio al abrir el juego (1) o directo al juego (0)\npantalla_inicio=%d\n",
+            c->pantalla_inicio);
     for (int j = 0; j < 2; j++) {
         fprintf(f, "\n[teclado%d]\n", j + 1);
         for (int a = 0; a < ACC_N; a++)
