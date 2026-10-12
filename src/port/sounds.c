@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "font.h"
+#include "lang.h"
 #include "neogeo.h"
 
 /* ------------------------------------------------------------------ user data */
@@ -101,14 +102,31 @@ static const Sound *profile_sound(uint8_t mode, uint8_t cmd)
     return NULL;
 }
 
+/* A built-in (profile) name in the frontend language: "Effect 2A" is translated word by word,
+   the rest through the table (lang.c). */
+static const char *builtin_name(const char *n)
+{
+    static const char *const PREFIX[3] = {"Track", "Effect", "Voice"};
+    static char b[40];
+    for (int i = 0; i < 3; i++) {
+        size_t l = strlen(PREFIX[i]);
+        if (!strncmp(n, PREFIX[i], l) && n[l] == ' ' && strlen(n + l + 1) == 2) {
+            snprintf(b, sizeof b, "%s %s", T(PREFIX[i]), n + l + 1);
+            return b;
+        }
+    }
+    return T(n);
+}
+
+/* User names are shown verbatim; built-in ones, translated. */
 static const char *sound_name(uint8_t mode, uint8_t cmd)
 {
     static char b[40];
     int m = mode_index(mode);
     if (m >= 0 && u.name[m][cmd]) return u.name[m][cmd];
     const Sound *s = profile_sound(mode, cmd);
-    if (s) return s->name;
-    snprintf(b, sizeof b, "%s %02X", mode == MODE_MUSIC ? "Track" : mode == MODE_VOICES ? "Voice" : "Effect", cmd);
+    if (s) return builtin_name(s->name);
+    snprintf(b, sizeof b, "%s %02X", T(mode == MODE_MUSIC ? "Track" : mode == MODE_VOICES ? "Voice" : "Effect"), cmd);
     return b;
 }
 
@@ -332,7 +350,9 @@ void sounds_edit_key(SDL_Scancode sc)
     free(u.name[i][c.cmd]);
     u.name[i][c.cmd] = NULL;
     const Sound *p = profile_sound(c.mode, c.cmd);
-    if (m.text[0] && !(p && !strcmp(p->name, m.text))) u.name[i][c.cmd] = copy_str(m.text);
+    /* the built-in name (in English or as currently shown) is not a user name */
+    if (m.text[0] && !(p && (!strcmp(p->name, m.text) || !strcmp(builtin_name(p->name), m.text))))
+        u.name[i][c.cmd] = copy_str(m.text);
     user_save();
 }
 
@@ -347,21 +367,22 @@ void sounds_draw(SDL_Renderer *r, int w, int h)
     SDL_SetRenderDrawColor(r, 0, 0, 0, 215);
     SDL_RenderFillRect(r, NULL);
     char b[128];
-    font_centered(r, cx, 12, 3, INK_GOLD, "MUSIC AND SOUNDS");
+    font_centered(r, cx, 12, 3, INK_GOLD, T("MUSIC AND SOUNDS"));
 
     /* tabs */
     float width = 0;
-    for (int c = 0; c < CAT_COUNT; c++) width += font_width(CATEGORY[c], 1.5f) + 24;
+    for (int c = 0; c < CAT_COUNT; c++) width += font_width(T(CATEGORY[c]), 1.5f) + 24;
     float x = cx - width / 2 + 12;
     for (int c = 0; c < CAT_COUNT; c++) {
         int is_sel = c == m.category;
+        const char *tab = T(CATEGORY[c]);
         if (is_sel) {
             SDL_SetRenderDrawColor(r, 255, 190, 60, 50);
-            SDL_FRect f = {x - 6, 42, font_width(CATEGORY[c], 1.5f) + 12, 18};
+            SDL_FRect f = {x - 6, 42, font_width(tab, 1.5f) + 12, 18};
             SDL_RenderFillRect(r, &f);
         }
-        font_text(r, x, 45, 1.5f, is_sel ? INK_GOLD : INK_GRAY, CATEGORY[c]);
-        x += font_width(CATEGORY[c], 1.5f) + 24;
+        font_text(r, x, 45, 1.5f, is_sel ? INK_GOLD : INK_GRAY, tab);
+        x += font_width(tab, 1.5f) + 24;
     }
 
     /* scrolling list: name, key, duration and rumble */
@@ -375,9 +396,10 @@ void sounds_draw(SDL_Renderer *r, int w, int h)
     if (first > n - visible) first = n - visible;
     if (first < 0) first = 0;
     if (!n) font_centered(r, cx, y0 + 20, 1, INK_GRAY,
-                            m.category == CAT_RECENT ? "Nothing has played in the game yet" : "Empty");
+                            T(m.category == CAT_RECENT ? "Nothing has played in the game yet" : "Empty"));
     int with_rumble = m.category != CAT_MUSIC;
-    if (with_rumble && n) font_text(r, x0 + 372, y0 - 14, 1, INK_GRAY, "Rumble");
+    /* uppercase key (the font is uppercase anyway): a shorter translation than the menu's "Rumble" */
+    if (with_rumble && n) font_text(r, x0 + 372, y0 - 14, 1, INK_GRAY, T("RUMBLE"));
     for (int p = first; p < n && p < first + visible; p++) {
         float y = y0 + (float)(p - first) * L;
         SoundKey c = l[p];
@@ -399,13 +421,13 @@ void sounds_draw(SDL_Renderer *r, int w, int h)
         font_text(r, x0 + 256, y, 1, INK_GRAY, b);
         const Sound *s = profile_sound(c.mode, c.cmd);
         if (s) {
-            if (s->tenths == 0xFFFF) snprintf(b, sizeof b, "loop");
+            if (s->tenths == 0xFFFF) snprintf(b, sizeof b, "%s", T("loop"));
             else snprintf(b, sizeof b, "%d.%ds", s->tenths / 10, s->tenths % 10);
             font_text(r, x0 + 356 - font_width(b, 1), y, 1, ink, b);
         }
         if (with_rumble && c.mode != MODE_MUSIC) {
             int i = mode_index(c.mode), v = i >= 0 ? u.vib[i][c.cmd] : VIB_AUTO;
-            const char *t = v != VIB_AUTO ? VIB_NAME[v] : rumble_of(c.mode, c.cmd) ? "auto" : "-";
+            const char *t = v != VIB_AUTO ? T(VIB_NAME[v]) : rumble_of(c.mode, c.cmd) ? "auto" : "-";
             font_text(r, x0 + 372, y, 1, v != VIB_AUTO ? INK_GOLD : INK_GRAY, t);
         }
     }
@@ -414,14 +436,14 @@ void sounds_draw(SDL_Renderer *r, int w, int h)
     float y = vh - 46;
     if (m.playing) {
         double secs = (double)(SDL_GetTicksNS() - m.since) / 1e9;
-        snprintf(b, sizeof b, "Playing: %s  %02d:%02d", sound_name(m.current.mode, m.current.cmd), (int)secs / 60, (int)secs % 60);
+        snprintf(b, sizeof b, T("Playing: %s  %02d:%02d"), sound_name(m.current.mode, m.current.cmd), (int)secs / 60, (int)secs % 60);
         font_centered(r, cx, y, 1, INK_GREEN, b);
     }
     if (m.editing) {
-        font_centered(r, cx, y + 16, 1, INK_SILVER, "Type the name   Enter save   Esc cancel");
+        font_centered(r, cx, y + 16, 1, INK_SILVER, T("Type the name   Enter save   Esc cancel"));
     } else {
-        font_centered(r, cx, y + 16, 1, INK_GRAY, "Enter/A listen   Del/Y stop   F2 rename");
-        font_centered(r, cx, y + 30, 1, INK_GRAY, "V/X rumble   </> LB/RB tab   Esc/B back");
+        font_centered(r, cx, y + 16, 1, INK_GRAY, T("Enter/A listen   Del/Y stop   F2 rename"));
+        font_centered(r, cx, y + 30, 1, INK_GRAY, T("V/X rumble   </> LB/RB tab   Esc/B back"));
     }
     SDL_SetRenderScale(r, 1, 1);
 }

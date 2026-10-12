@@ -38,6 +38,7 @@ typedef struct {
     int rumble;                       /* strength 0-100 (0 = off) */
     int start_screen;                 /* show the start menu when the game opens */
     int blood;                          /* 0 = as set in the service menu; 1 = always red */
+    int language;                        /* LANG_* (lang.h): frontend language */
     /* controls: [player][action] */
     SDL_Scancode key[2][ACT_COUNT];
     SDL_GamepadButton button[2][ACT_COUNT];

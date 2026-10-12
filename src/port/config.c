@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lang.h"
+
 const char *const ACTION_KEY[ACT_COUNT] = {
     "up", "down", "left", "right", "a", "b", "c", "d", "start", "coin", "auto",
 };
@@ -33,6 +35,7 @@ static const char *const FILTER_NAME_OLD[FILTER_COUNT] = {"nitido", "suave", "pi
 static const char *const AUTO_NAME[AUTO_COUNT] = {"off", "button", "fire"};
 static const char *const AUTO_NAME_OLD[AUTO_COUNT] = {"no", "boton", "disparo"};
 static const char *const SPEED_NAME[AUTO_SPEEDS] = {"10", "7.5", "5"};
+static const char *const LANGUAGE_NAME[LANG_COUNT] = {"en", "es"};
 const int AUTO_PERIOD[AUTO_SPEEDS] = {6, 8, 12};
 
 void config_defaults(Config *c)
@@ -155,6 +158,8 @@ int config_load(Config *c, const char *path)
             else if (is_key(k, "rumble", "vibracion")) c->rumble = integer(v, 0, 100, c->rumble);
             else if (is_key(k, "start_screen", "pantalla_inicio")) c->start_screen = integer(v, 0, 1, c->start_screen);
             else if (is_key(k, "blood", "sangre")) c->blood = integer(v, 0, 1, c->blood);
+            else if (is_key(k, "language", "idioma"))
+                c->language = lookup(LANGUAGE_NAME, NULL, LANG_COUNT, v, c->language);
         } else if ((j = player_section(section, "keyboard")) >= 0 || (j = player_section(section, "teclado")) >= 0) {
             int a = lookup(ACTION_KEY, ACTION_KEY_OLD, ACT_COUNT, k, -1);
             if (a >= 0) c->key[j][a] = *v ? SDL_GetScancodeFromName(v) : SDL_SCANCODE_UNKNOWN;
@@ -194,6 +199,8 @@ int config_save(const Config *c, const char *path)
             c->start_screen);
     fprintf(f, "; blood: 0 = as set in the service menu (BLOOD, off in the US), 1 = always red\n"
                "blood=%d\n", c->blood);
+    fprintf(f, "; language: menu language, en (English) or es (Spanish)\nlanguage=%s\n",
+            LANGUAGE_NAME[c->language]);
     for (int j = 0; j < 2; j++) {
         fprintf(f, "\n[keyboard%d]\n", j + 1);
         for (int a = 0; a < ACT_COUNT; a++)

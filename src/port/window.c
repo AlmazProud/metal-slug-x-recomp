@@ -36,6 +36,7 @@
 #include "dispatcher.h"
 #include "frontend.h"
 #include "font.h"
+#include "lang.h"
 #include "logo.h"
 #include "menu.h"
 #include "neogeo.h"
@@ -111,7 +112,7 @@ void fe_state_save(void)
     int ok = f && fwrite(d, 1, size, f) == size;
     if (f && fclose(f) != 0) ok = 0;
     free(d);
-    fe_notify(ok ? "State saved to slot %d" : "Could not save slot %d", cfg.slot);
+    fe_notify(T(ok ? "State saved to slot %d" : "Could not save slot %d"), cfg.slot);
 }
 
 void fe_state_load(void)
@@ -120,9 +121,9 @@ void fe_state_load(void)
     state_path(r, sizeof r);
     size_t size;
     void *d = SDL_LoadFile(r, &size);
-    if (!d) { fe_notify("Slot %d is empty", cfg.slot); return; }
-    if (ng_state_load(d, size) == 0) fe_notify("State loaded from slot %d", cfg.slot);
-    else fe_notify("Slot %d is from another port version", cfg.slot);
+    if (!d) { fe_notify(T("Slot %d is empty"), cfg.slot); return; }
+    if (ng_state_load(d, size) == 0) fe_notify(T("State loaded from slot %d"), cfg.slot);
+    else fe_notify(T("Slot %d is from another port version"), cfg.slot);
     SDL_free(d);
 }
 
@@ -181,7 +182,7 @@ static void pad_added(SDL_JoystickID id)
     for (int j = 0; j < 2; j++)
         if (!pads[j]) {
             pads[j] = SDL_OpenGamepad(id);
-            if (pads[j]) fe_notify("Gamepad %d: %s", j + 1, SDL_GetGamepadName(pads[j]));
+            if (pads[j]) fe_notify(T("Gamepad %d: %s"), j + 1, SDL_GetGamepadName(pads[j]));
             return;
         }
 }
@@ -192,7 +193,7 @@ static void pad_removed(SDL_JoystickID id)
         if (pads[j] && SDL_GetGamepadID(pads[j]) == id) {
             SDL_CloseGamepad(pads[j]);
             pads[j] = NULL;
-            fe_notify("Gamepad %d disconnected", j + 1);
+            fe_notify(T("Gamepad %d disconnected"), j + 1);
         }
 }
 
@@ -231,7 +232,7 @@ void fe_reset(void)
     ng_power_on();
     memcpy(ng.sram, sram, sizeof sram);
     play_frame = -1;
-    fe_notify("Machine reset");
+    fe_notify(T("Machine reset"));
 }
 
 /* ------------------------------------------------------------------ drawing */
@@ -353,13 +354,13 @@ static void on_key(const SDL_KeyboardEvent *e, int *paused, int *screenshots)
     if (dbg != DEBUG_NONE) { cfg.debug = debug_enabled(); return; }
     switch (sc) {
     case SDL_SCANCODE_ESCAPE: menu_pause(); break;
-    case SDL_SCANCODE_P: *paused = !*paused; fe_notify(*paused ? "Paused" : "Resume"); break;
+    case SDL_SCANCODE_P: *paused = !*paused; fe_notify(T(*paused ? "Paused" : "Resume")); break;
     case SDL_SCANCODE_F5: fe_state_save(); break;
     case SDL_SCANCODE_F9: fe_state_load(); break;
     case SDL_SCANCODE_F12: {
         char r[1100];
         snprintf(r, sizeof r, "%sscreenshot_%03d.bmp", pref_dir, (*screenshots)++);
-        if (save_bmp(r) == 0) fe_notify("Screenshot: %s", r);
+        if (save_bmp(r) == 0) fe_notify(T("Screenshot: %s"), r);
         break;
     }
     default: break;
@@ -428,8 +429,8 @@ static int find_roms(const Options *o)
     for (;;) {
         char msg[1600];
         snprintf(msg, sizeof msg,
-                 "No valid GOG copy of Metal Slug X was found.\n\n%s\n\n"
-                 "Choose the folder where you installed the game (or its resources\\game subfolder).", error);
+                 T("No valid GOG copy of Metal Slug X was found.\n\n%s\n\n"
+                   "Choose the folder where you installed the game (or its resources\\game subfolder)."), error);
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Metal Slug X", msg, NULL);
         dialog_done = 0;
         dialog_path[0] = 0;
@@ -457,6 +458,7 @@ int window_run(const Options *o)
     snprintf(cfg_path, sizeof cfg_path, "%smslugx.ini", pref_dir);
     config_defaults(&cfg);
     config_load(&cfg, cfg_path);
+    lang_set(cfg.language);
     if (o->scale > 0) cfg.scale = o->scale;
     if (o->turbo >= 0) cfg.turbo = o->turbo;
 
@@ -512,18 +514,19 @@ int window_run(const Options *o)
     }
     static int16_t samples[4096 * 2];
     uint64_t audio_frames = 0, audio_drops = 0, audio_empty = 0, audio_queue_sum = 0;
-    if (!cfg.start_screen) fe_notify("Esc: menu   F5/F9: save/load game");
+    if (!cfg.start_screen) fe_notify(T("Esc: menu   F5/F9: save/load game"));
 
-    /* PD_WINDOW_TEST=N,file.png[,menu|sounds|play|rename]: after N frames, saves what the
-       window shows (with the menu, with the sound menu playing the second music track, or after
-       choosing "Play" at frame 1300) and quits. */
+    /* PD_WINDOW_TEST=N,file.png[,menu|settings|sounds|play|rename]: after N frames, saves what
+       the window shows (with the pause menu or its Settings page, with the sound menu playing the
+       second music track, or after choosing "Play" at frame 1300) and quits. */
     long test_frame_count = 0;
     char test_png[1024] = "";
-    int test_menu = 0, test_sounds = 0, test_play = 0, test_rename = 0;
+    int test_menu = 0, test_settings = 0, test_sounds = 0, test_play = 0, test_rename = 0;
     if (getenv("PD_WINDOW_TEST")) {
         char extra[16] = "";
         sscanf(getenv("PD_WINDOW_TEST"), "%ld,%1023[^,],%15s", &test_frame_count, test_png, extra);
-        test_menu = !strcmp(extra, "menu");
+        test_settings = !strcmp(extra, "settings");
+        test_menu = test_settings || !strcmp(extra, "menu");
         test_sounds = !strcmp(extra, "sounds");
         test_play = !strcmp(extra, "play");
         test_rename = !strcmp(extra, "rename");
@@ -538,7 +541,13 @@ int window_run(const Options *o)
     double quit_after = getenv("PD_QUIT_AFTER") ? atof(getenv("PD_QUIT_AFTER")) : 0;
     uint64_t loops = 0, emulated = ng.frames;
     while (!quit) {
-        if (test_frame_count && test_menu && frames_shown == test_frame_count - 1) menu_pause();
+        if (test_frame_count && test_menu && frames_shown == test_frame_count - 1) {
+            menu_pause();
+            if (test_settings) {                     /* Continue, Save, Load, Settings */
+                for (int i = 0; i < 3; i++) menu_navigate(1);
+                menu_navigate(4);
+            }
+        }
         if (test_frame_count && test_play && frames_shown == 1300) menu_navigate(4);   /* "Play" */
         if (test_frame_count && test_rename) {              /* rename the same effect twice */
             long f = test_frame_count - frames_shown;

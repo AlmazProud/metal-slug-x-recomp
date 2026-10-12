@@ -15,6 +15,7 @@
 #include "dispatcher.h"
 #include "font.h"
 #include "frontend.h"
+#include "lang.h"
 #include "logo.h"
 #include "sounds.h"
 
@@ -22,7 +23,7 @@ enum {
     OP_PLAY, OP_CONTINUE, OP_SAVE, OP_LOAD, OP_SETTINGS, OP_SOUNDS, OP_EXTRAS, OP_BACK_TO_START,
     OP_QUIT,
     /* settings */
-    OP_VIDEO, OP_AUDIO, OP_GAME, OP_CONTROLS,
+    OP_LANGUAGE, OP_VIDEO, OP_AUDIO, OP_GAME, OP_CONTROLS,
     OP_FULLSCREEN, OP_VSYNC, OP_ASPECT, OP_FILTER, OP_SCANLINES,
     OP_VOLUME, OP_RUMBLE,
     OP_TURBO, OP_BLOOD, OP_AUTO1, OP_AUTO2, OP_AUTO_SPEED, OP_START_SCREEN,
@@ -40,7 +41,7 @@ typedef struct { const char *title; const int *op; int n; } Page;
 PAGE(P_START, "METAL SLUG X", OP_PLAY, OP_LOAD, OP_SETTINGS, OP_SOUNDS, OP_EXTRAS, OP_QUIT);
 PAGE(P_PAUSE, "PAUSE", OP_CONTINUE, OP_SAVE, OP_LOAD, OP_SETTINGS, OP_SOUNDS, OP_EXTRAS,
      OP_BACK_TO_START, OP_QUIT);
-PAGE(P_SETTINGS, "SETTINGS", OP_VIDEO, OP_AUDIO, OP_GAME, OP_CONTROLS);
+PAGE(P_SETTINGS, "SETTINGS", OP_LANGUAGE, OP_VIDEO, OP_AUDIO, OP_GAME, OP_CONTROLS);
 PAGE(P_VIDEO, "VIDEO", OP_FULLSCREEN, OP_VSYNC, OP_ASPECT, OP_FILTER, OP_SCANLINES);
 PAGE(P_AUDIO, "AUDIO", OP_VOLUME, OP_RUMBLE);
 PAGE(P_GAME, "GAME", OP_TURBO, OP_BLOOD, OP_AUTO1, OP_AUTO2, OP_AUTO_SPEED, OP_START_SCREEN);
@@ -89,9 +90,11 @@ static void go_back(void)
 }
 
 /* ------------------------------------------------------------------ texts */
-static const char *label(int op)
+/* Texts are written in English; label() and help() translate them (lang.c). */
+static const char *label_en(int op)
 {
     switch (op) {
+    case OP_LANGUAGE: return "Language";
     case OP_PLAY: return "Play";
     case OP_CONTINUE: return "Continue";
     case OP_SAVE: return "Save game";
@@ -127,6 +130,8 @@ static const char *label(int op)
     }
 }
 
+static const char *label(int op) { return T(label_en(op)); }
+
 /* Value on the right (empty if the option has no value). */
 static void value(int op, char *b, size_t n)
 {
@@ -134,25 +139,27 @@ static void value(int op, char *b, size_t n)
     static const char *const FILTER[FILTER_COUNT] = {"Sharp", "Smooth", "Pixel"};
     static const char *const AUTO[AUTO_COUNT] = {"Off", "Own button", "On fire"};
     static const char *const SPEED[AUTO_SPEEDS] = {"10/s", "7.5/s", "5/s"};
+    static const char *const LANGUAGE[LANG_COUNT] = {"English", "Espanol"};   /* never translated */
     b[0] = 0;
     switch (op) {
-    case OP_SAVE: case OP_LOAD: snprintf(b, n, "< Slot %d >", cfg.slot); break;
-    case OP_FULLSCREEN: snprintf(b, n, cfg.fullscreen ? "Yes" : "No"); break;
-    case OP_VSYNC: snprintf(b, n, cfg.vsync ? "Yes" : "No"); break;
-    case OP_ASPECT: snprintf(b, n, "%s", ASPECT[cfg.aspect]); break;
-    case OP_FILTER: snprintf(b, n, "%s", FILTER[cfg.filter]); break;
-    case OP_SCANLINES: snprintf(b, n, cfg.scanlines ? "Yes" : "No"); break;
+    case OP_SAVE: case OP_LOAD: snprintf(b, n, T("< Slot %d >"), cfg.slot); break;
+    case OP_LANGUAGE: snprintf(b, n, "%s", LANGUAGE[cfg.language]); break;
+    case OP_FULLSCREEN: snprintf(b, n, "%s", T(cfg.fullscreen ? "Yes" : "No")); break;
+    case OP_VSYNC: snprintf(b, n, "%s", T(cfg.vsync ? "Yes" : "No")); break;
+    case OP_ASPECT: snprintf(b, n, "%s", T(ASPECT[cfg.aspect])); break;
+    case OP_FILTER: snprintf(b, n, "%s", T(FILTER[cfg.filter])); break;
+    case OP_SCANLINES: snprintf(b, n, "%s", T(cfg.scanlines ? "Yes" : "No")); break;
     case OP_VOLUME: snprintf(b, n, "%d%%", cfg.volume); break;
-    case OP_RUMBLE: if (cfg.rumble) snprintf(b, n, "%d%%", cfg.rumble); else snprintf(b, n, "Off"); break;
+    case OP_RUMBLE: if (cfg.rumble) snprintf(b, n, "%d%%", cfg.rumble); else snprintf(b, n, "%s", T("Off")); break;
     case OP_TURBO:
-        if (cfg.turbo) snprintf(b, n, "Off (x%d)", 1 << cfg.turbo);
-        else snprintf(b, n, "Original");
+        if (cfg.turbo) snprintf(b, n, T("Off (x%d)"), 1 << cfg.turbo);
+        else snprintf(b, n, "%s", T("Original"));
         break;
-    case OP_BLOOD: snprintf(b, n, cfg.blood ? "Red" : "Original"); break;
-    case OP_AUTO1: case OP_AUTO2: snprintf(b, n, "%s", AUTO[cfg.autofire[op - OP_AUTO1]]); break;
+    case OP_BLOOD: snprintf(b, n, "%s", T(cfg.blood ? "Red" : "Original")); break;
+    case OP_AUTO1: case OP_AUTO2: snprintf(b, n, "%s", T(AUTO[cfg.autofire[op - OP_AUTO1]])); break;
     case OP_AUTO_SPEED: snprintf(b, n, "%s", SPEED[cfg.auto_speed]); break;
-    case OP_START_SCREEN: snprintf(b, n, cfg.start_screen ? "Yes" : "No"); break;
-    case OP_DEBUG: snprintf(b, n, debug_enabled() ? "Yes" : "No"); break;
+    case OP_START_SCREEN: snprintf(b, n, "%s", T(cfg.start_screen ? "Yes" : "No")); break;
+    case OP_DEBUG: snprintf(b, n, "%s", T(debug_enabled() ? "Yes" : "No")); break;
     case OP_SETTINGS: case OP_EXTRAS: case OP_VIDEO: case OP_AUDIO: case OP_GAME: case OP_CONTROLS:
         snprintf(b, n, ">");
         break;
@@ -160,10 +167,11 @@ static void value(int op, char *b, size_t n)
     }
 }
 
-static const char *help(int op)
+static const char *help_en(int op)
 {
     switch (op) {
-    case OP_TURBO: return "Original: the game slows down with many sprites, like the board";
+    case OP_LANGUAGE: return "Language / Idioma";            /* both: findable in either language */
+    case OP_TURBO: return "Original: slows down with many sprites, like the arcade";
     case OP_ASPECT: return "4:3 like the original monitor, or square pixels";
     case OP_VSYNC: return "No tearing; at 60 Hz the game runs 1.4% faster";
     case OP_BLOOD: return "Original: as set in the service menu (BLOOD, off in the US)";
@@ -176,6 +184,8 @@ static const char *help(int op)
     default: return "";
     }
 }
+
+static const char *help(int op) { return T(help_en(op)); }
 
 /* ------------------------------------------------------------------ actions */
 static void step_percent(int *v, int d)
@@ -208,6 +218,7 @@ static void do_action(int op, int d)
     case OP_AUDIO: if (!d) push_page(&P_AUDIO); break;
     case OP_GAME: if (!d) push_page(&P_GAME); break;
     case OP_CONTROLS: if (!d) push_page(&P_CONTROLS); break;
+    case OP_LANGUAGE: cfg.language = cycle(cfg.language, d ? d : 1, LANG_COUNT); lang_set(cfg.language); break;
     case OP_FULLSCREEN: cfg.fullscreen = !cfg.fullscreen; fe_apply_video(); break;
     case OP_VSYNC: cfg.vsync = !cfg.vsync; fe_apply_video(); break;
     case OP_ASPECT: cfg.aspect = cycle(cfg.aspect, d ? d : 1, ASPECT_COUNT); break;
@@ -255,7 +266,7 @@ static void remap_next(void)
     if (++m.remap_action >= ACT_COUNT) {
         m.remap_player = -1;
         fe_save_config();
-        fe_notify("Controls saved");
+        fe_notify(T("Controls saved"));
     }
 }
 
@@ -288,16 +299,15 @@ void menu_draw(SDL_Renderer *r, int w, int h)
 
     if (m.remap_player >= 0) {
         float y = vh / 2 - 50;
-        snprintf(b, sizeof b, "PLAYER %d CONTROLS", m.remap_player + 1);
+        snprintf(b, sizeof b, T("PLAYER %d CONTROLS"), m.remap_player + 1);
         font_centered(r, cx, y, 2, INK_GOLD, b);
-        snprintf(b, sizeof b, "Press the key or button for:");
-        font_centered(r, cx, y + 30, 1, INK_SILVER, b);
-        font_centered(r, cx, y + 44, 2, INK_SILVER, ACTION_LABEL[m.remap_action]);
+        font_centered(r, cx, y + 30, 1, INK_SILVER, T("Press the key or button for:"));
+        font_centered(r, cx, y + 44, 2, INK_SILVER, T(ACTION_LABEL[m.remap_action]));
         const char *c = SDL_GetScancodeName(cfg.key[m.remap_player][m.remap_action]);
         const char *bt = SDL_GetGamepadStringForButton(cfg.button[m.remap_player][m.remap_action]);
-        snprintf(b, sizeof b, "Current: %s / gamepad %s", *c ? c : "-", bt ? bt : "-");
+        snprintf(b, sizeof b, T("Current: %s / gamepad %s"), *c ? c : "-", bt ? bt : "-");
         font_centered(r, cx, y + 70, 1, INK_GRAY, b);
-        font_centered(r, cx, y + 90, 1, INK_GRAY, "Del: keep current    Esc: finish");
+        font_centered(r, cx, y + 90, 1, INK_GRAY, T("Del: keep current    Esc: finish"));
         SDL_SetRenderScale(r, 1, 1);
         return;
     }
@@ -317,7 +327,7 @@ void menu_draw(SDL_Renderer *r, int w, int h)
         font_centered(r, cx, 80, 1, INK_SILVER, "SUPER VEHICLE-001");
         y = 112;
     } else {
-        font_centered(r, cx, 26, 3, INK_GOLD, p->title);
+        font_centered(r, cx, 26, 3, INK_GOLD, T(p->title));
         y = 70;
     }
     /* options panel */
@@ -350,7 +360,7 @@ void menu_draw(SDL_Renderer *r, int w, int h)
     const char *a = help(p->op[m.sel[m.level]]);
     if (a[0]) font_centered(r, cx, vh - 36, 1, INK_SILVER, a);
     font_centered(r, cx, vh - 18, 1, INK_GRAY,
-                    at_start && m.level == 0 ? "Enter/A: select   </>: change"
-                                             : "Enter/A: select   </>: change   Esc/B: back");
+                    T(at_start && m.level == 0 ? "Enter/A: select   </>: change"
+                                               : "Enter/A: select   </>: change   Esc/B: back"));
     SDL_SetRenderScale(r, 1, 1);
 }

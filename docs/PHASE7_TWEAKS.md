@@ -58,3 +58,20 @@ Option in Settings → Video (`vsync=1` by default). There are three possible pa
 | V-sync (60 Hz) | 59.966 | 40.6 ms | 0 | 0 |
 | No V-sync | 59.184 | 39.3 ms | 0 | 0 |
 | V-sync, simulated 144 Hz (`PD_HZ=144`) | 59.098 | 41.5 ms | 0 | 0 |
+
+## Language
+
+The frontend (menus, sound menu, on-screen notices, the ROM folder dialog) is available in
+English (default) and Spanish. The option is the first item of Settings, **Language** (**Idioma**
+in Spanish), and its help line reads "Language / Idioma" in both languages so it can always be
+found; the change applies immediately. It is saved as `language=en|es` in the `[game]` section of
+`mslugx.ini` (`idioma` is accepted as an alias); a file without the key means English.
+
+Implementation (`src/port/lang.c`): texts are written in English and passed through `T()`, which
+with Spanish selected looks the string up in a table of English/Spanish pairs (linear `strcmp`,
+negligible per frame). Format strings are translated before formatting. The Spanish texts are the
+port's original ones, in plain ASCII because the menu font has no accents. Built-in sound names
+are translated at display time ("Effect 2A" word by word); names the user typed are shown as is.
+The debug panel and console messages stay in English.
+
+Window test: `PD_WINDOW_TEST=N,file.png,settings` captures the pause menu's Settings page.
