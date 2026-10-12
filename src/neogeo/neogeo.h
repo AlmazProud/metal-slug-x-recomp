@@ -129,6 +129,13 @@ typedef struct {
 enum { NG_OCULTAR_SPRITES = 1, NG_OCULTAR_FIX = 2 };
 extern NgDebug ng_dbg;
 
+/* ------------------------------------------------------------------ lectura forzada (Fase 7A) */
+/* Una palabra de la RAM de trabajo que el código del cartucho (PC < 0xC00000) lee con otro valor:
+ * (real & ~mascara) | valor. El BIOS ve la RAM real (su test de RAM y su menú de servicio no se
+ * enteran). Sirve para encender una opción del juego sin tocar la SRAM. */
+typedef struct { int activa; uint32_t dir; uint16_t mascara, valor; } NgLecturaForzada;
+extern NgLecturaForzada ng_lectura_forzada;
+
 /* ------------------------------------------------------------------ estados guardados */
 /* Estado completo de la máquina, tomado entre cuadros (después de ng_ejecutar_cuadro): 68000,
  * hardware de video y E/S, reloj, Z80 y YM2610. ng_estado_guardar devuelve un búfer de malloc;

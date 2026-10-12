@@ -73,6 +73,7 @@ static int opciones(int argc, char **argv, Opciones *o)
         else if (!strcmp(a, "--probar-estado") && v) { o->probar_estado = atoi(v); i++; }
         else if (!strcmp(a, "--catalogo-sonido") && v) { o->catalogo = v; i++; }
         else if (!strcmp(a, "--probar-sonidos")) o->probar_sonidos = 1;
+        else if (!strcmp(a, "--sangre")) o->sangre = 1;
         else if (!strcmp(a, "--traza") && v) { ng_traza = fopen(v, "w"); i++; }
         else if (!strcmp(a, "--traza-es") && i + 3 < argc) {
             /* --traza-es ARCHIVO DESDE_US HASTA_US */

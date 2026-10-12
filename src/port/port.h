@@ -14,6 +14,7 @@ typedef struct {
     int probar_estado;                   /* cuadros a comparar tras cargar un estado (0 = no) */
     const char *catalogo;                /* --catalogo-sonido: tabla de los comandos de sonido */
     int probar_sonidos;                  /* --probar-sonidos: prueba del menú de sonido */
+    int sangre;                          /* --sangre: opción BLOOD del juego encendida */
     int fecha[7], con_fecha;
 } Opciones;
 

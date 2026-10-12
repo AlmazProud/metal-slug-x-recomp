@@ -173,9 +173,12 @@ uint32_t bus_r16(uint32_t a)
     case 0x0:
         if (a < 0x80 && !ng.vectores_cartucho) return (uint32_t)ng_roms.bios[a] << 8 | ng_roms.bios[a + 1];
         return (uint32_t)ng_roms.p[a] << 8 | ng_roms.p[a + 1];
-    case 0x1:
-        a &= 0xFFFF;
-        return (uint32_t)ng.ram[a] << 8 | ng.ram[a + 1];
+    case 0x1: {
+        uint32_t v = (uint32_t)ng.ram[a & 0xFFFF] << 8 | ng.ram[(a & 0xFFFF) + 1];
+        if (ng_lectura_forzada.activa && a == ng_lectura_forzada.dir && ng_cpu.pc < 0xC00000)
+            v = (v & ~(uint32_t)ng_lectura_forzada.mascara) | ng_lectura_forzada.valor;
+        return v;
+    }
     case 0x2: {
         if (a >= 0x2FFFE0 && a <= 0x2FFFEF) return prot_leer();
         uint32_t o = (uint32_t)(ng.banco_p2 + 1) * 0x100000 + (a & 0xFFFFF);

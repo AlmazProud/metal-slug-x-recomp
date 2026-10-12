@@ -11,6 +11,7 @@
 
 #include "despachador.h"
 #include "neogeo.h"
+#include "perfil.h"
 #include "port.h"
 #include "sonidos.h"
 
@@ -537,6 +538,7 @@ int sin_ventana_preparar(const Opciones *o)
 
 int sin_ventana_correr(const Opciones *o)
 {
+    if (o->sangre) ng_lectura_forzada = (NgLecturaForzada){1, PERFIL_SANGRE_PALABRA, PERFIL_SANGRE_MASCARA, 0x0001};
     if (o->guion && guion_cargar(o->guion) != 0) return 2;
     if (o->entradas && entradas_cargar(o->entradas) != 0) return 2;
     traza_instr_iniciar();
