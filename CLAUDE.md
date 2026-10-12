@@ -43,11 +43,40 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 |---|---|
 | Entorno | **Cerrada** (2026-10-10). Verificación 16/16 OK. ROMs copiados a `roms\`. |
 | 0. Reconocimiento | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/ROM_MAP.md`. |
-| 1. Análisis 68000 | No iniciada |
+| 1. Análisis 68000 | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE1_COBERTURA.md`. |
 | 2. Recompilador | No iniciada |
 | 3. Runtime | No iniciada |
 | 4. Arranque y verificación diferencial | No iniciada |
 | 5. Mejoras nativas | No iniciada |
+
+### Fase 1: resultado
+
+- **Herramientas:**
+  - `herramientas/cobertura.py` + `mame/cobertura.lua`: cobertura dinámica en MAME. Usa la
+    traza del depurador por partes, un bot de entrada, los cambios de banco y las lecturas de
+    datos.
+  - `herramientas/analisis68k.py`: desensamblado recursivo con Capstone, heurísticas A/B,
+    validación contra MAME y comparación con Ghidra.
+  - `herramientas/ghidra/*.java`: siembra de raíces y exportación de funciones en headless.
+- **Mapa de memoria:**
+  - P1 está fijo en `0x000000`.
+  - P2 se ve por bancos de 1 MB en `0x200000–0x2FFFFF`; se cambia con una escritura en
+    `0x2FFFF0` (banco = dato & 7). En la traza se usan los bancos 0–3.
+- **Entradas:**
+  - VBlank (IRQ1) en `0x22AC`, timer (IRQ2) en `0x2322`.
+  - USER `0x2432`, PLAYER_START `0x2658`, DEMO_END `0x2800`, COIN_SOUND `0x27F6`.
+  - Las excepciones del 68000 van a `0x22A2` (salto por `$10.w`).
+- **Resultado (traza de 300 s):**
+  - 26 406 direcciones de P1 ejecutadas.
+  - 4 488 funciones; 46 % de P1 es código (12,6 % confirmado y el resto heurístico).
+  - Todo lo que MAME ejecutó lo alcanza el análisis.
+- **Precisión:** 130 bytes heurísticos sobre datos demostrados (heurística A). Ghidra, en
+  comparación, encuentra el 55,5 % de lo ejecutado sin MAME; el análisis propio, el 51,3 %.
+- **Código fuera de P1:**
+  - 2 instrucciones en P2 (banco 1, `0x299178`, llamado desde `0x44EC`);
+  - una rutina copiada a RAM (`0x10FC00`, `jmp $7C00(a5)` en `0x10EA`).
+  - Implicación para la Fase 2: el dispatcher debe considerar el banco activo y recurrir al
+    intérprete en RAM y en código no visto.
 
 ### Fase 0: resultado
 
@@ -126,7 +155,12 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 1:** plan corto y esperar el OK.
+- [ ] **Fase 2:** plan corto y esperar el OK.
+- [ ] Descartar raíces de la heurística A cuyo código pise datos demostrados por MAME
+      (hoy: 130 bytes).
+- [ ] Ampliar la cobertura: el bot se estanca a partir de unos 200 s (26 406 PCs). Mejor
+      grabar entradas reales (`-record`) de una partida de la Misión 1.
+- [ ] 99 saltos o llamadas indirectos sin destino observado (por ejemplo `0x22AA` y `0x2354`).
 - [ ] Identificar en qué difiere el P1 de GOG del de MAME (Fase 1).
 - [ ] Lua en MAME: las suscripciones (`add_machine_stop_notifier`, taps) deben guardarse en
       variables globales; si no, Lua las recolecta en silencio.
