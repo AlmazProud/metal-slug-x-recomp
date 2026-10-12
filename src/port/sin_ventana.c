@@ -41,6 +41,7 @@ static int guion_cargar(const char *ruta)
             else if (!strcmp(tok, "d")) tr.joy |= NG_D;
             else if (!strcmp(tok, "start1")) tr.sis[0] |= NG_START;
             else if (!strcmp(tok, "start2")) tr.sis[1] |= NG_START;
+            else if (!strcmp(tok, "select1")) tr.sis[0] |= NG_SELECT;
             else if (!strcmp(tok, "moneda1")) tr.sis[0] |= NG_MONEDA;
             else if (!strcmp(tok, "moneda2")) tr.sis[1] |= NG_MONEDA;
             else if (!strcmp(tok, "test")) tr.test = 1;
@@ -538,7 +539,14 @@ int sin_ventana_preparar(const Opciones *o)
 
 int sin_ventana_correr(const Opciones *o)
 {
-    if (o->sangre) ng_lectura_forzada = (NgLecturaForzada){1, PERFIL_SANGRE_PALABRA, PERFIL_SANGRE_MASCARA, 0x0001};
+    if (o->sangre)
+        ng_lectura_forzada[NG_FORZADA_SANGRE] = (NgLecturaForzada){1, PERFIL_SANGRE_PALABRA, PERFIL_SANGRE_MASCARA, 0x0001};
+    if (getenv("PD_DIPS")) {               /* investigación: dips de depuración del juego (perfil.h) */
+        uint16_t d = (uint16_t)strtoul(getenv("PD_DIPS"), NULL, 16);
+        ng_lectura_forzada[NG_FORZADA_DIPS] = (NgLecturaForzada){1, PERFIL_DIPS_PALABRA, d, d};
+    }
+    if (getenv("PD_DESARROLLO"))           /* investigación: modo desarrollo del BIOS */
+        ng_lectura_forzada[NG_FORZADA_DESARROLLO] = (NgLecturaForzada){1, PERFIL_DESARROLLO_PALABRA, 0xFF00, 0x0100};
     if (o->guion && guion_cargar(o->guion) != 0) return 2;
     if (o->entradas && entradas_cargar(o->entradas) != 0) return 2;
     traza_instr_iniciar();

@@ -18,6 +18,11 @@
  * (CONTINUE, DIFFICULTY, PLAY TIME, DEMO SOUND, PLAY MANUAL, BLOOD...). El juego la consulta en
  * 0x1B2BE (tst.b $10FD8F). Escribir ese byte desde el encendido rompe el test de RAM del BIOS: se
  * fuerza solo la lectura del código del juego (ng_lectura_forzada, byte bajo de la palabra). */
+/* Dips de depuración del juego: dos bytes que solo valen con el modo desarrollo del BIOS
+ * (0x10FE80); si no, el juego los borra en cada cuadro (0x2592). Se fuerzan como la sangre. */
+#define PERFIL_DIPS_PALABRA 0x10F000
+/* Modo desarrollo del BIOS (byte alto de la palabra): abre el menú oculto de los desarrolladores. */
+#define PERFIL_DESARROLLO_PALABRA 0x10FE80
 #define PERFIL_SANGRE_PALABRA 0x10FD8Eu
 #define PERFIL_SANGRE_MASCARA 0x00FFu
 

@@ -46,7 +46,7 @@ void (*ng_antes_de_leer_entradas)(void);
 NgRoms ng_roms;
 uint32_t ng_pc_vblank;
 NgDebug ng_dbg;
-NgLecturaForzada ng_lectura_forzada;
+NgLecturaForzada ng_lectura_forzada[NG_FORZADAS];
 Cpu68k ng_cpu;
 
 #define T_VBLANK (NG_LINEA_VBLANK * NG_CICLOS_LINEA + 29)

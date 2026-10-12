@@ -175,8 +175,11 @@ uint32_t bus_r16(uint32_t a)
         return (uint32_t)ng_roms.p[a] << 8 | ng_roms.p[a + 1];
     case 0x1: {
         uint32_t v = (uint32_t)ng.ram[a & 0xFFFF] << 8 | ng.ram[(a & 0xFFFF) + 1];
-        if (ng_lectura_forzada.activa && a == ng_lectura_forzada.dir && ng_cpu.pc < 0xC00000)
-            v = (v & ~(uint32_t)ng_lectura_forzada.mascara) | ng_lectura_forzada.valor;
+        for (int i = 0; i < NG_FORZADAS; i++) {
+            const NgLecturaForzada *f = &ng_lectura_forzada[i];
+            if (f->activa && a == f->dir && ng_cpu.pc < 0xC00000)
+                v = (v & ~(uint32_t)f->mascara) | f->valor;
+        }
         return v;
     }
     case 0x2: {

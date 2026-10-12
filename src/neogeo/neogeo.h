@@ -130,11 +130,12 @@ enum { NG_OCULTAR_SPRITES = 1, NG_OCULTAR_FIX = 2 };
 extern NgDebug ng_dbg;
 
 /* ------------------------------------------------------------------ lectura forzada (Fase 7A) */
-/* Una palabra de la RAM de trabajo que el código del cartucho (PC < 0xC00000) lee con otro valor:
+/* Palabras de la RAM de trabajo que el código del cartucho (PC < 0xC00000) lee con otro valor:
  * (real & ~mascara) | valor. El BIOS ve la RAM real (su test de RAM y su menú de servicio no se
- * enteran). Sirve para encender una opción del juego sin tocar la SRAM. */
+ * enteran). Sirve para encender opciones del juego sin tocar la SRAM: una ranura por uso. */
 typedef struct { int activa; uint32_t dir; uint16_t mascara, valor; } NgLecturaForzada;
-extern NgLecturaForzada ng_lectura_forzada;
+enum { NG_FORZADA_SANGRE, NG_FORZADA_DIPS, NG_FORZADA_DESARROLLO, NG_FORZADAS };
+extern NgLecturaForzada ng_lectura_forzada[NG_FORZADAS];
 
 /* ------------------------------------------------------------------ estados guardados */
 /* Estado completo de la máquina, tomado entre cuadros (después de ng_ejecutar_cuadro): 68000,

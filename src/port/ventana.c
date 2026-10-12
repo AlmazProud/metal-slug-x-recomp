@@ -214,7 +214,7 @@ void fe_servicio(void) { test_cuadros = 30; }
 /* Sangre roja: el juego lee su opción BLOOD encendida (perfil.h). */
 void fe_aplicar_sangre(void)
 {
-    ng_lectura_forzada = (NgLecturaForzada){cfg.sangre, PERFIL_SANGRE_PALABRA, PERFIL_SANGRE_MASCARA, 0x0001};
+    ng_lectura_forzada[NG_FORZADA_SANGRE] = (NgLecturaForzada){cfg.sangre, PERFIL_SANGRE_PALABRA, PERFIL_SANGRE_MASCARA, 0x0001};
 }
 void fe_salir(void) { salir = 1; }
 
