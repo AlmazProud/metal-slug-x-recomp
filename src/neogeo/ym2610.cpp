@@ -4,6 +4,9 @@
 
 #include "ymfm_opn.h"
 
+#include <algorithm>
+#include <vector>
+
 namespace {
 
 class Interfaz : public ymfm::ymfm_interface
@@ -41,6 +44,29 @@ void ym_reiniciar(void)
 uint8_t ym_leer(uint32_t offset) { return chip.read(offset & 3); }
 void ym_escribir(uint32_t offset, uint8_t dato) { chip.write(offset & 3, dato); }
 void ym_temporizador_vencido(uint32_t n) { interfaz.vencido(n); }
+
+uint32_t ym_estado_tam(void)
+{
+	std::vector<uint8_t> b;
+	ymfm::ymfm_saved_state st(b, true);
+	chip.save_restore(st);
+	return (uint32_t)b.size();
+}
+
+void ym_estado_guardar(uint8_t *destino)
+{
+	std::vector<uint8_t> b;
+	ymfm::ymfm_saved_state st(b, true);
+	chip.save_restore(st);
+	std::copy(b.begin(), b.end(), destino);
+}
+
+void ym_estado_cargar(const uint8_t *datos, uint32_t n)
+{
+	std::vector<uint8_t> b(datos, datos + n);
+	ymfm::ymfm_saved_state st(b, false);
+	chip.save_restore(st);
+}
 
 void ym_generar(int32_t salida[3])
 {

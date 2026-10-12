@@ -56,7 +56,7 @@ target_compile_options(programa_recompilado PRIVATE -O1 -Wno-unused-variable -Wn
 
 # Runtime de hardware de la Neo Geo (Fase 3).
 add_library(neogeo STATIC
-    neogeo/bus.c neogeo/maquina.c neogeo/roms.c neogeo/rtc.c neogeo/sha256.c
+    neogeo/bus.c neogeo/estado.c neogeo/maquina.c neogeo/roms.c neogeo/rtc.c neogeo/sha256.c
     neogeo/sonido.c neogeo/video.c neogeo/z80_impl.c neogeo/ym2610.cpp)
 target_include_directories(neogeo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/neogeo
                            PRIVATE ${PROJECT_SOURCE_DIR}/externo/chips)

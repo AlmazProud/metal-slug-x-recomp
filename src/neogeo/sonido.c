@@ -258,6 +258,21 @@ uint8_t ng_sonido_respuesta(void)
     return s.respuesta;
 }
 
+void ng_sonido_estado(NgEstado *e)
+{
+    ng_estado_bloque(e, &s, sizeof s);
+    uint32_t n = ym_estado_tam();
+    uint32_t n_guardado = n;
+    ng_estado_bloque(e, &n_guardado, sizeof n_guardado);
+    if (e->guardando) {
+        if (e->datos) ym_estado_guardar(e->datos + e->pos);
+    } else {
+        s.lectura = s.escritura;                 /* el audio pendiente no se repite */
+        if (n_guardado == n && e->pos + n <= e->tam) ym_estado_cargar(e->datos + e->pos, n);
+    }
+    e->pos += n;
+}
+
 void ng_sonido_iniciar(void)
 {
     int activo = ng_audio_activo;

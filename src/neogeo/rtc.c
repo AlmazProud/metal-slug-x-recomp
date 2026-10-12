@@ -33,6 +33,8 @@ static struct {
     int fijada;
 } rtc;
 
+void ng_rtc_estado(NgEstado *e) { ng_estado_bloque(e, &rtc, sizeof rtc); }
+
 static int pulso_nivel(const Pulso *p, int64_t ahora)
 {
     if (p->periodo <= 0 || ahora < p->t0) return p->base;

@@ -100,6 +100,7 @@ extern void (*ng_al_reconocer_vblank)(void);
 /* Gancho opcional: se llama antes de cada lectura de un puerto de entrada (reproducciones). */
 extern void (*ng_antes_de_leer_entradas)(void);
 extern NgRoms ng_roms;
+extern uint32_t ng_pc_vblank;          /* PC interrumpido por la última VBlank (diagnóstico) */
 extern Cpu68k ng_cpu;
 
 /* Fecha inicial del reloj (si no se llama, se usa la hora local). */
@@ -112,6 +113,24 @@ int64_t ng_proximo_limite(void);
 /* Procesa los eventos de hardware vencidos hasta t (sin entregar interrupciones), para ordenar
  * una escritura de video a mitad de instrucción respecto del dibujo de las líneas. */
 void ng_al_dia(int64_t t);           /* hasta el comienzo del cuadro siguiente */
+
+/* ------------------------------------------------------------------ estados guardados */
+/* Estado completo de la máquina, tomado entre cuadros (después de ng_ejecutar_cuadro): 68000,
+ * hardware de video y E/S, reloj, Z80 y YM2610. ng_estado_guardar devuelve un búfer de malloc;
+ * ng_estado_cargar devuelve 0 si el estado es válido para esta versión del port (si no, no toca
+ * la máquina). */
+uint8_t *ng_estado_guardar(size_t *tam);
+int ng_estado_cargar(const uint8_t *datos, size_t tam);
+
+typedef struct {
+    uint8_t *datos;
+    size_t tam, pos;
+    int guardando;
+} NgEstado;
+void ng_estado_bloque(NgEstado *e, void *p, size_t n);   /* guarda o restaura n bytes */
+void ng_maquina_estado(NgEstado *e);
+void ng_sonido_estado(NgEstado *e);
+void ng_rtc_estado(NgEstado *e);
 
 /* ------------------------------------------------------------------ internos */
 void ng_video_iniciar(void);

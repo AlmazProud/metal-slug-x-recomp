@@ -44,6 +44,7 @@ FILE *ng_traza_lecturas;
 void (*ng_al_reconocer_vblank)(void);
 void (*ng_antes_de_leer_entradas)(void);
 NgRoms ng_roms;
+uint32_t ng_pc_vblank;
 Cpu68k ng_cpu;
 
 #define T_VBLANK (NG_LINEA_VBLANK * NG_CICLOS_LINEA + 29)
@@ -190,6 +191,7 @@ void ng_al_dia(int64_t t)
 
 static void entregar_irq(Cpu68k *c, int nivel)
 {
+    if (nivel == 1) ng_pc_vblank = c->pc;
     uint32_t sr = cpu_get_sr(c);
     if (!c->s) { c->usp = c->a[7]; c->a[7] = c->ssp; c->s = 1; }
     c->t = 0;
@@ -198,7 +200,7 @@ static void entregar_irq(Cpu68k *c, int nivel)
     c->a[7] -= 2; bus_w16(c->a[7], sr);
     c->pc = bus_r32((uint32_t)(24 + nivel) * 4) & 0xFFFFFF;
     c->op = 0x4E75; c->ini = c->ciclos;     /* la entrada termina con accesos al bus */
-    c->ciclos += ciclos_entrada_irq(c->ciclos);
+    c->ciclos += CIC(ciclos_entrada_irq(c->ciclos));
     c->detenido = 0;
 }
 
@@ -240,6 +242,16 @@ void rc_evento(Cpu68k *c)
         if (pend && n > c->imask && irq_desde[n] + MUESTREO_MINIMO < limite) limite = irq_desde[n] + MUESTREO_MINIMO;
     }
     rc_limite_ciclos = limite;
+}
+
+void ng_maquina_estado(NgEstado *e)
+{
+    ng_estado_bloque(e, &ng, sizeof ng);
+    ng_estado_bloque(e, &ng_cpu, sizeof ng_cpu);
+    ng_estado_bloque(e, irq_desde, sizeof irq_desde);
+    ng_estado_bloque(e, &vblank_hecho, sizeof vblank_hecho);
+    ng_estado_bloque(e, &recarga_hecha, sizeof recarga_hecha);
+    if (!e->guardando) ng_irq_actualizar();
 }
 
 void ng_ejecutar_cuadro(void)

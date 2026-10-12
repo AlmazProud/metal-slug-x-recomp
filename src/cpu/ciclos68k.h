@@ -14,6 +14,14 @@
 
 #include "cpu68k.h"
 
+/* Costo en ciclos de una instrucción, con el "turbo" opcional de la Fase 5: con cpu_turbo = k
+ * cada instrucción cuesta 2^k veces menos, como un 68000 más rápido frente al mismo hardware
+ * (quita la ralentización original). Con 0 (por defecto) no cambia nada. */
+#ifndef CIC
+extern int cpu_turbo;
+#define CIC(n) ((n) >> cpu_turbo)
+#endif
+
 /* Ajuste por opcode (y su primera palabra de extensión) que no depende de la división. */
 static inline int ciclos_ajuste(const Cpu68k *c, uint32_t op, uint32_t ext)
 {

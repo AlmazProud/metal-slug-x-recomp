@@ -53,6 +53,9 @@ extern void (*rc_traza)(const Cpu68k *c);
  * instrucción a instrucción. Los ciclos son los mismos que los del código recompilado. */
 extern int rc_solo_interprete;
 
+/* Turbo (Fase 5): cada instrucción cuesta 2^cpu_turbo veces menos ciclos (ciclos68k.h, CIC). */
+extern int cpu_turbo;
+
 /* Estadísticas */
 extern uint64_t rc_pasos_recompilados, rc_pasos_interpretados;
 

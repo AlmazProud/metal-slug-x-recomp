@@ -6,6 +6,7 @@ int64_t rc_limite_ciclos = INT64_MAX;
 volatile int rc_salir = 0;
 volatile int rc_irq_nivel = 0;
 int rc_solo_interprete = 0;
+int cpu_turbo = 0;
 uint64_t rc_pasos_recompilados = 0, rc_pasos_interpretados = 0;
 void (*rc_traza)(const Cpu68k *c) = NULL;
 

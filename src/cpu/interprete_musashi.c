@@ -34,8 +34,8 @@ void rc_interprete_paso(Cpu68k *c)
     int base = CYC_INSTRUCTION[op];
     int ajuste = ciclos_ajuste_previo(c);         /* con el estado previo, como el generador */
     c->op = (uint16_t)op; c->ini = c->ciclos;
-    c->ciclos += base + ajuste;
-    c->ciclos += m68k_execute(1) - base;
+    c->ciclos += CIC(base + ajuste);
+    c->ciclos += CIC(m68k_execute(1)) - CIC(base);
 
     for (int i = 0; i < 8; i++) {
         c->d[i] = m68k_get_reg(NULL, M68K_REG_D0 + i);

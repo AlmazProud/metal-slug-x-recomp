@@ -26,6 +26,7 @@ from generador import Emisor, NoSoportada       # noqa: E402
 CABECERA = r"""/* GENERADO por tests/diferencial/generar_pruebas.py: NO EDITAR, NO VERSIONAR. */
 #include <string.h>
 #include "cpu68k.h"
+#define CIC(n) (n)
 #include "ciclos68k.h"
 #include "pruebas.h"
 

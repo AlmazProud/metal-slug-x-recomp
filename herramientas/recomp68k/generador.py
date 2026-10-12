@@ -144,7 +144,7 @@ class Emisor:
         if f is None:
             raise NoSoportada(i.op)
         if CICLOS_BASE is not None:
-            self.e(f"PD_INI(0x{self.i.opcode:04X}u); c->ciclos += {self.base()}{self.ajuste()};")
+            self.e(f"PD_INI(0x{self.i.opcode:04X}u); c->ciclos += CIC({self.base()}{self.ajuste()});")
         f()
         return self.lineas
 
@@ -171,7 +171,7 @@ class Emisor:
 
     def ciclos(self, n) -> str:
         """Sentencia que suma `n` ciclos (texto C o entero); vacía si no hay tabla de ciclos."""
-        return f"c->ciclos += {n}; " if CICLOS_BASE is not None else ""
+        return f"c->ciclos += CIC({n}); " if CICLOS_BASE is not None else ""
 
     def excepcion(self, vector: int, pc: int) -> str:
         """Sentencia de excepción: su costo reemplaza al de la instrucción."""
@@ -488,7 +488,7 @@ class Emisor:
         s = self.leer(self.i.ops[0], "w")
         r = self.i.ops[1].reg
         if CICLOS_BASE is not None:
-            self.e(f"c->ciclos += {'ciclos_muls' if con_signo else 'ciclos_mulu'}({s});")
+            self.e(f"c->ciclos += CIC({'ciclos_muls' if con_signo else 'ciclos_mulu'}({s}));")
         if con_signo:
             expr = f"(uint32_t)((int32_t)(int16_t){s} * (int32_t)(int16_t)(c->d[{r}] & 0xFFFF))"
         else:
@@ -504,7 +504,7 @@ class Emisor:
         r = self.i.ops[1].reg
         self.e(f"if ({s} == 0) {{ {self.excepcion(5, self.sig())} }}")
         if CICLOS_BASE is not None:
-            self.e(f"c->ciclos += ciclos_ajuste_div{'s' if con_signo else 'u'}(c->d[{r}], {s});")
+            self.e(f"c->ciclos += CIC(ciclos_ajuste_div{'s' if con_signo else 'u'}(c->d[{r}], {s}));")
         self.e(f"op_div{'s' if con_signo else 'u'}(c, {r}, {s});")
         self.fin()
 
