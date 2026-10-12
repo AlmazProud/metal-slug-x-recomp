@@ -34,7 +34,7 @@ repo\
   entorno\      instalador (setup.ps1, versions.json, env.*, prueba_sdl3\)
   src\cpu\      despachador, estado del 68000, respaldo con Musashi
   src\neogeo\   runtime de hardware (bus, LSPC, RTC, planificador, ROMs)
-  src\port\     ejecutable SDL3 (mslugx.exe)
+  src\port\     ejecutable SDL3 (mslugx.exe): frontend, configuración, modo sin ventana
   herramientas\ análisis, recompilador (recomp68k\), scripts de MAME (mame\), comparación
   tests\        diferencial (instrucciones) y lockstep (programa completo)
   externo\      Musashi
@@ -42,8 +42,8 @@ repo\
 
 Compilar: `cmake -S repo -B repo\build -G Ninja -DCMAKE_BUILD_TYPE=Release` y
 `cmake --build repo\build`. El programa recompilado se genera en `build\src\programa\` a
-partir de `roms\` y `analisis\`. Jugar:
-`repo\build\src\mslugx.exe --roms "K:\Metal Slug X\resources\game"`.
+partir de `roms\` y `analisis\`. Jugar: `repo\build\src\mslugx.exe` (busca solo la
+instalación de GOG). Pruebas: `ctest` en `repo\build`.
 
 Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 `call "C:\Projecto Decompile\env.bat"` (cmd).
@@ -58,8 +58,28 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | 2. Recompilador | **Cerrada** (2026-10-11). `ctest`: 3/3. |
 | 3A. Runtime: imagen y controles | **Cerrada** (2026-10-11). Ver `docs/FASE3_RUNTIME.md`. |
 | 3B. Runtime: sonido (Z80 + YM2610) | **Cerrada** (2026-10-11). Ver `docs/FASE3_RUNTIME.md`. |
-| 4. Arranque y verificación diferencial | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE4_VERIFICACION.md`. `ctest`: 4/4. |
-| 5. Mejoras nativas | No iniciada |
+| 4. Arranque y verificación diferencial | **Cerrada** (2026-10-11). Ver `docs/FASE4_VERIFICACION.md`. |
+| 5. Mejoras nativas | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE5_NATIVO.md`. `ctest`: 5/5. |
+
+### Fase 5: resultado
+
+Detalle en `docs/FASE5_NATIVO.md`.
+
+- **Frontend** (`src/port/`): `main.c` (opciones), `ventana.c`, `config.c` (`mslugx.ini` en
+  `%APPDATA%\ProjectoDecompile\mslugx\`), `gog.c` y `sin_ventana.c` (herramientas de la Fase 4,
+  sin cambios de comportamiento).
+- **ROMs:** se buscan solas: `--roms`, la carpeta recordada, `roms\` junto al exe, el registro
+  de GOG (id 2046360890) o un selector de carpeta.
+- **Imagen:** 4:3 o píxeles cuadrados; filtro nítido (escala entera + lineal), suave o píxeles;
+  scanlines; pantalla completa.
+- **Menú** (Esc o Guide): estados en 9 ranuras (también F5/F9), ralentización sí/no, volumen,
+  controles de 2 jugadores (teclado y mando), menú de servicio (F2) y reinicio.
+- **Turbo** (`CIC` en `ciclos68k.h`, `cpu_turbo`): con x2, los cuadros perdidos por la
+  ralentización bajan del 10,3 % al 0,2 % (demo del attract) y del 9,0 % al 0,0 % (Misión 1).
+  Apagado no cambia nada.
+- **Estados** (`neogeo/estado.c`, 835 KB): prueba `estado_guardado`; cargados en una máquina
+  reiniciada, reproducen RAM, imagen y audio idénticos.
+- `cmake --install build --prefix X` deja exe + SDL3.dll. Manifiesto: rutas UTF-8 y HiDPI.
 
 ### Fase 4: resultado
 
@@ -263,9 +283,12 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 5:** plan corto (mejoras nativas: relación de aspecto, filtros, pantalla completa,
-      controles configurables, opción de "overclock" para quitar la ralentización original) y
-      esperar el OK.
+- [ ] **Próximo paso tras el visto bueno de la Fase 5:** a decidir con el usuario. Opciones:
+      separar lo específico de mslugx en un "perfil de juego" para portar otros títulos de la
+      Neo Geo (Metal Slug 1-5), o más grabaciones de otras misiones.
+- [ ] **Demo del attract sin recompilar:** en 12 000 cuadros sin entradas, 35 millones de pasos
+      van por el intérprete (la cobertura de la recompilación viene de la Misión 1). Agregar esa
+      cobertura si hace falta rendimiento; hoy rinde unos 1000 cuadros/s igual.
 - [ ] **Z80 como MAME a nivel de muestra:** cuándo atiende la IRQ del YM2610 el Z80 de MAME
       (primer caso a los 15,1 s de la grabación, PC 0x0010). Hoy el audio coincide salvo
       corrimientos de 0-3 muestras.
@@ -274,7 +297,6 @@ verificado.
       en el 68000 y en MAME; el port, siempre la alta.
 - [ ] **Límites de tramo de MAME que el port aún no usa** para el intercalado con el Z80: por
       ejemplo, los temporizadores del uPD4990A.
-- [ ] **Relación de aspecto** de los píxeles (hoy cuadrados) y filtros: Fase 5.
 - [ ] **Flags indefinidos que siguen a Musashi:** N/V de ABCD/SBCD y N/Z en el desbordamiento de
       DIVU/DIVS. Hay que confirmarlos contra MAME (los ciclos de DIV ya son exactos).
 - [ ] **DIVS 0x80000000/-1:** se implementa como el hardware (V=1); Musashi devuelve 0. Si
