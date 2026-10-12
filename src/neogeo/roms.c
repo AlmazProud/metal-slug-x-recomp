@@ -23,7 +23,10 @@ static const Archivo ARCHIVOS[] = {
     {"mslugx_bios_sfix", 131072, "5e8dcbdfdb29b8a273a2bf40582946a84067975e98955d2b7b91c39f82a1fa0e"},
     {"mslugx_tiles", 50331648, "0945f34d952a4dfed664122440d032059eb49bf2a30a09351a395d77e5cfcd83"},
     {"mslugx_zoom_table", 131072, "2a76f023dc578804c6bcd58ed514ffc04fcb433b3bd75d4452575ffda57a0707"},
+    {"mslugx_game_z80", 131072, "6a132323fa9f41ae0712644cc804e113257baf04b270c63f93dbd5193f02ffad"},
+    {"mslugx_adpcm", 10485760, "b45ca27aa08aecec6f76bdc60e6066e72d80c6a37df18d3d62b6e06d6d1dc40c"},
 };
+#define N_ARCHIVOS (int)(sizeof ARCHIVOS / sizeof ARCHIVOS[0])
 
 static uint8_t *leer(const char *carpeta, const Archivo *a, char *error, int tam_error)
 {
@@ -59,9 +62,9 @@ static void intercambiar_bytes(uint8_t *d, uint32_t n)
 
 int ng_roms_cargar(NgRoms *r, const char *carpeta, char *error, int tam_error)
 {
-    uint8_t *d[6];
+    uint8_t *d[N_ARCHIVOS];
     memset(r, 0, sizeof *r);
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < N_ARCHIVOS; i++) {
         d[i] = leer(carpeta, &ARCHIVOS[i], error, tam_error);
         if (!d[i]) {
             while (i--) free(d[i]);
@@ -77,11 +80,14 @@ int ng_roms_cargar(NgRoms *r, const char *carpeta, char *error, int tam_error)
     r->fix_bios = d[3];
     r->tiles = d[4]; r->n_tiles = ARCHIVOS[4].tam / 128;
     r->zoom = d[5];
+    r->z80 = d[6];
+    r->adpcm = d[7]; r->adpcm_tam = ARCHIVOS[7].tam;
     return 0;
 }
 
 void ng_roms_liberar(NgRoms *r)
 {
     free(r->p); free(r->bios); free(r->fix_juego); free(r->fix_bios); free(r->tiles); free(r->zoom);
+    free(r->z80); free(r->adpcm);
     memset(r, 0, sizeof *r);
 }

@@ -42,6 +42,9 @@ typedef struct {
     uint8_t *tiles;          /* formato DotEmu: 4 bpp por filas, 128 bytes por tile */
     uint32_t n_tiles;
     uint8_t *zoom;           /* tabla L0 de reducción vertical (64 KB útiles) */
+    uint8_t *z80;            /* M1: programa de sonido, 128 KB */
+    uint8_t *adpcm;          /* V1-V3: muestras ADPCM, 10 MB */
+    uint32_t adpcm_tam;
 } NgRoms;
 
 /* Carga y valida (SHA-256) los archivos de la copia del usuario. Devuelve 0 si todo está bien;
@@ -69,9 +72,6 @@ typedef struct {
     uint32_t irq2_contador;
     int64_t irq2_cuando;                 /* -1 = sin programar */
     uint8_t irq_vblank, irq_raster, irq3;
-    /* sonido (sustituto de la Fase 3A, ver sonido.c) */
-    uint8_t snd_comando, snd_respuesta, snd_respuesta_pendiente;
-    int64_t snd_cuando;
     /* E/S */
     uint8_t joy[2], sistema[2], dsw;     /* sistema: NG_START | NG_SELECT | NG_MONEDA */
     uint8_t servicio, test;
@@ -114,8 +114,16 @@ void ng_rtc_escribir(uint8_t dato);      /* bits: 0 DATA IN, 1 CLK, 2 STB */
 int ng_rtc_tp(void);
 int ng_rtc_dato(void);
 
+void ng_sonido_iniciar(void);
+void ng_sonido_hasta(int64_t ciclos_68k);          /* avanza Z80 y YM2610 hasta ese ciclo */
+int64_t ng_sonido_proximo_evento(void);            /* próximo temporizador del YM (ciclo del 68000) */
 void ng_sonido_comando(uint8_t v);
 uint8_t ng_sonido_respuesta(void);
+
+/* Audio generado (estéreo, 16 bits, 55 555 Hz). Solo se guarda si ng_audio_activo != 0. */
+extern int ng_audio_activo;
+#define NG_AUDIO_HZ 55555
+uint32_t ng_audio_leer(int16_t *destino, uint32_t max_muestras);
 
 void ng_bus_iniciar(void);
 

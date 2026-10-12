@@ -53,10 +53,14 @@ target_compile_options(programa_recompilado PRIVATE -O1 -Wno-unused-variable -Wn
 # Runtime de hardware de la Neo Geo (Fase 3).
 add_library(neogeo STATIC
     neogeo/bus.c neogeo/maquina.c neogeo/roms.c neogeo/rtc.c neogeo/sha256.c
-    neogeo/sonido.c neogeo/video.c)
-target_include_directories(neogeo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/neogeo)
-target_link_libraries(neogeo PUBLIC cpu68k)
-target_compile_options(neogeo PRIVATE -Wall -Wextra)
+    neogeo/sonido.c neogeo/video.c neogeo/z80_impl.c neogeo/ym2610.cpp)
+target_include_directories(neogeo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/neogeo
+                           PRIVATE ${PROJECT_SOURCE_DIR}/externo/chips)
+target_link_libraries(neogeo PUBLIC cpu68k ymfm)
+set_target_properties(neogeo PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+target_compile_options(neogeo PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra>)
+# z80.h (tercero) genera avisos propios; se compila sin ellos.
+set_source_files_properties(neogeo/z80_impl.c PROPERTIES COMPILE_OPTIONS "-w")
 
 # Ejecutable del port (SDL3).
 find_package(SDL3 CONFIG)
@@ -67,6 +71,9 @@ endif()
 add_executable(mslugx WIN32 port/main.c)
 target_link_libraries(mslugx PRIVATE neogeo programa_recompilado SDL3::SDL3)
 target_compile_options(mslugx PRIVATE -Wall -Wextra)
+# Runtime de C++ (por ymfm) enlazado estático: el ejecutable solo necesita SDL3.dll.
+target_link_options(mslugx PRIVATE -static-libstdc++ -static-libgcc)
+set_target_properties(mslugx PROPERTIES LINKER_LANGUAGE CXX)
 add_custom_command(TARGET mslugx POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:mslugx> $<TARGET_FILE_DIR:mslugx>
     COMMAND_EXPAND_LISTS)

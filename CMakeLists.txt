@@ -3,7 +3,7 @@
 #   cmake -S repo -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build && ctest --test-dir build
 cmake_minimum_required(VERSION 3.25)
-project(mslugx_port LANGUAGES C)
+project(mslugx_port LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -18,6 +18,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 enable_testing()
 
 add_subdirectory(externo/musashi)
+add_subdirectory(externo/ymfm)
 add_subdirectory(src)
 add_subdirectory(tests/diferencial)
 add_subdirectory(tests/lockstep)

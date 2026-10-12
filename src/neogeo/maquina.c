@@ -61,6 +61,7 @@ static void reinicio_watchdog(void)
     fprintf(stderr, "watchdog: reinicio de la máquina (cuadro %llu, PC %06X)\n",
             (unsigned long long)ng.cuadros, ng_cpu.pc);
     ng_bus_iniciar();
+    ng_sonido_iniciar();             /* el reinicio del watchdog alcanza a toda la máquina */
     ng.irq2_control = 0;
     ng.irq2_cuando = -1;
     reset_cpu();
@@ -73,6 +74,7 @@ void ng_encender(void)
     ng_video_iniciar();
     ng_bus_iniciar();
     ng_rtc_iniciar();
+    ng_sonido_iniciar();
     ng.irq3 = 1;
     ng_irq_actualizar();
     ng.inicio_cuadro = -(int64_t)NG_LINEA_VBLANK * NG_CICLOS_LINEA;   /* t = 0 en vpos 240 */
@@ -89,6 +91,8 @@ static int64_t proximo_evento(void)
     if (!recarga_hecha && ng.inicio_cuadro + T_RECARGA < t) t = ng.inicio_cuadro + T_RECARGA;
     if (ng.irq2_cuando >= 0 && ng.irq2_cuando < t) t = ng.irq2_cuando;
     if (ng.watchdog < t) t = ng.watchdog;
+    int64_t ts = ng_sonido_proximo_evento();        /* temporizadores del YM: también cortan el tramo */
+    if (ts < t) t = ts;
     return t;
 }
 
@@ -153,6 +157,8 @@ void rc_evento(Cpu68k *c)
     for (;;) {
         int64_t t = proximo_evento();
         if (c->ciclos >= t) {
+            /* Como el planificador de MAME: el Z80 corre hasta el límite del tramo. */
+            ng_sonido_hasta(t);
             if (procesar(t)) { rc_salir = 1; break; }
             continue;
         }

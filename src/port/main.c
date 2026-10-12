@@ -8,6 +8,8 @@
  *         ejecutable). Los archivos se validan por SHA-256.
  * --sin-ventana: corre N cuadros lo más rápido posible y guarda capturas BMP de los cuadros
  *         pedidos (para compararlas contra MAME con herramientas/comparar_capturas.py).
+ * --wav: con --sin-ventana, guarda el audio generado (estéreo, 16 bits, 55 555 Hz).
+ * --sin-audio: con ventana, no abre el dispositivo de audio.
  * --guion: entradas para --sin-ventana, una línea por tramo: "desde hasta entrada..." (cuadros
  *         inclusive; entradas: arriba abajo izquierda derecha a b c d start1 start2 moneda1
  *         moneda2 test). Las líneas que empiezan con # se ignoran.
@@ -34,7 +36,8 @@ typedef struct {
     const char *roms;
     int escala, sin_ventana, sram_vacia;
     long cuadros;
-    const char *capturas, *salida, *guion;
+    const char *capturas, *salida, *guion, *wav;
+    int sin_audio;
     int fecha[7], con_fecha;
 } Opciones;
 
@@ -76,7 +79,7 @@ static int guion_cargar(const char *ruta)
     return 0;
 }
 
-/* Entradas del cuadro que está por ejecutarse (ng.cuadros = cuadros ya completos). */
+/* Entradas del cuadro que está por ejecutarse: ng.cuadros, con la numeración de MAME. */
 static void guion_aplicar(void)
 {
     uint8_t joy = 0, s0 = 0, s1 = 0, test = 0;
@@ -112,6 +115,34 @@ static int guardar_bmp(const char *ruta)
     }
     fclose(f);
     return 0;
+}
+
+/* ------------------------------------------------------------------ WAV */
+static FILE *wav;
+static uint32_t wav_muestras;
+
+static void wav_cabecera(FILE *f, uint32_t muestras)
+{
+    uint32_t datos = muestras * 4, hz = NG_AUDIO_HZ, bps = hz * 4;
+    uint8_t h[44] = {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ',
+                     16, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 16, 0,
+                     'd', 'a', 't', 'a', 0, 0, 0, 0};
+    #define P32(o, v) do { h[o] = (uint8_t)(v); h[o + 1] = (uint8_t)((v) >> 8); h[o + 2] = (uint8_t)((v) >> 16); h[o + 3] = (uint8_t)((v) >> 24); } while (0)
+    P32(4, 36 + datos); P32(24, hz); P32(28, bps); P32(40, datos);
+    #undef P32
+    fseek(f, 0, SEEK_SET);
+    fwrite(h, 1, sizeof h, f);
+    fseek(f, 0, SEEK_END);
+}
+
+static void wav_volcar(void)
+{
+    int16_t b[4096 * 2];
+    uint32_t n;
+    while ((n = ng_audio_leer(b, 4096)) > 0) {
+        fwrite(b, 4, n, wav);
+        wav_muestras += n;
+    }
 }
 
 /* ------------------------------------------------------------------ SRAM */
@@ -187,8 +218,8 @@ static void uso(void)
 {
     fprintf(stderr,
             "Uso: mslugx [--roms CARPETA] [--escala N] [--sram-vacia] [--fecha AAAA-MM-DD-hh-mm-ss-D]\n"
-            "            [--sin-ventana --cuadros N [--capturas a,b,c --salida CARPETA] [--guion ARCHIVO]]\n"
-            "            [--traza ARCHIVO]\n");
+            "            [--sin-ventana --cuadros N [--capturas a,b,c --salida CARPETA] [--guion ARCHIVO] [--wav ARCHIVO]]\n"
+            "            [--sin-audio] [--traza ARCHIVO] [--traza-es ARCHIVO DESDE_US HASTA_US]\n");
 }
 
 static int opciones(int argc, char **argv, Opciones *o)
@@ -204,6 +235,8 @@ static int opciones(int argc, char **argv, Opciones *o)
         else if (!strcmp(a, "--capturas") && v) { o->capturas = v; i++; }
         else if (!strcmp(a, "--salida") && v) { o->salida = v; i++; }
         else if (!strcmp(a, "--guion") && v) { o->guion = v; i++; }
+        else if (!strcmp(a, "--wav") && v) { o->wav = v; i++; }
+        else if (!strcmp(a, "--sin-audio")) o->sin_audio = 1;
         else if (!strcmp(a, "--traza") && v) { ng_traza = fopen(v, "w"); i++; }
         else if (!strcmp(a, "--traza-es") && i + 3 < argc) {
             /* --traza-es ARCHIVO DESDE_US HASTA_US */
@@ -262,6 +295,16 @@ int main(int argc, char **argv)
 
     programa_registrar();
     rc_interprete_iniciar();
+    if (o.sin_ventana) {
+        if (o.wav) {
+            wav = fopen(o.wav, "wb");
+            if (!wav) { fprintf(stderr, "No se pudo crear %s\n", o.wav); return 1; }
+            wav_cabecera(wav, 0);
+            ng_audio_activo = 1;
+        }
+    } else {
+        ng_audio_activo = !o.sin_audio;
+    }
     if (o.con_fecha) ng_rtc_fijar(o.fecha[0], o.fecha[1], o.fecha[2], o.fecha[6], o.fecha[3], o.fecha[4], o.fecha[5]);
     ng_encender();
 
@@ -272,9 +315,14 @@ int main(int argc, char **argv)
         for (long n = 0; n < o.cuadros; n++) {
             guion_aplicar();
             ng_ejecutar_cuadro();
-            if (pedida(o.capturas, ng.cuadros)) {
+            if (wav) wav_volcar();
+            /* Numeración de MAME (screen:frame_number()): la imagen que se completa al ejecutar
+               el cuadro N (ng.cuadros pasa de N a N + 1) es el cuadro N. Verificado con
+               capturas: 447 de 450 cuadros consecutivos idénticos con esta numeración. */
+            unsigned long long etiqueta = ng.cuadros - 1;
+            if (pedida(o.capturas, etiqueta)) {
                 char ruta[1200];
-                snprintf(ruta, sizeof ruta, "%s/port_%06llu.bmp", o.salida ? o.salida : ".", (unsigned long long)ng.cuadros);
+                snprintf(ruta, sizeof ruta, "%s/port_%06llu.bmp", o.salida ? o.salida : ".", etiqueta);
                 if (guardar_bmp(ruta) != 0) fprintf(stderr, "No se pudo escribir %s\n", ruta);
             }
         }
@@ -285,12 +333,13 @@ int main(int argc, char **argv)
         printf("lecturas sin mapear: %llu  escrituras sin mapear: %llu  reinicios del watchdog: %u\n",
                (unsigned long long)ng.lecturas_sin_mapear, (unsigned long long)ng.escrituras_sin_mapear,
                ng.reinicios_watchdog);
+        if (wav) { wav_cabecera(wav, wav_muestras); fclose(wav); }
         ng_roms_liberar(&ng_roms);
         return 0;
     }
 
     /* ---------------------------------------------- con ventana */
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | (ng_audio_activo ? SDL_INIT_AUDIO : 0))) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
@@ -306,6 +355,22 @@ int main(int argc, char **argv)
     SDL_SetRenderLogicalPresentation(render, NG_ANCHO, NG_ALTO, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
     SDL_Texture *tex = SDL_CreateTexture(render, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, NG_ANCHO, NG_ALTO);
     SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
+
+    /* Audio: SDL convierte de 55 555 Hz a la frecuencia del dispositivo. */
+    SDL_AudioStream *audio = NULL;
+    if (ng_audio_activo) {
+        const SDL_AudioSpec spec = {SDL_AUDIO_S16, 2, NG_AUDIO_HZ};
+        audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+        if (audio) {
+            /* Colchón inicial de 50 ms de silencio contra las variaciones del ritmo del video. */
+            static const int16_t silencio[NG_AUDIO_HZ / 20 * 2];
+            SDL_PutAudioStreamData(audio, silencio, (int)sizeof silencio);
+            SDL_ResumeAudioStreamDevice(audio);
+        }
+        else { fprintf(stderr, "Sin audio: %s\n", SDL_GetError()); ng_audio_activo = 0; }
+    }
+    static int16_t muestras[4096 * 2];
+    uint64_t audio_cuadros = 0, audio_descartes = 0, audio_vacios = 0, audio_cola_suma = 0;
 
     int salir = 0, pausa = 0, capturas = 0;
     Uint64 proximo = SDL_GetTicksNS();
@@ -337,6 +402,23 @@ int main(int argc, char **argv)
             leer_entradas();
             ng_ejecutar_cuadro();
         }
+        if (audio) {
+            uint32_t n = ng_audio_leer(muestras, 4096);
+            /* Si el dispositivo se atrasa (más de ~150 ms en cola), se descarta para no acumular
+               latencia; el ritmo lo marca el video a 59,1856 Hz. */
+            int cola = SDL_GetAudioStreamQueued(audio);
+            audio_cuadros++;
+            audio_cola_suma += (uint64_t)(cola > 0 ? cola : 0);
+            if (cola == 0) audio_vacios++;
+            if (cola < NG_AUDIO_HZ * 4 / 100) {           /* < 10 ms: rellena para no cortar */
+                static const int16_t relleno[NG_AUDIO_HZ / 50 * 2];
+                SDL_PutAudioStreamData(audio, relleno, (int)sizeof relleno);
+            }
+            if (n && cola < NG_AUDIO_HZ * 4 * 15 / 100)
+                SDL_PutAudioStreamData(audio, muestras, (int)(n * 4));
+            else if (n)
+                audio_descartes++;
+        }
         SDL_UpdateTexture(tex, NULL, ng.pantalla, NG_ANCHO * 4);
         SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
         SDL_RenderClear(render);
@@ -350,6 +432,11 @@ int main(int argc, char **argv)
     }
 
     if (!o.sram_vacia) sram_guardar();
+    if (audio && ng_traza && audio_cuadros)
+        fprintf(ng_traza, "audio: %llu cuadros, cola media %.1f ms, cola vacía %llu veces, descartes %llu\n",
+                (unsigned long long)audio_cuadros, audio_cola_suma / (double)audio_cuadros / (NG_AUDIO_HZ * 4) * 1000,
+                (unsigned long long)audio_vacios, (unsigned long long)audio_descartes);
+    if (audio) SDL_DestroyAudioStream(audio);
     if (mando) SDL_CloseGamepad(mando);
     SDL_DestroyTexture(tex);
     SDL_DestroyRenderer(render);
