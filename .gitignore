@@ -28,6 +28,7 @@
 !*.json
 !*.toml
 !*.txt
+!herramientas/hooks/*
 
 # 4) Siempre ignorado, aunque coincida con la lista blanca
 build/

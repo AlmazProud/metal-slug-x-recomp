@@ -1,0 +1,6 @@
+#!/bin/sh
+# Refuerzo de la regla 1: ver herramientas/verificar_commit.py
+top="$(git rev-parse --show-toplevel)"
+py="$top/../tools/python/python.exe"
+[ -x "$py" ] || py=python
+exec "$py" -I "$top/herramientas/verificar_commit.py"

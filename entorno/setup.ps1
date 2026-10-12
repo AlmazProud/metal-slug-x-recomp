@@ -333,10 +333,14 @@ function Copy-Roms {
 # ---------------------------------------------------------------- repositorio
 function Initialize-Repo {
     $git = Join-Path $Tools 'git\cmd\git.exe'
-    if (Test-Path -LiteralPath (Join-Path $Repo '.git')) { return }
-    $r = Invoke-Proceso -Exe $git -Argumentos @('init', '-b', 'main') -Dir $Repo
-    if ($r.Codigo -ne 0) { Fallo "git init falló:`n$($r.Salida)" }
-    Log "    repo: git init en $Repo" 'Green'
+    if (-not (Test-Path -LiteralPath (Join-Path $Repo '.git'))) {
+        $r = Invoke-Proceso -Exe $git -Argumentos @('init', '-b', 'main') -Dir $Repo
+        if ($r.Codigo -ne 0) { Fallo "git init falló:`n$($r.Salida)" }
+        Log "    repo: git init en $Repo" 'Green'
+    }
+    # Hook pre-commit versionado (regla 1: nunca ROMs ni binarios en el repo).
+    $r = Invoke-Proceso -Exe $git -Argumentos @('config', '--local', 'core.hooksPath', 'herramientas/hooks') -Dir $Repo
+    if ($r.Codigo -ne 0) { Fallo "no se pudo configurar core.hooksPath:`n$($r.Salida)" }
 }
 
 # ---------------------------------------------------------------- verificación
