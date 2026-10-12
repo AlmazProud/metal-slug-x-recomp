@@ -20,6 +20,11 @@
  *   --traza, --traza-es: trazas de diagnóstico.
  *   --probar-estado M: al final guarda un estado, corre M cuadros, reinicia la máquina, carga el
  *         estado y repite: RAM, imagen y audio deben coincidir (prueba de los estados guardados).
+ *   --catalogo-sonido ARCHIVO: tras los N cuadros (driver de sonido iniciado, sin sonar), envía
+ *         cada comando de sonido 00-FF por separado y anota duración, bucle, pico y notas por tipo
+ *         de canal. Con --salida, guarda además snd_XX.wav de cada uno (Fase 6B).
+ *   --probar-sonidos: al final abre el menú de sonido, reproduce una música y una voz (deben
+ *         sonar), lo cierra y comprueba que el juego sigue idéntico a no haberlo abierto.
  *
  * Controles, menú y teclas fijas del modo con ventana: ver ventana.c.
  */
@@ -66,6 +71,8 @@ static int opciones(int argc, char **argv, Opciones *o)
         else if (!strcmp(a, "--volcar") && v) { o->volcar = v; i++; }
         else if (!strcmp(a, "--sin-audio")) o->sin_audio = 1;
         else if (!strcmp(a, "--probar-estado") && v) { o->probar_estado = atoi(v); i++; }
+        else if (!strcmp(a, "--catalogo-sonido") && v) { o->catalogo = v; i++; }
+        else if (!strcmp(a, "--probar-sonidos")) o->probar_sonidos = 1;
         else if (!strcmp(a, "--traza") && v) { ng_traza = fopen(v, "w"); i++; }
         else if (!strcmp(a, "--traza-es") && i + 3 < argc) {
             /* --traza-es ARCHIVO DESDE_US HASTA_US */

@@ -34,6 +34,7 @@ typedef struct {
     int autodisparo[2];                  /* AUTO_* por jugador */
     int auto_velocidad;                  /* 0-2: 10, 7,5 o 5 por segundo */
     int debug;                           /* panel de depuración visible */
+    int vibracion;                       /* intensidad 0-100 (0 = apagada) */
     /* controles: [jugador][acción] */
     SDL_Scancode tecla[2][ACC_N];
     SDL_GamepadButton boton[2][ACC_N];

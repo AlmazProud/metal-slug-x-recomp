@@ -35,6 +35,7 @@ void config_por_defecto(Config *c)
     c->volumen = 100;
     c->ranura = 1;
     c->autodisparo[0] = c->autodisparo[1] = AUTO_BOTON;
+    c->vibracion = 70;
     static const SDL_Scancode t1[ACC_N] = {
         SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT,
         SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_C, SDL_SCANCODE_V, SDL_SCANCODE_1, SDL_SCANCODE_5,
@@ -115,6 +116,7 @@ int config_cargar(Config *c, const char *ruta)
             else if (!strcmp(k, "autodisparo_por_segundo"))
                 c->auto_velocidad = buscar(VELOCIDAD_NOMBRE, AUTO_VELOCIDADES, v, c->auto_velocidad);
             else if (!strcmp(k, "debug")) c->debug = entero(v, 0, 1, c->debug);
+            else if (!strcmp(k, "vibracion")) c->vibracion = entero(v, 0, 100, c->vibracion);
         } else if (!strncmp(seccion, "teclado", 7) || !strncmp(seccion, "mando", 5)) {
             int teclado = seccion[0] == 't';
             int j = seccion[teclado ? 7 : 5] - '1';
@@ -148,6 +150,8 @@ int config_guardar(const Config *c, const char *ruta)
     fprintf(f, "; autodisparo_por_segundo: 10 (máximo de la pistola), 7.5 o 5\nautodisparo_por_segundo=%s\n",
             VELOCIDAD_NOMBRE[c->auto_velocidad]);
     fprintf(f, "; debug: panel de depuración (F3)\ndebug=%d\n", c->debug);
+    fprintf(f, "; vibracion: intensidad del mando con explosiones y disparos, 0-100 (0 = apagada)\nvibracion=%d\n",
+            c->vibracion);
     for (int j = 0; j < 2; j++) {
         fprintf(f, "\n[teclado%d]\n", j + 1);
         for (int a = 0; a < ACC_N; a++)

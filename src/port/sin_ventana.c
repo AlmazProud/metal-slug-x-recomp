@@ -12,6 +12,7 @@
 #include "despachador.h"
 #include "neogeo.h"
 #include "port.h"
+#include "sonidos.h"
 
 /* ------------------------------------------------------------------ guion de entradas */
 typedef struct { unsigned long long desde, hasta; uint8_t joy, sis[2], test; } Tramo;
@@ -370,6 +371,115 @@ static int probar_estado(const Opciones *o)
     return a == b ? 0 : 1;
 }
 
+/* Catálogo de los comandos de sonido (Fase 6B): cada comando, solo, desde el mismo estado. */
+static int catalogo_sonido(const Opciones *o)
+{
+    FILE *f = fopen(o->catalogo, "w");
+    if (!f) return 1;
+    size_t tam;
+    uint8_t *base = ng_estado_guardar(&tam);
+    if (!base) { fclose(f); return 1; }
+    fprintf(f, "# cmd\tsegundos\tbucle\tpico\tfm\tssg\tadpcm_a\tadpcm_b\n");
+    const long MAXIMO = 40L * NG_AUDIO_HZ;               /* las músicas en bucle se cortan aquí */
+    int16_t b[4096 * 2];
+    for (int c = 0; c < 256; c++) {
+        ng_estado_cargar(base, tam);
+        while (ng_audio_leer(b, 4096) > 0) {}
+        NgNotas n0 = ng_notas;
+        FILE *w = NULL;
+        if (o->salida) {
+            char ruta[1200];
+            snprintf(ruta, sizeof ruta, "%s/snd_%02X.wav", o->salida, c);
+            w = fopen(ruta, "wb");
+            if (w) wav_cabecera(w, 0);
+        }
+        /* Comandos previos, separados por comas (hex), un cuadro entre cada uno. El driver de
+           mslugx usa prefijos de modo: 00 = música, 10 = efectos, 11 = voces. */
+        for (const char *p = getenv("PD_CATALOGO_PREFIJO"); p && *p;) {
+            char *fin;
+            unsigned long v = strtoul(p, &fin, 16);
+            if (fin == p) break;
+            ng_sonido_solo_comando((uint8_t)v);
+            ng_sonido_solo_avanzar(NG_CICLOS_CUADRO);
+            while (ng_audio_leer(b, 4096) > 0) {}
+            p = *fin == ',' ? fin + 1 : fin;
+        }
+        ng_sonido_solo_comando((uint8_t)c);
+        long muestras = 0, ultima = -1;
+        int pico = 0;
+        for (;;) {
+            ng_sonido_solo_avanzar(NG_CICLOS_CUADRO);
+            uint32_t k;
+            while ((k = ng_audio_leer(b, 4096)) > 0) {
+                for (uint32_t i = 0; i < 2 * k; i++) {
+                    int v = b[i] < 0 ? -b[i] : b[i];
+                    if (v > pico) pico = v;
+                    if (v > 64) ultima = muestras + (long)(i / 2);
+                }
+                if (w) fwrite(b, 4, k, w);
+                muestras += (long)k;
+            }
+            if (muestras >= MAXIMO) break;
+            if (ultima < 0 && muestras > NG_AUDIO_HZ) break;                 /* nada en 1 s */
+            if (ultima >= 0 && muestras - ultima > 3L * NG_AUDIO_HZ) break;  /* 3 s de silencio */
+        }
+        if (w) { wav_cabecera(w, (uint32_t)muestras); fclose(w); }
+        int bucle = muestras >= MAXIMO && ultima > MAXIMO - NG_AUDIO_HZ;
+        fprintf(f, "%02X\t%.2f\t%d\t%d\t%u\t%u\t%u\t%u\n", c, (ultima + 1) / (double)NG_AUDIO_HZ, bucle, pico,
+                ng_notas.fm - n0.fm, ng_notas.ssg - n0.ssg, ng_notas.adpcm_a - n0.adpcm_a, ng_notas.adpcm_b - n0.adpcm_b);
+        fflush(f);
+    }
+    free(base);
+    fclose(f);
+    return 0;
+}
+
+/* Energía del audio de n cuadros del menú de sonido (media de |muestra|). */
+static double energia_sonidos(int n)
+{
+    int16_t b[4096 * 2];
+    double suma = 0;
+    long cuantas = 0;
+    for (int i = 0; i < n; i++) {
+        sonidos_cuadro();
+        uint32_t k;
+        while ((k = ng_audio_leer(b, 4096)) > 0) {
+            for (uint32_t j = 0; j < 2 * k; j++) suma += b[j] < 0 ? -b[j] : b[j];
+            cuantas += (long)(2 * k);
+        }
+    }
+    return cuantas ? suma / cuantas : 0;
+}
+
+static int probar_sonidos(const Opciones *o)
+{
+    ng_antes_de_leer_entradas = NULL;
+    int16_t b[4096 * 2];
+    while (ng_audio_leer(b, 4096) > 0) {}
+    size_t tam;
+    uint8_t *antes = ng_estado_guardar(&tam);
+    uint32_t a = huella_tramo(o, 300);               /* el juego sin abrir el menú */
+    ng_estado_cargar(antes, tam);
+
+    sonidos_abrir();
+    double silencio = energia_sonidos(10);           /* tras 03 03 06: el juego queda callado */
+    sonidos_navegar(1);                               /* Música: segunda entrada (Misión 1) */
+    sonidos_navegar(4);
+    double musica = energia_sonidos(300);
+    sonidos_navegar(3);                               /* Efectos */
+    sonidos_navegar(3);                               /* Voces */
+    sonidos_navegar(4);
+    double voz = energia_sonidos(120);
+    sonidos_cerrar();
+    while (ng_audio_leer(b, 4096) > 0) {}
+    uint32_t d = huella_tramo(o, 300);               /* el juego después de cerrarlo */
+    free(antes);
+    int ok = a == d && musica > 200 && voz > 20 && silencio < musica / 10;
+    printf("menu de sonido: silencio %.0f, musica %.0f, voz %.0f; juego despues %08X / sin menu %08X: %s\n",
+           silencio, musica, voz, d, a, ok ? "OK" : "FALLA");
+    return ok ? 0 : 1;
+}
+
 /* Antes de ng_encender: el WAV necesita el audio activo desde el primer cuadro. */
 int sin_ventana_preparar(const Opciones *o)
 {
@@ -379,7 +489,7 @@ int sin_ventana_preparar(const Opciones *o)
         wav_cabecera(wav, 0);
         ng_audio_activo = 1;
     }
-    if (o->probar_estado) ng_audio_activo = 1;
+    if (o->probar_estado || o->catalogo || o->probar_sonidos) ng_audio_activo = 1;
     return 0;
 }
 
@@ -431,6 +541,8 @@ int sin_ventana_correr(const Opciones *o)
     if (wav) { wav_cabecera(wav, wav_muestras); fclose(wav); }
     if (huellas) fclose(huellas);
     int r = o->probar_estado ? probar_estado(o) : 0;
+    if (o->catalogo) r |= catalogo_sonido(o);
+    if (o->probar_sonidos) r |= probar_sonidos(o);
     ng_roms_liberar(&ng_roms);
     return r;
 }

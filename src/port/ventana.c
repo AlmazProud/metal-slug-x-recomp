@@ -27,6 +27,7 @@
 #include "despachador.h"
 #include "neogeo.h"
 #include "port.h"
+#include "sonidos.h"
 
 void maquina_arrancar(const Opciones *o);
 
@@ -172,8 +173,8 @@ static void mando_desconectado(SDL_JoystickID id)
 /* ------------------------------------------------------------------ menú */
 enum {
     M_CONTINUAR, M_GUARDAR, M_CARGAR, M_TURBO, M_PANTALLA, M_ASPECTO, M_FILTRO, M_SCANLINES,
-    M_VOLUMEN, M_AUTO1, M_AUTO2, M_AUTO_VEL, M_CONTROLES1, M_CONTROLES2, M_SERVICIO, M_DEBUG,
-    M_REINICIAR, M_SALIR, M_N
+    M_VOLUMEN, M_SONIDOS, M_VIBRACION, M_AUTO1, M_AUTO2, M_AUTO_VEL, M_CONTROLES1, M_CONTROLES2,
+    M_SERVICIO, M_DEBUG, M_REINICIAR, M_SALIR, M_N
 };
 static int menu_abierto, menu_sel;
 static int remap_jugador = -1, remap_accion;     /* configuración de controles en curso */
@@ -211,6 +212,11 @@ static void texto_item(int i, char *b, size_t n)
         break;
     }
     case M_DEBUG: snprintf(b, n, "Modo debug (F3)   %s", debug_activo() ? "si" : "no"); break;
+    case M_SONIDOS: snprintf(b, n, "Musica y sonidos"); break;
+    case M_VIBRACION:
+        if (cfg.vibracion) snprintf(b, n, "Vibracion         %d%%", cfg.vibracion);
+        else snprintf(b, n, "Vibracion         no");
+        break;
     case M_CONTROLES1: snprintf(b, n, "Controles del jugador 1"); break;
     case M_CONTROLES2: snprintf(b, n, "Controles del jugador 2"); break;
     case M_SERVICIO: snprintf(b, n, "Menu de servicio (dificultad, vidas)"); break;
@@ -249,6 +255,13 @@ static void menu_accion(int i, int d)
         break;
     case M_AUTO_VEL: cfg.auto_velocidad = ciclar(cfg.auto_velocidad, d ? d : 1, AUTO_VELOCIDADES); break;
     case M_DEBUG: debug_activar(!debug_activo()); cfg.debug = debug_activo(); break;
+    case M_SONIDOS: if (!d) { menu_abierto = 0; sonidos_abrir(); } break;
+    case M_VIBRACION:
+        cfg.vibracion += (d ? d : 1) * 10;
+        if (cfg.vibracion > 100) cfg.vibracion = d ? 100 : 0;
+        if (cfg.vibracion < 0) cfg.vibracion = 0;
+        vibracion_intensidad(cfg.vibracion);
+        break;
     case M_CONTROLES1: case M_CONTROLES2:
         if (!d) { remap_jugador = i - M_CONTROLES1; remap_accion = 0; }
         break;
@@ -405,6 +418,19 @@ static void tecla(const SDL_KeyboardEvent *e, int *pausa, int *capturas)
         aplicar_video();
         return;
     }
+    if (sonidos_abierto()) {
+        switch (sc) {
+        case SDL_SCANCODE_UP: sonidos_navegar(0); break;
+        case SDL_SCANCODE_DOWN: sonidos_navegar(1); break;
+        case SDL_SCANCODE_LEFT: sonidos_navegar(2); break;
+        case SDL_SCANCODE_RIGHT: sonidos_navegar(3); break;
+        case SDL_SCANCODE_RETURN: case SDL_SCANCODE_SPACE: case SDL_SCANCODE_KP_ENTER: sonidos_navegar(4); break;
+        case SDL_SCANCODE_ESCAPE: sonidos_navegar(5); break;
+        case SDL_SCANCODE_DELETE: case SDL_SCANCODE_BACKSPACE: sonidos_navegar(6); break;
+        default: break;
+        }
+        return;
+    }
     if (menu_abierto) {
         switch (sc) {
         case SDL_SCANCODE_UP: menu_navegar(0); break;
@@ -446,6 +472,19 @@ static void boton(const SDL_GamepadButtonEvent *e)
     SDL_Gamepad *g = SDL_GetGamepadFromID(e->which);
     int combo = g && ((b == SDL_GAMEPAD_BUTTON_START && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_BACK)) ||
                       (b == SDL_GAMEPAD_BUTTON_BACK && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START)));
+    if (sonidos_abierto()) {
+        switch (b) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP: sonidos_navegar(0); break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: sonidos_navegar(1); break;
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT: case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: sonidos_navegar(2); break;
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: sonidos_navegar(3); break;
+        case SDL_GAMEPAD_BUTTON_SOUTH: sonidos_navegar(4); break;
+        case SDL_GAMEPAD_BUTTON_NORTH: sonidos_navegar(6); break;
+        case SDL_GAMEPAD_BUTTON_EAST: case SDL_GAMEPAD_BUTTON_GUIDE: sonidos_navegar(5); break;
+        default: break;
+        }
+        return;
+    }
     if (b == SDL_GAMEPAD_BUTTON_GUIDE || combo) {
         if (menu_abierto) menu_navegar(5);
         else menu_abierto = 1;
@@ -546,6 +585,8 @@ int ventana_correr(const Opciones *o)
     cpu_turbo = cfg.turbo;
     maquina_arrancar(o);
     debug_activar(cfg.debug);
+    vibracion_iniciar(mandos, 2);
+    vibracion_intensidad(cfg.vibracion);
     if (!o->sram_vacia) sram_cargar();
 
     int alto = NG_ALTO * cfg.escala;
@@ -576,15 +617,16 @@ int ventana_correr(const Opciones *o)
     if (cfg.turbo) avisar("Ralentizacion desactivada (68000 x%d). Esc: menu", 1 << cfg.turbo);
     else avisar("Esc: menu   F5/F9: guardar/cargar estado");
 
-    /* PD_PRUEBA_VENTANA=N,archivo.png[,menu]: tras N cuadros guarda lo que muestra la ventana
-       (con el menú abierto si se pide) y sale. */
+    /* PD_PRUEBA_VENTANA=N,archivo.png[,menu|sonidos]: tras N cuadros guarda lo que muestra la
+       ventana (con el menú, o con el menú de sonido reproduciendo la segunda música) y sale. */
     long prueba_cuadros = 0;
     char prueba_png[1024] = "";
-    int prueba_menu = 0;
+    int prueba_menu = 0, prueba_sonidos = 0;
     if (getenv("PD_PRUEBA_VENTANA")) {
         char extra[16] = "";
         sscanf(getenv("PD_PRUEBA_VENTANA"), "%ld,%1023[^,],%15s", &prueba_cuadros, prueba_png, extra);
         prueba_menu = !strcmp(extra, "menu");
+        prueba_sonidos = !strcmp(extra, "sonidos");
     }
     long cuadros_vistos = 0;
 
@@ -592,6 +634,11 @@ int ventana_correr(const Opciones *o)
     Uint64 proximo = SDL_GetTicksNS();
     while (!salir) {
         if (prueba_cuadros && prueba_menu && cuadros_vistos == prueba_cuadros - 1) menu_abierto = 1;
+        if (prueba_cuadros && prueba_sonidos && cuadros_vistos == prueba_cuadros - 60) {
+            sonidos_abrir();
+            sonidos_navegar(1);
+            sonidos_navegar(4);
+        }
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             switch (e.type) {
@@ -605,10 +652,13 @@ int ventana_correr(const Opciones *o)
             default: break;
             }
         }
-        if ((!pausa || avanzar) && !menu_abierto) {
+        if (sonidos_abierto()) {
+            sonidos_cuadro();
+        } else if ((!pausa || avanzar) && !menu_abierto) {
             leer_entradas();
             ng_ejecutar_cuadro();
             debug_cuadro();
+            vibracion_cuadro();
             avanzar = 0;
         }
         if (audio) {
@@ -635,6 +685,7 @@ int ventana_correr(const Opciones *o)
         SDL_FRect juego = dibujar_juego(w, h);
         debug_dibujar(render, juego, w, h, cfg.turbo);
         dibujar_interfaz(w, h);
+        sonidos_dibujar(render, w, h);
         if (prueba_cuadros && ++cuadros_vistos >= prueba_cuadros) {
             SDL_Surface *s = SDL_RenderReadPixels(render, NULL);
             if (s) { SDL_SavePNG(s, prueba_png); SDL_DestroySurface(s); }
@@ -649,6 +700,7 @@ int ventana_correr(const Opciones *o)
         else if (ahora - proximo > 4 * NS_POR_CUADRO) proximo = ahora;   /* nos atrasamos: no acumular */
     }
 
+    sonidos_cerrar();                    /* la SRAM y el estado vuelven a ser los del juego */
     if (!o->sram_vacia) sram_guardar();
     config_guardar(&cfg, ruta_cfg);
     if (audio && ng_traza && audio_cuadros)

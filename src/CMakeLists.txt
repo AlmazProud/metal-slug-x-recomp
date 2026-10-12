@@ -72,7 +72,7 @@ if(NOT SDL3_FOUND)
     message(STATUS "Port desactivado: no se encontró SDL3 (CMAKE_PREFIX_PATH)")
     return()
 endif()
-set(PORT_FUENTES port/main.c port/sin_ventana.c port/ventana.c port/config.c port/debug.c port/gog.c)
+set(PORT_FUENTES port/main.c port/sin_ventana.c port/ventana.c port/config.c port/debug.c port/gog.c port/sonidos.c port/perfil_sonidos.c)
 if(WIN32)
     enable_language(RC)
     list(APPEND PORT_FUENTES port/mslugx.rc)
@@ -95,6 +95,9 @@ install(FILES $<TARGET_RUNTIME_DLLS:mslugx> DESTINATION .)
 # Fase 5: un estado guardado, cargado en una máquina reiniciada, reproduce RAM, imagen y audio.
 add_test(NAME estado_guardado
          COMMAND mslugx --roms ${PD_ROMS} --sin-ventana --cuadros 3000 --probar-estado 600)
+# Fase 6B: el menú de sonido suena y, al cerrarlo, el juego sigue idéntico.
+add_test(NAME menu_sonido
+         COMMAND mslugx --roms ${PD_ROMS} --sin-ventana --cuadros 3000 --probar-sonidos)
 
 # Fase 4: la partida grabada del usuario (Misión 1) reproducida contra MAME, sin divergencias en RAM,
 # paleta ni imagen. Las referencias de MAME y las entradas viven en PD_ANALISIS/fase4 (fuera del repo;
