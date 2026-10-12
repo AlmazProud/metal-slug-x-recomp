@@ -7,7 +7,8 @@ aquí con su versión, origen, licencia y el uso que se le da.
 
 | Biblioteca | Versión | Origen | Licencia | Uso |
 |---|---|---|---|---|
-| (ninguna) | | | | |
+| Capstone | 5.0.7 | PyPI (`capstone`), github.com/capstone-engine/capstone | BSD-3-Clause | Decodificador de instrucciones 68000 en las herramientas de análisis (Fase 1). No se enlaza al port. |
+| NumPy | 2.5.4 | PyPI (`numpy`) | BSD-3-Clause | Conversión de formatos gráficos en el extractor de ROMs. No se enlaza al port. |
 
 ## Herramientas del entorno (no se distribuyen con el repo)
 
