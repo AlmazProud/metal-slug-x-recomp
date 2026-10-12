@@ -74,7 +74,7 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 6D. Remaster: widescreen | **Dropped** by the user (2026-10-12): it takes away the essence of the game. |
 | 7A. V-sync and red blood | **Closed** (2026-10-12). See `docs/PHASE7_TWEAKS.md`. `ctest`: 6/6. |
 | 7I. English translation | **Closed** (2026-10-12). `ctest`: 6/6. Publishing on GitHub (license, plug-and-play release) comes at the end. |
-| 7B. Debug mode and cheats | **Closed** (2026-10-12), pending approval. See `docs/PHASE7B_DEBUG.md`. `ctest`: 6/6. |
+| 7B. Debug mode and cheats | **Closed** (2026-10-12). See `docs/PHASE7B_DEBUG.md`. `ctest`: 6/6. |
 
 ### Phase 7B: result
 
