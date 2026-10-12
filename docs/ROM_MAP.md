@@ -1,7 +1,7 @@
 # ROM_MAP: GOG/DotEmu files and MAME's `mslugx` set
 
 Source: GOG installation of Metal Slug X, folder `resources\game\`. The files are copied to
-`roms\` with `INSTALL.bat -CopiarRoms`.
+`roms\` with `INSTALL.bat -CopyRoms`.
 
 Oracle: MAME 0.289 (`mame -listxml mslugx`). Everything listed here was **verified by CRC32
 and SHA1** with `tools/extract_roms.py`, which obtains the expected hashes from MAME at run

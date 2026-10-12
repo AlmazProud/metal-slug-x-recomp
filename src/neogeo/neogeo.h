@@ -133,7 +133,7 @@ extern NgDebug ng_dbg;
 /* Work RAM words that the cartridge code (PC < 0xC00000) reads with a different value:
  * (real & ~mask) | value. The BIOS sees the real RAM (its RAM test and service menu are not
  * affected). Used to turn on game options without touching the SRAM: one slot per use. */
-typedef struct { int active; uint32_t dir; uint16_t mask, value; } NgForcedRead;
+typedef struct { int active; uint32_t addr; uint16_t mask, value; } NgForcedRead;
 enum { NG_FORCED_BLOOD, NG_FORCED_DIPS, NG_FORCED_DEVMODE, NG_FORCED_COUNT };
 extern NgForcedRead ng_forced_read[NG_FORCED_COUNT];
 
@@ -147,7 +147,7 @@ int ng_state_load(const uint8_t *data, size_t size);
 
 typedef struct {
     uint8_t *data;
-    size_t tam, pos;
+    size_t size, pos;
     int saving;
 } NgState;
 void ng_state_block(NgState *e, void *p, size_t n);   /* saves or restores n bytes */

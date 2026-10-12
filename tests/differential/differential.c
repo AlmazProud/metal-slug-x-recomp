@@ -87,7 +87,7 @@ int main(int argc, char **argv)
         return 2;
     }
     int seeds = argc > 3 ? atoi(argv[3]) : 64;
-    int debug = getenv("PD_DEPURAR") != NULL;
+    int debug = getenv("PD_VERBOSE") != NULL;
     setvbuf(stdout, NULL, _IONBF, 0);
     mem_load_roms(argv[1], argv[2]);
     static Layer layer_m, layer_r;

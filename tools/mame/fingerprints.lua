@@ -16,24 +16,24 @@
 -- power-on. There both sides are on an instruction boundary: there are no half-done
 -- writes, unlike the frame boundary, where MAME can be in the middle of an instruction.
 --
--- With PD_PIXELES=1, also, for each frame N: "F <N> <image hash>" (320x224 32-bit pixels
+-- With PD_PIXELS=1, also, for each frame N: "F <N> <image hash>" (320x224 32-bit pixels
 -- from screen:pixels(); hash h = h*31 + 64-bit word, with natural overflow).
 --
--- Variables: PD_HUELLAS (output), PD_DESDE / PD_HASTA (frames with a fingerprint; all by default),
--- PD_VOLCAR (list of frames whose whole RAM is saved to PD_DIR_VOLCADOS/ram_mame_NNNNNN.bin).
+-- Variables: PD_FINGERPRINTS (output), PD_FROM / PD_TO (frames with a fingerprint; all by default),
+-- PD_DUMP (list of frames whose whole RAM is saved to PD_DUMP_DIR/ram_mame_NNNNNN.bin).
 
--- PD_SCRIPT_ENTRADAS: path of inputs.lua, to also record the input changes.
-if os.getenv("PD_SCRIPT_ENTRADAS") then dofile(os.getenv("PD_SCRIPT_ENTRADAS")) end
+-- PD_INPUTS_SCRIPT: path of inputs.lua, to also record the input changes.
+if os.getenv("PD_INPUTS_SCRIPT") then dofile(os.getenv("PD_INPUTS_SCRIPT")) end
 
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
 local scr = manager.machine.screens[":screen"]
-local output = io.open(os.getenv("PD_HUELLAS") or "huellas_mame.txt", "w")
-local first = tonumber(os.getenv("PD_DESDE") or "0")
-local last = tonumber(os.getenv("PD_HASTA") or "1e12")
+local output = io.open(os.getenv("PD_FINGERPRINTS") or "huellas_mame.txt", "w")
+local first = tonumber(os.getenv("PD_FROM") or "0")
+local last = tonumber(os.getenv("PD_TO") or "1e12")
 local dump = {}
-for n in string.gmatch(os.getenv("PD_VOLCAR") or "", "%d+") do dump[tonumber(n)] = true end
-local dump_dir = os.getenv("PD_DIR_VOLCADOS") or "."
+for n in string.gmatch(os.getenv("PD_DUMP") or "", "%d+") do dump[tonumber(n)] = true end
+local dump_dir = os.getenv("PD_DUMP_DIR") or "."
 
 local function fnv(s)
     local h = 0x811C9DC5
@@ -90,7 +90,7 @@ end)
 
 local vblanks = 0
 local dump_v = {}
-for n in string.gmatch(os.getenv("PD_VOLCAR_V") or "", "%d+") do dump_v[tonumber(n)] = true end
+for n in string.gmatch(os.getenv("PD_DUMP_V") or "", "%d+") do dump_v[tonumber(n)] = true end
 wtap_ack = mem:install_write_tap(0x3C000C, 0x3C000D, "pd_ack", function(offset, data, mask)
     if (data & mask & 0x0004) == 0 then return end
     vblanks = vblanks + 1
@@ -110,13 +110,13 @@ fingerprints_sub = emu.add_machine_frame_notifier(function()
     local ram = mem:read_range(0x100000, 0x10FFFF, 8)
     local pal = mem:read_range(0x400000, 0x401FFF, 8)
     output:write(string.format("%d %08X %08X\n", f, fnv(ram), fnv(pal)))
-    if os.getenv("PD_PIXELES") then
+    if os.getenv("PD_PIXELS") then
         local px = scr:pixels()
         local h = 0
         for i = 1, #px, 8 do h = h * 31 + string.unpack("<i8", px, i) end
         output:write(string.format("F %d %016X\n", f, h))
     end
-    if os.getenv("PD_REGISTROS") then
+    if os.getenv("PD_REGISTERS") then
         local s = cpu.state
         local r = {}
         for _, n in ipairs({"D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "SP"}) do

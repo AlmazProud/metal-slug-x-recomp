@@ -4,7 +4,7 @@ used only as documentation).
 
 Usage:
   python sampling_queues.py <mame>/src/devices/cpu/m68000/m68000-sdf.cpp > colas.txt
-  python verify_sampling.py colas.txt build/src/clases_muestreo.exe
+  python verify_sampling.py colas.txt build/src/sampling_classes.exe
 Compares, for each handler and each path, (L, U) from the start of the instruction. Excluded:
 MOVEM, CHK, DIV, RESET, TRAPV, STOP and MOVEP (paths with loops: see docs/PHASE4_VERIFICATION.md).
 """

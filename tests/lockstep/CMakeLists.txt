@@ -15,7 +15,7 @@ add_test(NAME lockstep_reset
 
 # From a real game state (MAME dump at frame 4000 of the user's recording).
 if(EXISTS "${PD_ANALYSIS}/state_f4000.bin")
-    add_test(NAME lockstep_juego
+    add_test(NAME lockstep_game
              COMMAND lockstep ${PD_ROMS}/mslugx_game_m68k ${PD_ROMS}/mslugx_bios_m68k 120000000
                      ${PD_ANALYSIS}/state_f4000.bin)
 endif()

@@ -46,11 +46,11 @@ void debug_enable(int active)
     if (!active) ng_dbg.hide = 0;
     clear_boxes();
     d.n = 0;
-    const char *views = getenv("PD_DEBUG_VISTAS");     /* tests: "cajas,palette,memoria" */
+    const char *views = getenv("PD_DEBUG_VIEWS");     /* tests: "boxes,palette,memory" */
     if (active && views) {
-        d.boxes = strstr(views, "cajas") != NULL;
+        d.boxes = strstr(views, "boxes") != NULL;
         d.palette = strstr(views, "palette") != NULL;
-        d.memory = strstr(views, "memoria") != NULL;
+        d.memory = strstr(views, "memory") != NULL;
     }
 }
 

@@ -1,29 +1,29 @@
 /* Metal Slug X, native port: command-line options and startup.
  *
  * Usage:
- *   mslugx [--roms FOLDER] [--scale N] [--turbo N] [--sram-vacia] [--sin-audio]
+ *   mslugx [--roms FOLDER] [--scale N] [--turbo N] [--empty-sram] [--no-audio]
  *          [--date YYYY-MM-DD-hh-mm-ss-D]
- *   mslugx --sin-window --frames N [--screenshots a,b,c --output FOLDER] ...
+ *   mslugx --headless --frames N [--screenshots a,b,c --output FOLDER] ...
  *
  * --roms: resources\game folder of the GOG installation. Without this option, windowed mode
  *         looks for it on its own (window.c); headless mode uses "roms" next to the executable.
  *         The files are validated by SHA-256.
  * --turbo: 0 = like the original; 1 / 2 = 68000 at double / quadruple speed (without the
  *         original slowdown). In windowed mode, the value from mslugx.ini is the default.
- * --sin-window: runs N frames as fast as possible (verification against MAME, headless.c):
+ * --headless: runs N frames as fast as possible (verification against MAME, headless.c):
  *   --screenshots: saves BMPs of the requested frames (tools/compare_screenshots.py).
  *   --wav: saves the generated audio (stereo, 16 bits, 55 555 Hz).
  *   --inputs: inputs recorded in MAME (tools/mame/inputs.lua, timed "C" lines,
  *         or "E frame P1 P2 SIS MON TEST"). --fingerprints: per-frame and per-VBlank fingerprints (Phase 4).
  *   --script: inputs by spans: "from to input..." (frames inclusive; inputs: up down left
  *         right a b c d start1 start2 select1 coin1 coin2 test).
- *   --traza, --traza-es: diagnostic traces.
- *   --probar-estado M: at the end saves a state, runs M frames, resets the machine, loads the
+ *   --trace, --trace-io: diagnostic traces.
+ *   --test-state M: at the end saves a state, runs M frames, resets the machine, loads the
  *         state and repeats: RAM, image and audio must match (save-state test).
- *   --catalog-sonido FILE: after the N frames (sound driver started, silent), sends each sound
+ *   --sound-catalog FILE: after the N frames (sound driver started, silent), sends each sound
  *         command 00-FF separately and records duration, loop, peak and notes per channel
  *         type. With --output, also saves snd_XX.wav for each one (Phase 6B).
- *   --probar-sonidos: at the end opens the sound menu, plays a music track and a voice (they
+ *   --test-sounds: at the end opens the sound menu, plays a music track and a voice (they
  *         must be audible), closes it and checks that the game is identical to not having opened it.
  *
  * Controls, menu and fixed keys of windowed mode: see window.c.
@@ -44,11 +44,11 @@ void program_register(void);
 static void usage(void)
 {
     fprintf(stderr,
-            "Usage: mslugx [--roms FOLDER] [--scale N] [--turbo N] [--sram-vacia] [--sin-audio]\n"
+            "Usage: mslugx [--roms FOLDER] [--scale N] [--turbo N] [--empty-sram] [--no-audio]\n"
             "              [--date YYYY-MM-DD-hh-mm-ss-D]\n"
-            "       mslugx --sin-window --frames N [--screenshots a,b,c --output FOLDER] [--script FILE]\n"
-            "              [--inputs FILE] [--fingerprints FILE] [--wav FILE] [--traza FILE]\n"
-            "              [--traza-es FILE FROM_US TO_US]\n");
+            "       mslugx --headless --frames N [--screenshots a,b,c --output FOLDER] [--script FILE]\n"
+            "              [--inputs FILE] [--fingerprints FILE] [--wav FILE] [--trace FILE]\n"
+            "              [--trace-io FILE FROM_US TO_US]\n");
 }
 
 static int parse_options(int argc, char **argv, Options *o)
@@ -69,21 +69,21 @@ static int parse_options(int argc, char **argv, Options *o)
         else if (!strcmp(a, "--inputs") && v) { o->inputs = v; i++; }
         else if (!strcmp(a, "--fingerprints") && v) { o->fingerprints = v; i++; }
         else if (!strcmp(a, "--dump") && v) { o->dump = v; i++; }
-        else if (!strcmp(a, "--sin-audio")) o->no_audio = 1;
-        else if (!strcmp(a, "--probar-estado") && v) { o->test_state = atoi(v); i++; }
-        else if (!strcmp(a, "--catalog-sonido") && v) { o->catalog = v; i++; }
-        else if (!strcmp(a, "--probar-sonidos")) o->test_sounds = 1;
+        else if (!strcmp(a, "--no-audio")) o->no_audio = 1;
+        else if (!strcmp(a, "--test-state") && v) { o->test_state = atoi(v); i++; }
+        else if (!strcmp(a, "--sound-catalog") && v) { o->catalog = v; i++; }
+        else if (!strcmp(a, "--test-sounds")) o->test_sounds = 1;
         else if (!strcmp(a, "--blood")) o->blood = 1;
-        else if (!strcmp(a, "--traza") && v) { ng_trace = fopen(v, "w"); i++; }
-        else if (!strcmp(a, "--traza-es") && i + 3 < argc) {
-            /* --traza-es FILE FROM_US TO_US */
+        else if (!strcmp(a, "--trace") && v) { ng_trace = fopen(v, "w"); i++; }
+        else if (!strcmp(a, "--trace-io") && i + 3 < argc) {
+            /* --trace-io FILE FROM_US TO_US */
             ng_trace_io = fopen(argv[i + 1], "w");
             ng_trace_from = (int64_t)(atof(argv[i + 2]) * 12.0);
             ng_trace_to = (int64_t)(atof(argv[i + 3]) * 12.0);
             i += 3;
         }
-        else if (!strcmp(a, "--sin-window")) o->headless = 1;
-        else if (!strcmp(a, "--sram-vacia")) o->empty_sram = 1;
+        else if (!strcmp(a, "--headless")) o->headless = 1;
+        else if (!strcmp(a, "--empty-sram")) o->empty_sram = 1;
         else if (!strcmp(a, "--date") && v) {
             int *f = o->date;
             if (sscanf(v, "%d-%d-%d-%d-%d-%d-%d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6]) != 7) return -1;

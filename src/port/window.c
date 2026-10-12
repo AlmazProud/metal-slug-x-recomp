@@ -93,7 +93,13 @@ static void sram_save(void)
 }
 
 /* ------------------------------------------------------------------ save states */
-static void state_path(char *r, size_t n) { snprintf(r, n, "%sestado_%d.bin", pref_dir, cfg.slot); }
+static void state_path(char *r, size_t n)
+{
+    snprintf(r, n, "%sstate_%d.bin", pref_dir, cfg.slot);
+    char old[1100];                       /* older versions: estado_N.bin, carried over */
+    snprintf(old, sizeof old, "%sestado_%d.bin", pref_dir, cfg.slot);
+    if (!SDL_GetPathInfo(r, NULL) && SDL_GetPathInfo(old, NULL)) SDL_RenamePath(old, r);
+}
 
 void fe_state_save(void)
 {
@@ -352,7 +358,7 @@ static void on_key(const SDL_KeyboardEvent *e, int *paused, int *screenshots)
     case SDL_SCANCODE_F9: fe_state_load(); break;
     case SDL_SCANCODE_F12: {
         char r[1100];
-        snprintf(r, sizeof r, "%scaptura_%03d.bmp", pref_dir, (*screenshots)++);
+        snprintf(r, sizeof r, "%sscreenshot_%03d.bmp", pref_dir, (*screenshots)++);
         if (save_bmp(r) == 0) fe_notify("Screenshot: %s", r);
         break;
     }
@@ -508,19 +514,19 @@ int window_run(const Options *o)
     uint64_t audio_frames = 0, audio_drops = 0, audio_empty = 0, audio_queue_sum = 0;
     if (!cfg.start_screen) fe_notify("Esc: menu   F5/F9: save/load game");
 
-    /* PD_PRUEBA_VENTANA=N,file.png[,menu|sonidos|jugar|renombrar]: after N frames, saves what the
+    /* PD_WINDOW_TEST=N,file.png[,menu|sounds|play|rename]: after N frames, saves what the
        window shows (with the menu, with the sound menu playing the second music track, or after
        choosing "Play" at frame 1300) and quits. */
     long test_frame_count = 0;
     char test_png[1024] = "";
     int test_menu = 0, test_sounds = 0, test_play = 0, test_rename = 0;
-    if (getenv("PD_PRUEBA_VENTANA")) {
+    if (getenv("PD_WINDOW_TEST")) {
         char extra[16] = "";
-        sscanf(getenv("PD_PRUEBA_VENTANA"), "%ld,%1023[^,],%15s", &test_frame_count, test_png, extra);
+        sscanf(getenv("PD_WINDOW_TEST"), "%ld,%1023[^,],%15s", &test_frame_count, test_png, extra);
         test_menu = !strcmp(extra, "menu");
-        test_sounds = !strcmp(extra, "sonidos");
-        test_play = !strcmp(extra, "jugar");
-        test_rename = !strcmp(extra, "renombrar");
+        test_sounds = !strcmp(extra, "sounds");
+        test_play = !strcmp(extra, "play");
+        test_rename = !strcmp(extra, "rename");
     }
     long frames_shown = 0;
     if (test_frame_count) { no_wait = 1; fe_apply_video(); }
@@ -528,8 +534,8 @@ int window_run(const Options *o)
     int paused = 0, screenshots = 0;
     Uint64 next = SDL_GetTicksNS(), previous = next, accumulated = 0, start = next;
     float hz = monitor_rate();
-    /* PD_SALIR_TRAS=seconds: quits on its own (real-time pacing measurement, with --traza). */
-    double quit_after = getenv("PD_SALIR_TRAS") ? atof(getenv("PD_SALIR_TRAS")) : 0;
+    /* PD_QUIT_AFTER=seconds: quits on its own (real-time pacing measurement, with --trace). */
+    double quit_after = getenv("PD_QUIT_AFTER") ? atof(getenv("PD_QUIT_AFTER")) : 0;
     uint64_t loops = 0, emulated = ng.frames;
     while (!quit) {
         if (test_frame_count && test_menu && frames_shown == test_frame_count - 1) menu_pause();

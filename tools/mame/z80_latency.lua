@@ -1,6 +1,6 @@
 -- Z80 latency: time between each 68000 command (write to 0x320000) and each
 -- Z80 reply (write to its port 0x0C), with the machine time in microseconds.
--- Output: PD_TRAZA (latencia_z80.txt by default).
+-- Output: PD_TRACE (latencia_z80.txt by default).
 
 local cpu = manager.machine.devices[":maincpu"]
 local z80 = manager.machine.devices[":audiocpu"]
@@ -44,7 +44,7 @@ rtap_resp = mem:install_read_tap(0x320000, 0x320001, "pd_resp_r", function(offse
 end)
 
 latency_stop_sub = emu.add_machine_stop_notifier(function()
-    local f = io.open(os.getenv("PD_TRAZA") or "latencia_z80.txt", "w")
+    local f = io.open(os.getenv("PD_TRACE") or "latencia_z80.txt", "w")
     for _, s in ipairs(lines) do f:write(s .. "\n") end
     f:close()
 end)

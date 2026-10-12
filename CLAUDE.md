@@ -89,7 +89,7 @@ Details in `docs/PHASE7_TWEAKS.md`.
     from the queue;
   - with other refresh rates, an accumulator at the board's rate.
   - Measured: 0 audio dropouts and 0 discards in all three cases.
-- Tests: `PD_SALIR_TRAS`, `PD_HZ`, `--sangre`.
+- Tests: `PD_QUIT_AFTER`, `PD_HZ`, `--blood`.
 
 ### Phase 6C: result
 
@@ -101,7 +101,7 @@ Details in `docs/PHASE6_REMASTER.md`.
   - Start: the demo keeps running in the background; "Play" inserts a coin + START.
   - Pause, Settings (Video, Audio, Game, Controls) and Extras.
 - **Sound menu:** Recent tab, rename (F2/R) and per-sound rumble (V/X), saved in the user's
-  `sonidos.ini`.
+  `sounds.ini`.
 
 ### Phase 6B: result
 
@@ -109,11 +109,11 @@ Details in `docs/PHASE6_REMASTER.md`.
 
 - **Sound driver:** mode commands `00` (music), `10` (effects) and `11` (voices) that stay
   active; `03` resets the driver (the game sends `03 03 06` before each music track).
-- **Catalog:** `--catalogo-sonido` + `PD_CATALOGO_PREFIJO`; `tools/sound_catalog.py`
+- **Catalog:** `--sound-catalog` + `PD_CATALOG_PREFIX`; `tools/sound_catalog.py`
   generates `src/port/profile_sounds.c` (18 music tracks, 185 effects, 61 voices).
 - **Names:** only those confirmed with gameplay screenshots; the rest go by number.
 - **"Music and sounds" menu** (`src/port/sounds.c`): saves the state, advances only the Z80 and
-  the YM (`ng_sound_only_*`) and restores on exit. Test `menu_sonido`.
+  the YM (`ng_sound_only_*`) and restores on exit. Test `sound_menu`.
 - **Rumble** driven by sound commands (`ng_on_sound_command`): explosions, cannon, shots;
   intensity 0-100.
 
@@ -149,7 +149,7 @@ Details in `docs/PHASE5_NATIVE.md`.
 - **Turbo** (`CIC` in `cycles68k.h`, `cpu_turbo`): at x2, frames dropped to slowdown fall from
   10.3 % to 0.2 % (attract demo) and from 9.0 % to 0.0 % (Mission 1). When off it changes
   nothing.
-- **Save states** (`neogeo/savestate.c`, 835 KB): test `estado_guardado`; loaded into a reset
+- **Save states** (`neogeo/savestate.c`, 835 KB): test `savestate_roundtrip`; loaded into a reset
   machine, they reproduce identical RAM, video and audio.
 - `cmake --install build --prefix X` leaves the exe + SDL3.dll. Manifest: UTF-8 paths and HiDPI.
 
@@ -159,7 +159,7 @@ Details in `docs/PHASE4_VERIFICATION.md`.
 
 - **Zero divergences in Mission 1:** the user's recording (11 969 frames) replays with identical
   RAM and palette in all 11 771 VBlanks and identical video in all 11 968 frames. Automatic
-  test: `ctest` → `mision1_contra_mame` (references in `analysis/phase4/`, outside the repo).
+  test: `ctest` → `mission1_vs_mame` (references in `analysis/phase4/`, outside the repo).
 - **68000 cycle accuracy against MAME:**
   - reset: the first instruction starts at cycle 34;
   - IRQ entry: waits for the E clock;
@@ -217,7 +217,7 @@ Details and evidence in `docs/PHASE3_RUNTIME.md`.
   - `compare_screenshots.py`, `images.py` (dependency-free PNG/BMP);
   - in `mame/`: `screenshots.lua`, `trace_ports.lua`, `trace_sound.lua`, `z80_latency.lua` and
     `trace_io.lua`;
-  - in the port: `--sin-ventana`, `--capturas`, `--guion`, `--traza` and `--traza-es`.
+  - in the port: `--headless`, `--screenshots`, `--script`, `--trace` and `--trace-io`.
 
 ### Phase 2: result
 
@@ -234,11 +234,11 @@ Details and evidence in `docs/PHASE3_RUNTIME.md`.
 - **Dispatcher** (`src/cpu/dispatcher.c`): JSR/BSR = verified native call (`rc_call`);
   checkpoints on backward branches; Musashi fallback for RAM, P2 and unseen code.
 - **Tests** (`ctest`):
-  - `diferencial_cpu`: 4 253 real instructions (3 356 opcodes) × 64 states = 272 192 cases,
+  - `cpu_differential`: 4 253 real instructions (3 356 opcodes) × 64 states = 272 192 cases,
     0 differences in registers, SR, PC, memory and cycles. A mutation test confirms the harness
     catches errors.
   - `lockstep_reset`: whole program against Musashi from reset.
-  - `lockstep_juego`: from a real state (MAME dump at frame 4000 of `mision1.inp`): 120M
+  - `lockstep_game`: from a real state (MAME dump at frame 4000 of `mision1.inp`): 120M
     cycles, 591 VBlanks, 10.1M instructions, identical memory, a single interpreted step. The
     recompiled program is about 5 times faster than Musashi.
 - **User's recording:** `analysis/inp/mision1.inp`, 11 969 frames, up to the Sphinx. It replays

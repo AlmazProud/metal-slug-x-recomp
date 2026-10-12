@@ -18,7 +18,7 @@ mslugx.exe --roms "K:\Metal Slug X\resources\game"
 | `src/neogeo/machine.c` | Cycle-based 68000 scheduler: lines, VBlank (IRQ1), IRQ2 (position counter with its three reload modes), power-on IRQ3, watchdog and interrupt delivery. |
 | `src/neogeo/rtc.c` | NEC uPD4990A clock in serial mode: commands, shift register, TP and DATA OUT. |
 | `src/neogeo/sound.c` | Z80 (z80.h, zlib) with its map (M1 with NEO-ZMC banks, RAM, latch, NMI) and YM2610 (ymfm, BSD-3, via `ym2610.cpp`), interleaved with the 68000 like the MAME scheduler (Phase 3B). |
-| `src/port/main.c` | SDL3: integer-scaled window, keyboard and gamepad, 59.1856 Hz pacing, 55,555 Hz audio (50 ms cushion), persistent SRAM and a headless mode for the tests (`--capturas`, `--guion`, `--wav`, `--traza`, `--traza-es`). |
+| `src/port/main.c` | SDL3: integer-scaled window, keyboard and gamepad, 59.1856 Hz pacing, 55,555 Hz audio (50 ms cushion), persistent SRAM and a headless mode for the tests (`--screenshots`, `--script`, `--wav`, `--trace`, `--trace-io`). |
 
 **BIOS decision:** we use the user's BIOS (`sp-u2`, recompiled together with P1), not a
 reimplementation (HLE). It is already verified in the lockstep, MAME (the oracle) runs the
@@ -28,7 +28,7 @@ same binary, and an HLE would add behavior of its own with no way to validate it
 
 Tools: `tools/mame/screenshots.lua`, `trace_ports.lua`, `trace_sound.lua`,
 `z80_latency.lua` and `trace_io.lua`, plus `tools/compare_screenshots.py`. In the port, the
-`--capturas`, `--traza` and `--traza-es` options produce the same formats.
+`--screenshots`, `--trace` and `--trace-io` options produce the same formats.
 
 1. **Idle port values** (`trace_ports.lua`):
    - `300001`: DIP = `FF`;
@@ -57,7 +57,7 @@ Tools: `tools/mame/screenshots.lua`, `trace_ports.lua`, `trace_sound.lua`,
    with VBlank arrived 24 lines (1536 µs) early. That is why the port's frame ends at VBlank and
    its number matches `screen:frame_number()`.
 6. **Interrupts at instruction boundaries:** the generator emits a checkpoint before every
-   instruction (`program.py`; disabled with `--sin-punto-por-instruccion`). An interrupt is
+   instruction (`program.py`; disabled with `--no-per-instruction-points`). An interrupt is
    taken before the first instruction that starts at or after its cycle, not at the next
    dispatch point.
 
@@ -75,7 +75,7 @@ Tools: `tools/mame/screenshots.lua`, `trace_ports.lua`, `trace_sound.lua`,
   - each command synchronizes immediately and opens 50 µs of fine interleaving (perfect
     quantum);
   - outside that window, the 68000 sees the reply in the next slice.
-- **Timeline against MAME** (`--traza` vs `z80_latency.lua`): commands, Z80 replies and the
+- **Timeline against MAME** (`--trace` vs `z80_latency.lua`): commands, Z80 replies and the
   moment the 68000 sees them match within a few microseconds.
 
   | Event | MAME | Port |
@@ -107,7 +107,7 @@ Tools: `tools/mame/screenshots.lua`, `trace_ports.lua`, `trace_sound.lua`,
   - the first command to the Z80 (4.67 s after power-on) lands within 1.25 µs of MAME's;
   - in the window of frames 280–282, all 4436 I/O writes match in order, address and data,
     with a constant offset of 1.1 µs.
-- **Simulated game** (`--guion`): coin, START, "How to play", soldier select and a playable
+- **Simulated game** (`--script`): coin, START, "How to play", soldier select and a playable
   Mission 1, with shooting, scoring and enemies.
 - **Performance:** without sound (3A), about 3500 frames/s; with the Z80 and the YM2610 (3B),
   about 1600 frames/s headless. Windowed it uses about 12 % of one core.
@@ -131,7 +131,7 @@ Tools: `tools/mame/screenshots.lua`, `trace_ports.lua`, `trace_sound.lua`,
 3. **Visible effect.** Around frame 900 of the attract mode, the game does something one frame
    earlier than MAME (command E5 at frame 919, and then the demo). This is the next divergence
    to track down in Phase 4 with per-frame RAM comparison.
-4. **Clock.** The BIOS shows the time; the port uses the system time or `--fecha`, and MAME the
+4. **Clock.** The BIOS shows the time; the port uses the system time or `--date`, and MAME the
    system time.
 5. **Unmapped reads.** They return `0xFFFF`; on real hardware they return the last value on
    the bus (the prefetch). None were observed.

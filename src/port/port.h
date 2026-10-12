@@ -12,8 +12,8 @@ typedef struct {
     const char *screenshots, *output, *script, *wav, *inputs, *fingerprints, *dump;
     int no_audio;
     int test_state;                   /* frames to compare after loading a state (0 = no) */
-    const char *catalog;                /* --catalog-sonido: table of the sound commands */
-    int test_sounds;                  /* --probar-sonidos: sound menu test */
+    const char *catalog;                /* --sound-catalog: table of the sound commands */
+    int test_sounds;                  /* --test-sounds: sound menu test */
     int blood;                          /* --blood: the game's BLOOD option turned on */
     int date[7], has_date;
 } Options;

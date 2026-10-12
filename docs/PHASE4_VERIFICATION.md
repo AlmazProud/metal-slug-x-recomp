@@ -10,7 +10,7 @@ the Sphinx in Mission 1) replays in the port **with no divergence at all** from 
 | 68000 sound commands | 1902 commands | same values, within 1 µs |
 | Attract mode without inputs (Phase 3) | 451 consecutive frames + 10 scattered | all identical |
 
-The test is automatic: `ctest` → `mision1_contra_mame` (about 11 s). The MAME references and
+The test is automatic: `ctest` → `mission1_vs_mame` (about 11 s). The MAME references and
 the recorded inputs live in `analysis/phase4/`, outside the repo.
 
 ## Method
@@ -22,11 +22,11 @@ the recorded inputs live in `analysis/phase4/`, outside the repo.
      frame's image);
    - inputs, as **changes over time** (`tools/mame/inputs.lua`): the time of the last read with
      the old value and of the first read with the new one.
-2. **The port** (`--entradas`, `--huellas`, `--fecha`) applies each input change at that time,
+2. **The port** (`--inputs`, `--fingerprints`, `--date`) applies each input change at that time,
    with the clock date of the recording, and writes the same fingerprints.
 3. **To locate each divergence:**
    - `tools/mame/cycles.lua` traces the cycle counter of every instruction in MAME (debugger);
-   - the port does the same with `PD_TRAZA_INSTR` (everything through the interpreter, same
+   - the port does the same with `PD_TRACE_INSTR` (everything through the interpreter, same
      cycles);
    - `tools/compare_cycles.py` aligns both traces and points out the first instruction with a
      different duration or flow.

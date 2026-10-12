@@ -1,7 +1,7 @@
 -- Trace of the mslugx protection (0x2FFFE0-0x2FFFEF) and check against the model
 -- documented in docs/ROM_MAP.md. Usage:
 --   mame mslugx -bios us -autoboot_script tools/mame/trace_protection.lua ...
--- On exit writes a summary to the file named by the PD_TRAZA environment variable
+-- On exit writes a summary to the file named by the PD_TRACE environment variable
 -- (traza_proteccion.txt in the current directory by default).
 
 local cpu = manager.machine.devices[":maincpu"]
@@ -54,7 +54,7 @@ end)
 -- The subscription must be stored in a global variable; otherwise Lua collects it and it is never called.
 -- The output text below is kept as is (trace file format).
 protection_stop_sub = emu.add_machine_stop_notifier(function()
-    local f = io.open(os.getenv("PD_TRAZA") or "traza_proteccion.txt", "w")
+    local f = io.open(os.getenv("PD_TRACE") or "traza_proteccion.txt", "w")
     f:write(string.format("lecturas=%d coinciden=%d difieren=%d\n", stats.reads, stats.ok, stats.bad))
     for off, n in pairs(stats.writes) do f:write(string.format("escrituras en +%X: %d\n", off, n)) end
     for c, n in pairs(stats.cmds) do f:write(string.format("lecturas con command=%04X: %d\n", c, n)) end

@@ -163,16 +163,16 @@ static void port_write(uint16_t p, uint8_t v)
     }
 }
 
-/* Per-instruction Z80 trace (diagnostics): PD_TRAZA_Z80=file,from_us,to_us. Format
+/* Per-instruction Z80 trace (diagnostics): PD_TRACE_Z80=file,from_us,to_us. Format
    "C=<Z80 cycle> <PC>:", comparable with the MAME debugger trace (totalcycles). */
 static void z80_trace_start(void)
 {
     z80_trace_ready = 1;
-    const char *e = getenv("PD_TRAZA_Z80");
+    const char *e = getenv("PD_TRACE_Z80");
     double d, h;
     char path[1024];
     if (!e || sscanf(e, "%1023[^,],%lf,%lf", path, &d, &h) != 3) return;
-    if (getenv("PD_TRAZA_YM")) ym_trace = fopen(path, "w");   /* port writes only */
+    if (getenv("PD_TRACE_YM")) ym_trace = fopen(path, "w");   /* port writes only */
     else z80_trace = fopen(path, "w");
     z80_trace_from = (int64_t)(d * 24.0);
     z80_trace_to = (int64_t)(h * 24.0);
@@ -294,7 +294,7 @@ void ng_sound_state(NgState *e)
         if (e->data) ym_state_save(e->data + e->pos);
     } else {
         s.read_pos = s.write_pos;                /* pending audio is not replayed */
-        if (n_saved == n && e->pos + n <= e->tam) ym_state_load(e->data + e->pos, n);
+        if (n_saved == n && e->pos + n <= e->size) ym_state_load(e->data + e->pos, n);
     }
     e->pos += n;
 }

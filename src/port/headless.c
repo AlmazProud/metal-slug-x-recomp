@@ -191,11 +191,11 @@ static uint32_t fnv_bytes(uint32_t h, const uint8_t *d, size_t n)
     return h;
 }
 
-/* PD_VOLCAR_SPRITES=frame,file: list of the sprites drawn in that frame (box in visible pixels
+/* PD_DUMP_SPRITES=frame,file: list of the sprites drawn in that frame (box in visible pixels
    and SCB2-4 registers, first tile). Diagnostic for locating the game's graphics. */
 static void dump_sprites(void)
 {
-    const char *e = getenv("PD_VOLCAR_SPRITES");
+    const char *e = getenv("PD_DUMP_SPRITES");
     if (!e) return;
     unsigned long long frame;
     char path[1024];
@@ -214,10 +214,10 @@ static void dump_sprites(void)
     fclose(f);
 }
 
-/* PD_CAPTURAR_SPRITES=frame,from,to,file.bmp: image with only those sprites (magenta background). */
+/* PD_CAPTURE_SPRITES=frame,from,to,file.bmp: image with only those sprites (magenta background). */
 static void capture_sprites(void)
 {
-    const char *e = getenv("PD_CAPTURAR_SPRITES");
+    const char *e = getenv("PD_CAPTURE_SPRITES");
     if (!e) return;
     unsigned long long frame;
     int from, to;
@@ -244,7 +244,7 @@ static void fingerprint_vblank(void)
     fprintf(fingerprint_file, "V %llu %08X %08X f=%llu pc=%06X int=%06X a5=%06X l=%02X\n", ++n_vblanks, fnv_bytes(0x811C9DC5u, ng.ram, sizeof ng.ram),
             fnv_bytes(0x811C9DC5u, pal, sizeof pal), (unsigned long long)ng.frames, ng_cpu.pc, ng_pc_vblank,
             ng_cpu.a[5], ng.ram[0x008A]);
-    const char *list = getenv("PD_VOLCAR_V");
+    const char *list = getenv("PD_DUMP_V");
     if (list) {
         for (const char *p = list; *p;) {
             char *end;
@@ -252,7 +252,7 @@ static void fingerprint_vblank(void)
             if (end == p) break;
             if (v == n_vblanks) {
                 char path[1200];
-                snprintf(path, sizeof path, "%s/ram_port_v%06llu.bin", getenv("PD_DIR_VOLCADOS") ? getenv("PD_DIR_VOLCADOS") : ".", v);
+                snprintf(path, sizeof path, "%s/ram_port_v%06llu.bin", getenv("PD_DUMP_DIR") ? getenv("PD_DUMP_DIR") : ".", v);
                 FILE *f = fopen(path, "wb");
                 if (f) { fwrite(ng.ram, 1, sizeof ng.ram, f); fclose(f); }
             }
@@ -277,7 +277,7 @@ static void fingerprint(FILE *f, unsigned long long label)
     for (int i = 0; i < 0x1000; i++) { pal[2 * i] = (uint8_t)(bank[i] >> 8); pal[2 * i + 1] = (uint8_t)bank[i]; }
     fprintf(f, "%llu %08X %08X\n", label, fnv_bytes(0x811C9DC5u, ng.ram, sizeof ng.ram),
             fnv_bytes(0x811C9DC5u, pal, sizeof pal));
-    if (getenv("PD_REGISTROS")) {
+    if (getenv("PD_REGISTERS")) {
         fprintf(f, "R %llu %06X %04X", label, ng_cpu.pc, cpu_get_sr(&ng_cpu));
         for (int i = 0; i < 8; i++) fprintf(f, " %08X", ng_cpu.d[i]);
         for (int i = 0; i < 8; i++) fprintf(f, " %08X", ng_cpu.a[i]);
@@ -286,11 +286,11 @@ static void fingerprint(FILE *f, unsigned long long label)
 }
 
 /* ------------------------------------------------------------------ per-instruction trace */
-/* PD_TRAZA_INSTR=file,from,to (68000 cycles): same format as tools/mame/cycles.lua
+/* PD_TRACE_INSTR=file,from,to (68000 cycles): same format as tools/mame/cycles.lua
    ("C=<cycle> <PC>:"), with everything executed by the interpreter. */
 static FILE *instr_trace;
 static long long trace_from, trace_to;
-static int trace_regs;          /* PD_TRAZA_REGS=1: appends D0-D7 to every line */
+static int trace_regs;          /* PD_TRACE_REGS=1: appends D0-D7 to every line */
 
 static void trace_instr(const Cpu68k *c)
 {
@@ -302,7 +302,7 @@ static void trace_instr(const Cpu68k *c)
     }
 }
 
-/* PD_CONTAR_PC=hex: counts per frame how many times that address is executed (all through the
+/* PD_COUNT_PC=hex: counts per frame how many times that address is executed (all through the
    interpreter). With the exit of the game's wait loop (0x3A42 in mslugx) it measures slowdown:
    a frame without a single iteration of the main loop is a lost frame. */
 static uint32_t count_pc;
@@ -319,28 +319,28 @@ static void count_end_frame(void)
     frames_counted++;
     count_total += count_frame;
     if (!count_frame) frames_without_loop++;
-    static FILE *detail;                    /* PD_CONTAR_ARCHIVO: one digit per frame */
-    if (!detail && getenv("PD_CONTAR_ARCHIVO")) detail = fopen(getenv("PD_CONTAR_ARCHIVO"), "w");
+    static FILE *detail;                    /* PD_COUNT_FILE: one digit per frame */
+    if (!detail && getenv("PD_COUNT_FILE")) detail = fopen(getenv("PD_COUNT_FILE"), "w");
     if (detail) fputc(count_frame > 9 ? '+' : (int)('0' + count_frame), detail);
     count_frame = 0;
 }
 
 static void instr_trace_init(void)
 {
-    const char *cp = getenv("PD_CONTAR_PC");
+    const char *cp = getenv("PD_COUNT_PC");
     if (cp) {
         count_pc = (uint32_t)strtoul(cp, NULL, 16);
         rc_interpreter_only = 1;
         rc_trace = count_instr;
     }
-    const char *e = getenv("PD_TRAZA_INSTR");
+    const char *e = getenv("PD_TRACE_INSTR");
     if (!e) return;
     char path[1024];
     if (sscanf(e, "%1023[^,],%lld,%lld", path, &trace_from, &trace_to) != 3) return;
     instr_trace = fopen(path, "w");
     if (!instr_trace) return;
     rc_interpreter_only = 1;
-    trace_regs = getenv("PD_TRAZA_REGS") != NULL;
+    trace_regs = getenv("PD_TRACE_REGS") != NULL;
     rc_trace = trace_instr;
 }
 
@@ -445,7 +445,7 @@ static int sound_catalog(const Options *o)
         }
         /* Preceding commands, comma separated (hex), one frame between each. The mslugx driver
            uses mode prefixes: 00 = music, 10 = effects, 11 = voices. */
-        for (const char *p = getenv("PD_CATALOGO_PREFIJO"); p && *p;) {
+        for (const char *p = getenv("PD_CATALOG_PREFIX"); p && *p;) {
             char *end;
             unsigned long v = strtoul(p, &end, 16);
             if (end == p) break;
@@ -551,13 +551,13 @@ int headless_run(const Options *o)
         uint16_t d = (uint16_t)strtoul(getenv("PD_DIPS"), NULL, 16);
         ng_forced_read[NG_FORCED_DIPS] = (NgForcedRead){1, PROFILE_DIPS_WORD, d, d};
     }
-    if (getenv("PD_DESARROLLO"))           /* research: BIOS development mode */
+    if (getenv("PD_DEVMODE"))           /* research: BIOS development mode */
         ng_forced_read[NG_FORCED_DEVMODE] = (NgForcedRead){1, PROFILE_DEVMODE_WORD, 0xFF00, 0x0100};
     if (o->script && script_load(o->script) != 0) return 2;
     if (o->inputs && inputs_load(o->inputs) != 0) return 2;
     instr_trace_init();
-    if (getenv("PD_TRAZA_LECTURAS")) {
-        ng_trace_reads = fopen(getenv("PD_TRAZA_LECTURAS"), "w");
+    if (getenv("PD_TRACE_READS")) {
+        ng_trace_reads = fopen(getenv("PD_TRACE_READS"), "w");
         if (!ng_trace_io) { ng_trace_from = 0; ng_trace_to = INT64_MAX; }
     }
     FILE *fingerprints = o->fingerprints ? fopen(o->fingerprints, "w") : NULL;

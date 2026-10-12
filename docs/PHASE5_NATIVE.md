@@ -66,7 +66,7 @@ They all live in `%APPDATA%\ProjectoDecompile\mslugx\`:
 
 - `mslugx.ini`: settings, format described in `src/port/config.c`;
 - `sram.bin`;
-- `estado_N.bin`;
+- `state_N.bin` (older `estado_N.bin` files are renamed on first use);
 - screenshots.
 
 ## Image
@@ -88,7 +88,7 @@ The Neo Geo draws 320×224 and the monitor stretches it to 4:3, so pixels are no
 **Measurement.** The game runs its logic at 30 Hz: the main loop waits for VBlank (PC
 `0x39B0`-`0x3A3E`) and exits at `0x3A42` once every 2 frames. When the logic of a cycle does not
 finish in time, the cycle lasts 3 or 4 frames (20 or 15 Hz): that is the slowdown seen with lots
-of explosions. It is measured with `PD_CONTAR_PC=3A42` (headless).
+of explosions. It is measured with `PD_COUNT_PC=3A42` (headless).
 
 **Turbo** (`src/cpu/cycles68k.h`, macro `CIC`): every instruction costs 2^k times fewer cycles.
 It is a faster 68000 against the same video and sound hardware, like MAME's overclock. With k = 0
@@ -126,14 +126,14 @@ native calls have unwound.
 A state carries a version and a size. If they do not match the executable, it is rejected without
 touching the machine.
 
-**Test:** `ctest` → `estado_guardado` (`--probar-estado 600`). Saves a state, runs 600 frames,
+**Test:** `ctest` → `savestate_roundtrip` (`--test-state 600`). Saves a state, runs 600 frames,
 resets the machine, loads the state and repeats. RAM, image and audio come out identical. The same
 was checked on Mission 1 (900 frames from frame 5000).
 
 ## New test tools
 
-- `PD_PRUEBA_VENTANA=N,file.png[,menu]`: after N frames, saves what the window shows (with the
+- `PD_WINDOW_TEST=N,file.png[,menu]`: after N frames, saves what the window shows (with the
   menu open if requested) and exits.
 - `PD_PREF=folder\`: a different preferences folder, so the user's settings are not touched.
-- `PD_CONTAR_PC=hex` and `PD_CONTAR_ARCHIVO`: iterations per frame of an address.
-- V fingerprints (`--huellas`) include the PC interrupted by VBlank (`int=`).
+- `PD_COUNT_PC=hex` and `PD_COUNT_FILE`: iterations per frame of an address.
+- V fingerprints (`--fingerprints`) include the PC interrupted by VBlank (`int=`).

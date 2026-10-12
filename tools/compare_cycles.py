@@ -1,5 +1,5 @@
 """Compares per-instruction 68000 cycle traces: MAME (tools/mame/cycles.lua) against
-the port (PD_TRAZA_INSTR variable). Each useful line starts with "C=<cycle> <PC>:".
+the port (PD_TRACE_INSTR variable). Each useful line starts with "C=<cycle> <PC>:".
 
 Usage:
   python compare_cycles.py MAME.txt PORT.txt [--max 20]

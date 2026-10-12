@@ -5,12 +5,12 @@ target_include_directories(cpu68k PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
 target_link_libraries(cpu68k PUBLIC musashi)
 
 # Musashi's base 68000 cycle table, used by the generator.
-add_executable(volcar_ciclos ${PROJECT_SOURCE_DIR}/tools/recomp68k/dump_cycles.c)
-target_link_libraries(volcar_ciclos PRIVATE musashi)
+add_executable(dump_cycles ${PROJECT_SOURCE_DIR}/tools/recomp68k/dump_cycles.c)
+target_link_libraries(dump_cycles PRIVATE musashi)
 
 # Query for the interrupt sampling rules (tools/verify_sampling.py).
-add_executable(clases_muestreo ${PROJECT_SOURCE_DIR}/tools/recomp68k/sampling_classes.c)
-target_link_libraries(clases_muestreo PRIVATE cpu68k)
+add_executable(sampling_classes ${PROJECT_SOURCE_DIR}/tools/recomp68k/sampling_classes.c)
+target_link_libraries(sampling_classes PRIVATE cpu68k)
 
 if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALYSIS}/listing_bios.txt")
     message(STATUS "Recompiled program disabled: ROMs (${PD_ROMS}) or analysis listings (${PD_ANALYSIS}) are missing")
@@ -18,7 +18,7 @@ if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALYSIS}/listin
 endif()
 
 set(CYCLES_BIN ${CMAKE_CURRENT_BINARY_DIR}/cycles_68000.bin)
-add_custom_command(OUTPUT ${CYCLES_BIN} COMMAND volcar_ciclos ${CYCLES_BIN} DEPENDS volcar_ciclos VERBATIM)
+add_custom_command(OUTPUT ${CYCLES_BIN} COMMAND dump_cycles ${CYCLES_BIN} DEPENDS dump_cycles VERBATIM)
 
 set(PROG_DIR ${CMAKE_CURRENT_BINARY_DIR}/program)
 set(PROG_C ${PROG_DIR}/program_registry.c)
@@ -42,9 +42,9 @@ add_custom_command(
     OUTPUT ${PROG_C}
     COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/recomp68k/program.py
             --roms ${PD_ROMS}
-            --listados ${PD_ANALYSIS}/listing_p1.txt ${PD_ANALYSIS}/listing_bios.txt
-            --cobertura ${COVERAGE}
-            --cycles ${CYCLES_BIN} --output ${PROG_DIR} --archivos 16
+            --listings ${PD_ANALYSIS}/listing_p1.txt ${PD_ANALYSIS}/listing_bios.txt
+            --coverage ${COVERAGE}
+            --cycles ${CYCLES_BIN} --output ${PROG_DIR} --files 16
     DEPENDS ${RECOMP_PY} ${CYCLES_BIN}
     COMMENT "Recompiling the user's P1 and BIOS to C"
     VERBATIM)
@@ -93,21 +93,21 @@ install(TARGETS mslugx RUNTIME DESTINATION .)
 install(FILES $<TARGET_RUNTIME_DLLS:mslugx> DESTINATION .)
 
 # Phase 5: a save state, loaded into a reset machine, reproduces RAM, image and audio.
-add_test(NAME estado_guardado
-         COMMAND mslugx --roms ${PD_ROMS} --sin-window --frames 3000 --probar-estado 600)
+add_test(NAME savestate_roundtrip
+         COMMAND mslugx --roms ${PD_ROMS} --headless --frames 3000 --test-state 600)
 # Phase 6B: the sound menu is audible and, after closing it, the game stays identical.
-add_test(NAME menu_sonido
-         COMMAND mslugx --roms ${PD_ROMS} --sin-window --frames 3000 --probar-sonidos)
+add_test(NAME sound_menu
+         COMMAND mslugx --roms ${PD_ROMS} --headless --frames 3000 --test-sounds)
 
 # Phase 4: the user's recorded game (Mission 1) replayed against MAME, with no divergences in RAM,
 # palette or image. The MAME references and the inputs live in PD_ANALYSIS/phase4 (outside the repo;
 # how to generate them: tools/verify_mission.py).
 if(EXISTS "${PD_ANALYSIS}/phase4/mission1_fingerprints_mame.txt" AND EXISTS "${PD_ANALYSIS}/phase4/mission1_inputs.txt")
-    add_test(NAME mision1_contra_mame
+    add_test(NAME mission1_vs_mame
              COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/verify_mission.py
                      --exe $<TARGET_FILE:mslugx> --roms ${PD_ROMS}
                      --inputs ${PD_ANALYSIS}/phase4/mission1_inputs.txt
-                     --referencia ${PD_ANALYSIS}/phase4/mission1_fingerprints_mame.txt
+                     --reference ${PD_ANALYSIS}/phase4/mission1_fingerprints_mame.txt
                      --frames 11970 --date 2026-10-11-20-28-31-0
-                     --output ${CMAKE_CURRENT_BINARY_DIR}/mision1_huellas_port.txt)
+                     --output ${CMAKE_CURRENT_BINARY_DIR}/mission1_fingerprints_port.txt)
 endif()

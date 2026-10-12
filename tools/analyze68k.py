@@ -12,7 +12,7 @@ Produces:
   - docs/PHASE1_COVERAGE.md             coverage report
 
 Usage:
-    python tools/analyze68k.py [--cobertura analysis/coverage.json]
+    python tools/analyze68k.py [--coverage analysis/coverage.json]
 """
 from __future__ import annotations
 
@@ -293,14 +293,14 @@ def main() -> int:
     root = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[2]))
     repo = Path(__file__).resolve().parents[1]
     ap.add_argument("--roms", type=Path, default=root / "roms")
-    ap.add_argument("--cobertura", type=Path, nargs="+", default=[root / "analysis" / "coverage.json"],
+    ap.add_argument("--coverage", type=Path, nargs="+", default=[root / "analysis" / "coverage.json"],
                     help="one or more coverage JSON files (tools/coverage.py); they are merged")
     a = ap.parse_args()
 
     mem = Memory(a.roms)
     p1 = mem.regions[0][1]
     cov = {"pcs": {}, "indirectos": [], "lecturas_p1": [], "instrucciones_trazadas": 0}
-    for path in a.cobertura:
+    for path in a.coverage:
         if not path.exists():
             continue
         part = json.loads(path.read_text())
@@ -443,7 +443,7 @@ roots (vectors and header) and its auto-analysis (`tools/ghidra/`).
 
     with (repo / "docs" / "functions_p1.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["inicio", "fin", "bytes_codigo", "instrucciones", "llamadas", "motivos"])
+        w.writerow(["start", "end", "code_bytes", "instructions", "calls", "reasons"])
         for fn in funcs:
             w.writerow([f"{fn['inicio']:06X}", f"{fn['fin']:06X}", fn["bytes_codigo"], fn["instrucciones"],
                         fn["llamadas"], " ".join(fn["motivos"])])

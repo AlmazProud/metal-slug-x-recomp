@@ -13,6 +13,6 @@ final_state_sub = emu.add_machine_stop_notifier(function()
         h = ((h ~ (w & 0xFF)) * 0x01000193) & 0xFFFFFFFF
     end
     local f = manager.machine.screens[":screen"]:frame_number()
-    print(string.format("PD_ESTADO frame=%d ram_fnv=%08X", f, h))
+    print(string.format("PD_STATE frame=%d ram_fnv=%08X", f, h))
     manager.machine.video:snapshot()
 end)

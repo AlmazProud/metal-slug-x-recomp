@@ -7,16 +7,16 @@ if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALYSIS}/listin
     return()
 endif()
 
-# Musashi base cycle table (the volcar_ciclos executable is defined in src/).
-set(CICLOS ${CMAKE_CURRENT_BINARY_DIR}/ciclos_68000.bin)
-add_custom_command(OUTPUT ${CICLOS} COMMAND volcar_ciclos ${CICLOS} DEPENDS volcar_ciclos VERBATIM)
-set(GEN ${CMAKE_CURRENT_BINARY_DIR}/pruebas_gen.c)
+# Musashi base cycle table (the dump_cycles executable is defined in src/).
+set(CYCLES_BIN ${CMAKE_CURRENT_BINARY_DIR}/cycles_68000.bin)
+add_custom_command(OUTPUT ${CYCLES_BIN} COMMAND dump_cycles ${CYCLES_BIN} DEPENDS dump_cycles VERBATIM)
+set(GEN ${CMAKE_CURRENT_BINARY_DIR}/tests_gen.c)
 file(GLOB RECOMP_PY ${PROJECT_SOURCE_DIR}/tools/recomp68k/*.py)
 add_custom_command(
     OUTPUT ${GEN}
     COMMAND Python3::Interpreter -I ${CMAKE_CURRENT_SOURCE_DIR}/generate_tests.py
-            --roms ${PD_ROMS} --listado ${PD_ANALYSIS}/listing_p1.txt --output ${GEN} --cycles ${CICLOS}
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/generate_tests.py ${RECOMP_PY} ${CICLOS}
+            --roms ${PD_ROMS} --listing ${PD_ANALYSIS}/listing_p1.txt --output ${GEN} --cycles ${CYCLES_BIN}
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/generate_tests.py ${RECOMP_PY} ${CYCLES_BIN}
     COMMENT "Generating differential tests from the user's ROMs"
     VERBATIM)
 
@@ -26,5 +26,5 @@ target_link_libraries(diferencial PRIVATE musashi)
 # The generated code declares temporaries that are sometimes unused.
 set_source_files_properties(${GEN} PROPERTIES COMPILE_OPTIONS "-Wno-unused-variable;-Wno-unused-but-set-variable")
 
-add_test(NAME diferencial_cpu
+add_test(NAME cpu_differential
          COMMAND diferencial ${PD_ROMS}/mslugx_game_m68k ${PD_ROMS}/mslugx_bios_m68k 64)

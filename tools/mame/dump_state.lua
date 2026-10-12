@@ -1,7 +1,7 @@
 -- Dumps the state of the 68000 and of work memory at a given frame and closes MAME.
 -- Used by the lockstep test to start from a real point in the game (instead of reset).
 --
--- Environment variables: PD_FRAME (frame at which to dump), PD_ESTADO (output file).
+-- Environment variables: PD_FRAME (frame at which to dump), PD_STATE (output file).
 -- Format (big-endian): "PDEST1", 19 u32 (D0-D7, A0-A6, SP, USP, SR, PC), 128 bytes of the
 -- vector area (0x000000), 16 bytes of the P2 window (0x200000, to deduce the bank),
 -- 64 KB of RAM (0x100000), 64 KB of SRAM (0xD00000), 8 KB of palette (0x400000).
@@ -10,7 +10,7 @@ local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
 local screen = manager.machine.screens[":screen"]
 local target = tonumber(os.getenv("PD_FRAME") or "3000")
-local output = os.getenv("PD_ESTADO") or "estado.bin"
+local output = os.getenv("PD_STATE") or "estado.bin"
 
 local function block(base, n)
     local t = {}
@@ -32,7 +32,7 @@ dump_sub = emu.add_machine_frame_notifier(function()
     f:write(block(0xD00000, 0x10000))
     f:write(block(0x400000, 0x2000))
     f:close()
-    print(string.format("PD_VOLCADO frame=%d pc=%06X sr=%04X", target,
+    print(string.format("PD_DUMPED frame=%d pc=%06X sr=%04X", target,
                         cpu.state["PC"].value, cpu.state["SR"].value))
     manager.machine:exit()
 end)

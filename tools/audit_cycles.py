@@ -1,7 +1,7 @@
 """Audits the recompiler's cycle table against the real 68000 cycles from MAME.
 
 Usage:
-  python audit_cycles.py --roms FOLDER --cycles ciclos_68000.bin MAME_TRACE.txt [...]
+  python audit_cycles.py --roms FOLDER --cycles cycles_68000.bin MAME_TRACE.txt [...]
 
 Reads traces from tools/mame/cycles.lua ("C=<cycle> <PC>: <instruction>"), takes the duration
 of each uninterrupted instruction (difference with the next line) and compares it with the

@@ -22,7 +22,7 @@ or in `mslugx.ini`:
   - `no`.
 - `autodisparo_por_segundo`: 10, 7.5 or 5.
 
-**Measurement** (`--guion` with the pattern, counting sound command `F7`, the pistol shot, over
+**Measurement** (`--script` with the pattern, counting sound command `F7`, the pistol shot, over
 5 s of gameplay):
 
 | Pattern | Shots |
@@ -48,7 +48,7 @@ F3, or "Debug mode" in the menu. Panel at the top left:
   - 3 or 4 = 20 or 15 Hz, the slowdown (in red).
 
   It was verified with Mission 1: the per-VBlank distribution matches the Phase 5 measurement
-  (`PD_CONTAR_PC`).
+  (`PD_COUNT_PC`).
 - **68000 load** (half-second average and peak): fraction of line starts at which the 68000 was
   not in the wait loop (`0x39B0`-`0x3A41`). The average is used because the logic runs every 2
   frames and the load of a single frame alternates.
@@ -74,13 +74,13 @@ Debug mode keys:
 
 **Tests:**
 
-- `PD_DEBUG_VISTAS=cajas,paleta,memoria` opens the views when the mode is enabled.
-- With `PD_PRUEBA_VENTANA`, the window runs without waiting for the clock.
+- `PD_DEBUG_VIEWS=boxes,palette,memory` opens the views when the mode is enabled.
+- With `PD_WINDOW_TEST`, the window runs without waiting for the clock.
 
 ## 6B: the Metal Slug X sound driver
 
 The 68000 controls sound with one-byte commands to the Z80 (`ng_sound_command`). It was worked out
-from the Mission 1 command trace (`--traza`) and from catalogs made without the game running:
+from the Mission 1 command trace (`--trace`) and from catalogs made without the game running:
 
 - **Modes:** commands `00`, `10` and `11` set a mode that stays active, and the next command is
   interpreted in that mode. The same number sounds different in each one.
@@ -94,7 +94,7 @@ from the Mission 1 command trace (`--traza`) and from catalogs made without the 
   - `02` and `0F` sound in any mode.
 - **Out of range:** the driver reads past its tables and plays garbage.
 
-**Catalog** (`--catalogo-sonido` with `PD_CATALOGO_PREFIJO=MM`, from frame 1300, right after the
+**Catalog** (`--sound-catalog` with `PD_CATALOG_PREFIX=MM`, from frame 1300, right after the
 game resets the driver):
 
 - for each command: duration, whether it loops, peak and notes started per channel type
@@ -149,7 +149,7 @@ Menu → "Music and sounds":
   apart;
 - on closing, the state is restored and the game continues exactly where it was.
 
-**Test:** `ctest` → `menu_sonido` (`--probar-sonidos`).
+**Test:** `ctest` → `sound_menu` (`--test-sounds`).
 
 - Music and voice play: mean energy of 2473 and 620, versus 66 in silence.
 - On closing, 300 frames of the game are identical to never having opened the menu (RAM, image
@@ -221,7 +221,7 @@ with a canvas of at least 440 x 250.
 - The first time, the port saves the state, runs the machine silently until the "TM" appears
   (first tile `0x309CA`), redraws only those sprites (`ng_video_capture_sprites`) and restores the
   state. It takes less than a second.
-- The logo is kept in `logo_titulo.png` in the user folder, never in the repo.
+- The logo is kept in `title_logo.png` in the user folder, never in the repo.
 
 **Interface scale:** continuous, as a 480 x 300 canvas fitted to the window (`font_factor`), with
 `SDL_SCALEMODE_PIXELART` so pixels look even at non-integer scales. That way the menus fit any
@@ -233,6 +233,6 @@ own copies. Also, the "R" that opens editing no longer leaks into the name.
 
 **Tests:**
 
-- `PD_PRUEBA_VENTANA=N,png[,menu|sonidos|jugar|renombrar]` for screenshots of each screen;
-  `renombrar` renames an effect twice;
+- `PD_WINDOW_TEST=N,png[,menu|sounds|play|rename]` for screenshots of each screen;
+  `rename` renames an effect twice;
 - `ctest` 6/6.

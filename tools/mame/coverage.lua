@@ -2,9 +2,9 @@
 -- Launched by tools/coverage.py; not used on its own.
 --
 -- Environment variables:
---   PD_TRAZA_DIR  folder (path WITHOUT spaces, e.g. 8.3) where traza_NNNN.txt files are written
+--   PD_TRACE_DIR  folder (path WITHOUT spaces, e.g. 8.3) where traza_NNNN.txt files are written
 --   PD_FRAMES     frames per trace file (300 by default)
---   PD_JUGAR      1 = simple bot that inserts coins and plays (1 by default)
+--   PD_PLAY      1 = simple bot that inserts coins and plays (1 by default)
 --
 -- Every P2 bank change (write to 0x2FFFF0) is noted in the trace as
 -- "BANK n" with tracelog, so the analyzer knows which bank is active.
@@ -13,9 +13,9 @@ local dbg = manager.machine.debugger
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
 local screen = manager.machine.screens[":screen"]
-local dir = os.getenv("PD_TRAZA_DIR")
+local dir = os.getenv("PD_TRACE_DIR")
 local per_file = tonumber(os.getenv("PD_FRAMES") or "300")
-local play = (os.getenv("PD_JUGAR") or "1") == "1"
+local play = (os.getenv("PD_PLAY") or "1") == "1"
 local part = 0
 
 local function new_trace()

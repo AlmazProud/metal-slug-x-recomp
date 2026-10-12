@@ -2,7 +2,7 @@
 sound menu and rumble (Phase 6B).
 
 Input: the catalogs produced by the port, one per sound driver mode:
-  mslugx --sin-window --frames 1300 --catalog-sonido cat_pMM.tsv   with PD_CATALOGO_PREFIJO=MM
+  mslugx --headless --frames 1300 --sound-catalog cat_pMM.tsv   with PD_CATALOG_PREFIX=MM
 (MM = 00 music, 10 effects, 11 voices; frame 1300 is right after the game resets the driver).
 Only command numbers, durations and names are stored: no audio data.
 

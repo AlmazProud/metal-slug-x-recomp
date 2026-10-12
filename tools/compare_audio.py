@@ -1,7 +1,7 @@
 """Compares the port's audio (--wav) with MAME's (-wavwrite), both 16-bit PCM WAV files.
 
 Usage:
-  python compare_audio.py PORT.wav MAME.wav [--max-desfase-ms 50]
+  python compare_audio.py PORT.wav MAME.wav [--max-offset-ms 50]
 
 Finds the offset (in samples) that best aligns both signals and reports, for that offset:
   - Pearson correlation, overall and per second (1.0 = identical up to scale);
@@ -32,7 +32,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("port", type=Path)
     ap.add_argument("mame", type=Path)
-    ap.add_argument("--max-desfase-ms", type=float, default=50.0)
+    ap.add_argument("--max-offset-ms", type=float, default=50.0)
     a = ap.parse_args()
 
     hz_p, p = read_wav(a.port)
@@ -46,7 +46,7 @@ def main() -> int:
     pm, mm = pm[:n], mm[:n]
 
     # Offset by cross-correlation (FFT) within +-max.
-    max_d = int(a.max_desfase_ms * hz_p / 1000)
+    max_d = int(a.max_offset_ms * hz_p / 1000)
     size = 1 << int(np.ceil(np.log2(2 * n)))
     cc = np.fft.irfft(np.fft.rfft(pm, size) * np.conj(np.fft.rfft(mm, size)), size)
     candidates = np.concatenate([cc[:max_d + 1], cc[-max_d:]])

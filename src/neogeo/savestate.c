@@ -14,7 +14,7 @@
 
 void ng_state_block(NgState *e, void *p, size_t n)
 {
-    if (e->data && e->pos + n <= e->tam) {
+    if (e->data && e->pos + n <= e->size) {
         if (e->saving) memcpy(e->data + e->pos, p, n);
         else memcpy(p, e->data + e->pos, n);
     }
@@ -36,12 +36,12 @@ uint8_t *ng_state_save(size_t *size)
 {
     NgState e = {NULL, 0, 0, 1};
     walk(&e);                               /* first pass: only measures */
-    e.tam = e.pos;
+    e.size = e.pos;
     e.pos = 0;
-    e.data = malloc(e.tam);
+    e.data = malloc(e.size);
     if (!e.data) return NULL;
     walk(&e);
-    *size = e.tam;
+    *size = e.size;
     return e.data;
 }
 

@@ -19,7 +19,7 @@ extern const Sound PROFILE_SOUNDS[];    /* profile_sounds.c (generated) */
 extern const int PROFILE_SOUND_COUNT;
 
 /* ------------------------------------------------------------------ sound menu */
-/* window: for typing names; path: the user's sound names and rumble file (sonidos.ini). */
+/* window: for typing names; path: the user's sound names and rumble file (sounds.ini). */
 void sounds_init(SDL_Window *window, const char *path);
 void sounds_show(void);                /* saves the game state and stops the 68000 */
 void sounds_close(void);               /* restores the game exactly as it was */

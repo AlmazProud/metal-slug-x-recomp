@@ -1,7 +1,7 @@
-/* Projecto Decompile: sustituto de softfloat/milieu.h para compilar Musashi SIN SoftFloat.
- * El 68000 no tiene FPU; Musashi solo necesita que existan estos nombres de tipos enteros
- * (m68kcpu.h los incluye antes de definir la CPU, y m68kops.c usa int8/int32).
- * Licencia: la del proyecto. No contiene código de SoftFloat. */
+/* Projecto Decompile: replacement for softfloat/milieu.h so Musashi builds WITHOUT SoftFloat.
+ * The 68000 has no FPU; Musashi only needs these integer type names to exist (m68kcpu.h
+ * includes them before defining the CPU, and m68kops.c uses int8/int32).
+ * License: the project's. Contains no SoftFloat code. */
 #ifndef PD_MILIEU_H
 #define PD_MILIEU_H
 

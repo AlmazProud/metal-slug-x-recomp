@@ -11,5 +11,5 @@ if not exist "%PD_SETUP%" (
 )
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PD_SETUP%" %*
 set "PD_RC=%ERRORLEVEL%"
-if not defined PD_SIN_PAUSA pause
+if not defined PD_NO_PAUSE pause
 exit /b %PD_RC%

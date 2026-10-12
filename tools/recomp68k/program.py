@@ -14,8 +14,8 @@ c->pc.
 The output is derived from the game program: it is written to the build directory and is
 never committed.
 
-Usage: python program.py --roms DIR --listados L1 [L2...] --cobertura J [J...] --cycles BIN
-                         --output DIR [--archivos N] [--sin-punto-por-instruccion]
+Usage: python program.py --roms DIR --listings L1 [L2...] --coverage J [J...] --cycles BIN
+                         --output DIR [--files N] [--no-per-instruction-points]
 """
 from __future__ import annotations
 
@@ -100,21 +100,21 @@ def successors(i) -> list[int]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--roms", type=Path, required=True)
-    ap.add_argument("--listados", type=Path, nargs="+", required=True)
-    ap.add_argument("--cobertura", type=Path, nargs="*", default=[])
+    ap.add_argument("--listings", type=Path, nargs="+", required=True)
+    ap.add_argument("--coverage", type=Path, nargs="*", default=[])
     ap.add_argument("--cycles", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
-    ap.add_argument("--archivos", type=int, default=16, help="fixed number of output .c files")
-    ap.add_argument("--sin-punto-por-instruccion", action="store_true",
+    ap.add_argument("--files", type=int, default=16, help="fixed number of output .c files")
+    ap.add_argument("--no-per-instruction-points", action="store_true",
                     help="checkpoints only on backward jumps (interrupts are taken at the "
                          "dispatch points, not at the exact instruction boundary)")
     a = ap.parse_args()
-    per_instruction = not a.sin_punto_por_instruccion
+    per_instruction = not a.no_per_instruction_points
     generator.load_cycles(a.cycles)
     mem = Memory(a.roms)
 
-    instr, entries = read_listings(a.listados)
-    for path in a.cobertura:
+    instr, entries = read_listings(a.listings)
+    for path in a.coverage:
         if path.exists():
             for _src, dst, _bank in json.loads(path.read_text())["indirectos"]:
                 if dst in instr:
@@ -199,8 +199,8 @@ def main() -> int:
         registrations.append((name, members))
 
     n_files = 0
-    per_file = max(1, -(-len(functions) // a.archivos))
-    for k in range(0, a.archivos * per_file, per_file):
+    per_file = max(1, -(-len(functions) // a.files))
+    for k in range(0, a.files * per_file, per_file):
         chunk = functions[k:k + per_file]
         register_body = "\n".join(f"    for (size_t i = 0; i < sizeof d_{n} / sizeof d_{n}[0]; i++) rc_register(d_{n}[i], {n});"
                                   for n, _ in registrations[k:k + per_file])

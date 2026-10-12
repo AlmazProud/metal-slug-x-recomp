@@ -39,7 +39,7 @@ Notes:
 
 **Verification:** with the Mission 1 recording, the first image difference is at frame 1459, the
 first enemy that dies. The screenshots show the original's white splatter and the red one with the
-option. `--sangre` in headless mode lets you repeat it.
+option. `--blood` in headless mode lets you repeat it.
 
 ## V-sync
 
@@ -51,7 +51,7 @@ Option in Settings → Video (`vsync=1` by default). There are three possible pa
 | V-sync with a 58 to 62 Hz monitor | One frame per refresh: the game runs at the monitor's rate (1.4 % faster at 60 Hz), like MAME's `-syncrefresh` | Played back at the same ratio (`SDL_SetAudioStreamFrequencyRatio`), with a correction of up to ±0.5 % based on the queue, to keep it at ~50 ms |
 | V-sync at other rates (75, 120, 144 Hz...) | Presents on every refresh and an accumulator decides how many frames to emulate at the board's exact rate | Same |
 
-**Measurement** (20 real seconds, `PD_SALIR_TRAS` + `--traza`, 60 Hz monitor):
+**Measurement** (20 real seconds, `PD_QUIT_AFTER` + `--trace`, 60 Hz monitor):
 
 | Mode | Emulated frames/s | Mean audio queue | Queue empty | Drops |
 |---|---|---|---|---|

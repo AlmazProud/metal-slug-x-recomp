@@ -7,7 +7,7 @@ unmodified, together with their license file.
 
 | Library | Version | Origin | License | Use |
 |---|---|---|---|---|
-| Musashi | 4.60 (commit `313ebf1`) | github.com/kstenerud/Musashi, copied into `external/musashi/` | MIT | Reference 68000 interpreter (differential tests) and runtime fallback. **No SoftFloat**: `m68kfpu.c` and the `softfloat/` headers are our own substitutes (see `external/musashi/LEEME_PD.md`). Linked into the port. |
+| Musashi | 4.60 (commit `313ebf1`) | github.com/kstenerud/Musashi, copied into `external/musashi/` | MIT | Reference 68000 interpreter (differential tests) and runtime fallback. **No SoftFloat**: `m68kfpu.c` and the `softfloat/` headers are our own substitutes (see `external/musashi/README_PD.md`). Linked into the port. |
 | z80.h (chips) | commit `9e88298` (2026-09-26); tarball SHA256 `fcae3999…a09b8d` | github.com/floooh/chips, `chips/z80.h` copied into `external/chips/` with its `LICENSE` | zlib | Sound Z80, emulated cycle by cycle. Linked into the port. |
 | ymfm | commit `81aec25` (2026-07-27); tarball SHA256 `9bcf001b…f443f` | github.com/aaronsgiles/ymfm, only the YM2610 files (OPN, ADPCM and SSG) in `external/ymfm/` with its `LICENSE` | BSD-3-Clause | YM2610 (FM, SSG, ADPCM-A/B), the same core MAME uses. Written in C++: it is the only C++ code in the port, used through a C bridge (`src/neogeo/ym2610.cpp`). Linked into the port, with the C++ runtime linked statically. |
 | Capstone | 5.0.7 | PyPI (`capstone`), github.com/capstone-engine/capstone | BSD-3-Clause | 68000 instruction decoder in the analysis tools (Phase 1). Not linked into the port. |

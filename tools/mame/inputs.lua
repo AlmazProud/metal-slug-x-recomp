@@ -6,11 +6,11 @@
 -- TEST (300081). The port applies each change between those two instants (--inputs option); since
 -- it performs the same reads at the same cycles, it reads exactly what MAME read.
 -- (Tying the inputs to frame_number() does not work: inside a tap it does not advance like the frame.)
--- Variable: PD_ENTRADAS (output).
+-- Variable: PD_INPUTS (output).
 
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
-local output = io.open(os.getenv("PD_ENTRADAS") or "entradas_mame.txt", "w")
+local output = io.open(os.getenv("PD_INPUTS") or "entradas_mame.txt", "w")
 local last_value = { P1 = 0xFF, P2 = 0xFF, SIS = 0xFF, MON = 0x1F, TEST = 0x80 }
 local last_t = { P1 = 0, P2 = 0, SIS = 0, MON = 0, TEST = 0 }
 

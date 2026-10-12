@@ -6,7 +6,7 @@ traces in parts as they are produced and deletes them, and saves a JSON with:
   - observed targets of indirect jumps (jmp/jsr with a parenthesized operand).
 
 Usage:
-    python tools/coverage.py --segundos 180 [--output FILE] [--sin-bot]
+    python tools/coverage.py --seconds 180 [--output FILE] [--no-bot]
 
 The result (addresses, not ROM bytes) goes to <root>/analysis/coverage.json by default.
 """
@@ -86,11 +86,11 @@ class Accumulator:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     root = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[2]))
-    ap.add_argument("--segundos", type=int, default=180, help="emulated seconds")
+    ap.add_argument("--seconds", type=int, default=180, help="emulated seconds")
     ap.add_argument("--output", type=Path, default=root / "analysis" / "coverage.json")
-    ap.add_argument("--sin-bot", action="store_true")
+    ap.add_argument("--no-bot", action="store_true")
     ap.add_argument("--playback", type=Path,
-                    help="plays back a MAME .inp recording (ignores --segundos and disables the bot)")
+                    help="plays back a MAME .inp recording (ignores --seconds and disables the bot)")
     a = ap.parse_args()
 
     work = root / "tools" / "_verificacion" / "cobertura"
@@ -105,8 +105,8 @@ def main() -> int:
     if nvram.exists():
         for f in sorted(nvram.rglob("*"), reverse=True):
             f.unlink() if f.is_file() else f.rmdir()
-    play = not (a.sin_bot or a.playback)
-    env = dict(os.environ, PD_TRAZA_DIR=short_path(work), PD_JUGAR="1" if play else "0")
+    play = not (a.no_bot or a.playback)
+    env = dict(os.environ, PD_TRACE_DIR=short_path(work), PD_PLAY="1" if play else "0")
     cmd = [str(mame), "mslugx", "-bios", "us", "-rompath", str(root / "roms" / "mame"),
            "-video", "none", "-sound", "none", "-nothrottle",
            "-debug", "-debugger", "none", "-autoboot_script", str(lua),
@@ -115,7 +115,7 @@ def main() -> int:
         cmd += ["-playback", a.playback.name, "-input_directory", str(a.playback.parent),
                 "-exit_after_playback"]
     else:
-        cmd += ["-seconds_to_run", str(a.segundos)]
+        cmd += ["-seconds_to_run", str(a.seconds)]
     proc = subprocess.Popen(cmd, cwd=mame.parent, env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

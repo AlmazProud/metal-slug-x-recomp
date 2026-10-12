@@ -14,8 +14,8 @@ set "PD_ROMS=%PD_ROOT%\roms"
 set "PD_7Z=%PD_TOOLS%\7zip"
 if exist "%PD_TOOLS%\7zip\x64\7za.exe" set "PD_7Z=%PD_TOOLS%\7zip\x64"
 
-if defined PD_ACTIVO goto :vars
-set "PD_ACTIVO=1"
+if defined PD_ACTIVE goto :vars
+set "PD_ACTIVE=1"
 set "PATH=%PD_TOOLS%\python;%PD_TOOLS%\python\Scripts;%PD_TOOLS%\cmake\bin;%PD_TOOLS%\ninja;%PD_TOOLS%\llvm-mingw\bin;%PD_TOOLS%\sdl3\x86_64-w64-mingw32\bin;%PD_TOOLS%\jdk21\bin;%PD_TOOLS%\ghidra\support;%PD_TOOLS%\mame;%PD_7Z%;%PD_TOOLS%\imhex;%PD_TOOLS%\git\cmd;%PATH%"
 prompt (PD) $P$G
 
