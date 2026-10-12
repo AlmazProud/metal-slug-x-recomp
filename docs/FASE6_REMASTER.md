@@ -8,7 +8,7 @@ emulación cuando está apagada: `ctest` (con la Misión 1 contra MAME) sigue pa
 | 6A | Disparo automático y modo debug | Cerrada (2026-10-12) |
 | 6B | Catálogo de sonidos, menú de música, voces y efectos; vibración del mando | Cerrada (2026-10-12) |
 | 6C | Menú de inicio moderno con la fuente del juego | Cerrada (2026-10-12) |
-| 6D | Pantalla ancha: investigación primero | Pendiente |
+| 6D | Pantalla ancha | Descartada por el usuario: le quita la esencia al juego |
 
 ## 6A: disparo automático
 

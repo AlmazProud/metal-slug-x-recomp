@@ -62,8 +62,8 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | 5. Mejoras nativas | **Cerrada** (2026-10-11). Ver `docs/FASE5_NATIVO.md`. |
 | 6A. Remaster: autodisparo y modo debug | **Cerrada** (2026-10-12). Ver `docs/FASE6_REMASTER.md`. |
 | 6B. Remaster: catálogo de sonidos, menú de sonido, vibración | **Cerrada** (2026-10-12). |
-| 6C. Remaster: menú de inicio moderno | **Cerrada** (2026-10-12), pendiente del visto bueno. `ctest`: 6/6. |
-| 6D. Remaster: pantalla ancha (investigar primero) | No iniciada |
+| 6C. Remaster: menú de inicio moderno | **Cerrada** (2026-10-12). `ctest`: 6/6. |
+| 6D. Remaster: pantalla ancha | **Descartada** por el usuario (2026-10-12): le quita la esencia al juego. |
 
 ### Fase 6C: resultado
 
@@ -329,9 +329,9 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 6D** tras el visto bueno de la 6C: investigación corta de la pantalla ancha (16:9,
-      HUD en los bordes) y reporte antes de seguir.
-- [ ] **Hoja de ruta pedida por el usuario** (para el resultado final, después de la 6D):
+- [ ] **Siguiente fase:** el usuario elige entre la hoja de ruta de abajo (plan corto y OK antes de
+      escribir código).
+- [ ] **Hoja de ruta pedida por el usuario** (para el resultado final):
   - [ ] **V-sync** (opción en Video).
   - [ ] **Sangre roja (sin censura):** investigar si depende de la región del BIOS (el del usuario
         es de EE. UU.; Japón suele ir sin censura) o de un parche puntual de la comprobación.
