@@ -42,12 +42,40 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | Fase | Estado |
 |---|---|
 | Entorno | **Cerrada** (2026-10-10). Verificación 16/16 OK. ROMs copiados a `roms\`. |
-| 0. Reconocimiento | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/ROM_MAP.md`. |
-| 1. Análisis 68000 | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE1_COBERTURA.md`. |
-| 2. Recompilador | No iniciada |
+| 0. Reconocimiento | **Cerrada** (2026-10-11). Ver `docs/ROM_MAP.md`. |
+| 1. Análisis 68000 | **Cerrada** (2026-10-11). Ver `docs/FASE1_COBERTURA.md`. |
+| 2. Recompilador | **Cerrada** (2026-10-11), pendiente del visto bueno. `ctest`: 3/3. |
 | 3. Runtime | No iniciada |
 | 4. Arranque y verificación diferencial | No iniciada |
 | 5. Mejoras nativas | No iniciada |
+
+### Fase 2: resultado
+
+- **Musashi 4.60 (MIT) sin SoftFloat** (opción B del usuario): `externo/musashi/` con
+  sustitutos propios de `m68kfpu.c` y `softfloat/*.h`. Es la referencia de semántica y el
+  intérprete de respaldo.
+- **Decodificador propio** (`herramientas/recomp68k/decodificador.py`): Capstone decodifica
+  formatos del 68020 en modo 68000. Validado en 116 581 instrucciones; las 6 diferencias son
+  errores de Capstone.
+- **Generador** (`generador.py`): las 87 instrucciones que usa el juego, con ciclos del 68000
+  (tabla base de Musashi, volcada al compilar, más los ajustes dinámicos).
+- **Programa completo** (`programa.py`): P1 y BIOS del usuario agrupados en regiones
+  (componentes conexos del grafo de control), cada instrucción emitida una sola vez y entrada
+  por `switch(c->pc)`. 124 193 instrucciones, 3 318 regiones, 31,7 MB de C en `build/`.
+- **Despachador** (`src/cpu/despachador.c`): JSR/BSR = llamada nativa verificada
+  (`rc_llamar`); puntos de control en los saltos hacia atrás; respaldo con Musashi en RAM, P2 y
+  código no visto.
+- **Pruebas** (`ctest`):
+  - `diferencial_cpu`: 4 253 instrucciones reales (3 356 opcodes) × 64 estados = 272 192 casos,
+    0 diferencias en registros, SR, PC, memoria y ciclos. Una prueba de mutación confirma que
+    el arnés detecta errores.
+  - `lockstep_reset`: programa completo contra Musashi desde el reset.
+  - `lockstep_juego`: desde un estado real (volcado de MAME en el frame 4000 de
+    `mision1.inp`): 120M ciclos, 591 VBlank, 10,1M instrucciones, memoria idéntica, un solo paso
+    interpretado. El programa recompilado es unas 5 veces más rápido que Musashi.
+- **Grabación del usuario:** `analisis/inp/mision1.inp`, 11 969 frames, hasta la Esfinge.
+  Se reproduce determinista (`herramientas/mame/estado_final.lua`); para reproducirla se usa
+  siempre una nvram vacía. Cobertura con ella: 40 404 PCs de P1.
 
 ### Fase 1: resultado
 
@@ -155,7 +183,17 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 2:** plan corto y esperar el OK.
+- [ ] **Fase 3:** plan corto y esperar el OK.
+- [ ] **Interrupciones:** hoy se entregan en los puntos de despacho; MAME las toma en el
+      límite de la instrucción. Para la Fase 4 hace falta un punto de control por instrucción
+      (o por bloque) que coincida con MAME.
+- [ ] **Flags indefinidos y ciclos que siguen a Musashi:** N/V de ABCD/SBCD, N/Z en el
+      desbordamiento de DIVU/DIVS y ciclos fijos de DIVU/DIVS. Hay que confirmarlos contra MAME
+      (núcleo 68000 exacto).
+- [ ] **DIVS 0x80000000/-1:** se implementa como el hardware (V=1); Musashi devuelve 0. Si
+      aparece en una prueba, es una diferencia conocida.
+- [ ] **Código de P2:** banco 1, 144 PCs; hoy lo ejecuta el intérprete. Recompilarlo por
+      banco si el rendimiento lo pide.
 - [ ] Descartar raíces de la heurística A cuyo código pise datos demostrados por MAME
       (hoy: 130 bytes).
 - [ ] Ampliar la cobertura: el bot se estanca a partir de unos 200 s (26 406 PCs). Mejor
