@@ -106,7 +106,9 @@ extern Cpu68k ng_cpu;
 /* Initial clock date (if not called, the local time is used). */
 void ng_rtc_set(int year, int month, int day, int weekday, int hour, int minute, int second);
 
-void ng_power_on(void);                  /* power-on state: 68000 reset */
+void ng_power_on(void);
+/* Between frames: calls a game routine and restores the 68000 afterwards (see machine.c). */
+int ng_call68k(uint32_t target, const uint32_t d[8], const uint32_t a[8], long max_steps);                  /* power-on state: 68000 reset */
 void ng_run_frame(void);
 /* Next slice limit (hardware event), in 68000 cycles. */
 int64_t ng_next_limit(void);

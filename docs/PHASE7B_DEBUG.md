@@ -90,11 +90,35 @@ Found in the code and confirmed with dumps (addresses in `src/port/profile.h`):
     the soldier stays fat until he dies or the cheat changes the form. Fat soldiers fire the big
     shots.
   - Mummy: form 3 requested directly; back to normal with form 0 (or 1 with a weapon).
+- **Spawning vehicles.** The stages create their objects from records read by `0x1A0A6`
+  (command 7 at `0x1A10A`): `[7, length, group, flags, type*4, x, y, parameters]`; the type
+  indexes a table of routines at `0x197DC`, and the object is allocated by `0x40BC` (free list,
+  parent `0x101414`). Found by watching `0x40BC` and `0x1A10A` (`PD_WATCH_PC`) when Mission 1
+  creates the SV-001 (frame 6065, record `07 0A 09 80 02EC 0100 0060`).
+  - The port writes such a record below the game's stack and runs `0x1A0A6` as a **nested call**
+    (`ng_call68k`: registers set, interrupts masked, no hardware events, then the 68000 is
+    restored exactly; only memory keeps the effects), on a frame where the game is waiting for
+    the VBlank.
+  - Spawning every type of the table in Mission 1 found these vehicles (all rideable, 900 frames
+    each without problems):
+
+    | Type | Vehicle | Type | Vehicle |
+    |---|---|---|---|
+    | `0x2EC` | Metal Slug (SV-001) | `0x304` | Elephant Slug |
+    | `0x2F0` | Metal Slug, gold | `0x308` | Slug Copter |
+    | `0x2F4` | Camel Slug | `0x30C` | white pod (unidentified) |
+    | `0x2F8` | Slug Flyer | `0x310` | green tank (unidentified) |
+    | `0x2FC` | Slugnoid | `0x314` | mounted gun |
+    | `0x300` | Ostrich Slug | `0x318` | walker (unidentified) |
+
+    Several of them do not appear in Metal Slug X's missions as far as we know; names are by
+    appearance.
 - **In a mission:** `0x100088 == 2`.
 
 ## In the port
 
-- **Extras > Cheats:** player 1/2, weapon (choose with left/right, give with Enter), 99 bombs,
+- **Extras > Cheats:** player 1/2, weapon (choose with left/right, give with Enter), vehicle
+  (appears ahead of the player), 99 bombs,
   lives, soldier, form (normal / fat / mummy), and the invincible / infinite bombs / infinite ammo / D kills all switches.
   Session only: they are off on the next start.
 - **Extras > Debug:** developer mode (saved as `devmode=1`), open the developer menu (also
@@ -106,7 +130,8 @@ Found in the code and confirmed with dumps (addresses in `src/port/profile.h`):
 ## Tests
 
 - Headless: `PD_DIPS=hex`, `PD_DEVMODE=1` and `PD_CHEAT=frame,kind,player,value[;...]` (kind:
-  weapon, bombs, lives, soldier, form, devmenu; poke = player object byte, for research). The script file accepts `select1`.
+  weapon, bombs, lives, soldier, form, vehicle, spawntype, devmenu; poke = player object byte),
+  and `PD_WATCH_PC=hex[,frame]` logs every execution of an address with its registers. The script file accepts `select1`.
 - Window: `PD_WINDOW_TEST=N,file.png,cheats` or `,debug` for screenshots of the pages.
 - Verified: the 16 weapons fire over the Mission 1 recording; lives 9 and 99 bombs show in the
   HUD; Fio after a respawn; fat in Mission 1 from frame 1872 until the cheat turned it off at 2600; mummy and cured; `devmenu` opens the developer menu with no manual input.

@@ -264,6 +264,37 @@ void ng_machine_state(NgState *e)
     if (!e->saving) ng_irq_update();
 }
 
+/* Nested call into the game's code between frames (cheats.c): runs `target` with the given
+   registers until it returns, with interrupts masked and no hardware events, then restores the
+   68000 exactly (registers, PC, cycles); only memory keeps the effects. Returns 1 if the routine
+   returned within max_steps dispatch steps. */
+int ng_call68k(uint32_t target, const uint32_t d[8], const uint32_t a[8], long max_steps)
+{
+    enum { RET = 0x0FFFFEu };                  /* never executed: the call ends when PC gets here */
+    Cpu68k saved = ng_cpu;
+    int64_t limit = rc_cycle_limit;
+    int exit_req = rc_exit;
+    rc_cycle_limit = INT64_MAX;
+    rc_exit = 0;
+    for (int i = 0; i < 8; i++) { ng_cpu.d[i] = d[i]; ng_cpu.a[i] = a[i]; }
+    ng_cpu.imask = 7;
+    ng_cpu.stopped = 0;
+    ng_cpu.a[7] -= 4;
+    bus_w32(ng_cpu.a[7], RET);
+    const uint32_t ret_sp = ng_cpu.a[7] + 4;
+    ng_cpu.pc = target & 0xFFFFFF;
+    int ok = 0;
+    for (long n = 0; n < max_steps; n++) {
+        if (ng_cpu.pc == RET && ng_cpu.a[7] == ret_sp) { ok = 1; break; }
+        if (ng_cpu.a[7] > ret_sp) break;
+        rc_step(&ng_cpu);
+    }
+    ng_cpu = saved;
+    rc_cycle_limit = limit;
+    rc_exit = exit_req;
+    return ok;
+}
+
 void ng_run_frame(void)
 {
     rc_exit = 0;

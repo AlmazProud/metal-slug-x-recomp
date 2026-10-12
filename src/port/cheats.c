@@ -105,10 +105,59 @@ int cheats_set_form(int player, int form)
     return 1;
 }
 
+/* ------------------------------------------------------------------ spawning objects */
+/* The stages create their objects from records read by the routine at 0x1A0A6 (command 7,
+   0x1A10A): [7, length, group, flags, type*4 (word), x, y, parameters...]. Flags bit 7: x is
+   relative to the screen. The port builds such a record below the game's stack and calls the
+   routine (ng_call68k) while the game waits for the VBlank, so the object is created exactly as
+   the stage would. */
+/* Vehicles: object types (type*4 in the table at 0x197DC) found by spawning each type of the
+   table in Mission 1; the SV-001 record is the one Mission 1 uses (frame 6065). Several are not
+   used by Metal Slug X's missions as far as we know. */
+const CheatVehicle CHEATS_VEHICLES[CHEATS_VEHICLE_COUNT] = {
+    {0x2EC, "Metal Slug (SV-001)"}, {0x2F0, "Metal Slug (gold)"}, {0x2F4, "Camel Slug"},
+    {0x2F8, "Slug Flyer"}, {0x2FC, "Slugnoid"}, {0x300, "Ostrich Slug"}, {0x304, "Elephant Slug"},
+    {0x308, "Slug Copter"}, {0x30C, "Pod (unknown)"}, {0x310, "Green tank (unknown)"},
+    {0x314, "Mounted gun"}, {0x318, "Walker (unknown)"},
+};
+static int spawn_type = -1;
+
+/* Record [7, length 10, group 9 (none), flags 0x80 (x on screen), type, x, y]. */
+int cheats_spawn_type(int type)
+{
+    if (!cheats_in_game(0)) return 0;
+    spawn_type = type;
+    return 1;
+}
+
+int cheats_spawn_vehicle(int vehicle)
+{
+    return vehicle >= 0 && vehicle < CHEATS_VEHICLE_COUNT && cheats_spawn_type(CHEATS_VEHICLES[vehicle].type);
+}
+
+static void spawn_now(int type)
+{
+    const uint8_t r[10] = {0x07, 0x0A, 0x09, 0x80, (uint8_t)(type >> 8), (uint8_t)type,
+                           PROFILE_SPAWN_X >> 8, PROFILE_SPAWN_X & 0xFF, PROFILE_SPAWN_Y >> 8, PROFILE_SPAWN_Y & 0xFF};
+    uint32_t sp = ng_cpu.a[7] & ~1u, rec = sp - 0x400;
+    for (int i = 0; i < 10; i++) bus_w8(rec + i, r[i]);
+    uint32_t d[8] = {0}, a[8] = {0};
+    a[0] = rec;
+    a[5] = 0x108000;
+    a[6] = PROFILE_SPAWN_PARENT;
+    a[7] = sp - 0x100;
+    ng_call68k(PROFILE_SPAWN_ROUTINE, d, a, 2000000);
+}
+
 /* Every frame: keeps a fat soldier fat (food counter topped up) until he dies or the cheat is
    turned off. */
 void cheats_frame(void)
 {
+    /* Spawn requests wait for a quiet moment: the game waiting for the VBlank. */
+    if (spawn_type >= 0 && ng_cpu.pc >= PROFILE_WAIT_START && ng_cpu.pc < PROFILE_WAIT_END) {
+        if (cheats_in_game(0)) spawn_now(spawn_type);
+        spawn_type = -1;
+    }
     for (int p = 0; p < 2; p++) {
         if (!keep_fat[p]) continue;
         uint32_t obj = p ? PROFILE_PLAYER2_OBJECT : PROFILE_PLAYER1_OBJECT;

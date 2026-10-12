@@ -47,6 +47,11 @@
 #define PROFILE_FAT_CHECK_FIRST 0xC0BAEu
 #define PROFILE_FAT_CHECK_LAST 0xC0BF2u
 #define PROFILE_FAT_STAGE 4
+/* Stage object records: routine 0x1A0A6 (A0 = record list, A6 = the stage's object root). */
+#define PROFILE_SPAWN_ROUTINE 0x1A0A6u
+#define PROFILE_SPAWN_PARENT 0x101414u
+#define PROFILE_SPAWN_X 0x100                 /* the stage's SV-001 record: x 256 (on screen), y 96 */
+#define PROFILE_SPAWN_Y 0x60
 /* Player status objects 0x101204 / 0x1012B4: +0x83 soldier (0 Marco, 1 Eri, 2 Tarma, 3 Fio,
  * soldier select order), +0x82 the same as internal character, +0x84 lives (from the HERO
  * soft dip, 0xC942C). */

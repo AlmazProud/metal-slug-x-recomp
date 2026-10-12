@@ -48,7 +48,13 @@ int cheats_soldier(int player);
 enum { FORM_NORMAL = 0, FORM_FAT = 2, FORM_MUMMY = 3 };
 int cheats_form(int player);
 int cheats_set_form(int player, int form);
-void cheats_frame(void);                 /* after every emulated frame (keeps the fat form) */
+void cheats_frame(void);
+/* Spawning: created like the stage creates its objects, on the next VBlank wait. */
+typedef struct { uint16_t type; const char *name; } CheatVehicle;
+#define CHEATS_VEHICLE_COUNT 12
+extern const CheatVehicle CHEATS_VEHICLES[CHEATS_VEHICLE_COUNT];
+int cheats_spawn_vehicle(int vehicle);
+int cheats_spawn_type(int type);         /* any stage object type (type*4), for research */             /* queued until the game waits for the VBlank */                 /* after every emulated frame (keeps the fat form) */
 
 #define CHEATS_WEAPONS 16
 const char *cheats_weapon_name(int weapon);          /* English; NULL if unused */

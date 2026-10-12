@@ -32,7 +32,7 @@ enum {
     /* extras */
     OP_DEBUG, OP_SERVICE, OP_RESET, OP_CHEATS, OP_DEBUG_PAGE,
     /* cheats (in game) */
-    OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER, OP_FORM,
+    OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_VEHICLE, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER, OP_FORM,
     OP_INVINCIBLE, OP_INF_BOMBS, OP_INF_AMMO, OP_D_KILLS,
     /* debug */
     OP_DEVMODE, OP_DEV_MENU, OP_BOXES, OP_INFO, OP_GROUND, OP_CPU_METER, OP_PA_POINT, OP_PAUSE_ANY,
@@ -53,13 +53,13 @@ PAGE(P_AUDIO, "AUDIO", OP_VOLUME, OP_RUMBLE);
 PAGE(P_GAME, "GAME", OP_TURBO, OP_BLOOD, OP_AUTO1, OP_AUTO2, OP_AUTO_SPEED, OP_START_SCREEN);
 PAGE(P_CONTROLS, "CONTROLS", OP_CONTROLS1, OP_CONTROLS2);
 PAGE(P_EXTRAS, "EXTRAS", OP_CHEATS, OP_DEBUG_PAGE, OP_DEBUG, OP_SERVICE, OP_RESET);
-PAGE(P_CHEATS, "CHEATS", OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER, OP_FORM,
+PAGE(P_CHEATS, "CHEATS", OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_VEHICLE, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER, OP_FORM,
      OP_INVINCIBLE, OP_INF_BOMBS, OP_INF_AMMO, OP_D_KILLS);
 PAGE(P_DEBUG, "DEBUG", OP_DEVMODE, OP_DEV_MENU, OP_BOXES, OP_INFO, OP_GROUND, OP_CPU_METER,
      OP_PA_POINT, OP_PAUSE_ANY);
 
 /* Cheat selections (session only). */
-static int cheat_player, cheat_weapon = 5, cheat_lives = 9;
+static int cheat_player, cheat_weapon = 5, cheat_lives = 9, cheat_vehicle;
 
 static struct {
     const Page *stack[6];
@@ -145,6 +145,7 @@ static const char *label_en(int op)
     case OP_LIVES: return "Set lives";
     case OP_SOLDIER: return "Soldier";
     case OP_FORM: return "Form";
+    case OP_VEHICLE: return "Vehicle";
     case OP_INVINCIBLE: return "Invincible";
     case OP_INF_BOMBS: return "Infinite bombs";
     case OP_INF_AMMO: return "Infinite ammo";
@@ -214,6 +215,7 @@ static void value(int op, char *b, size_t n)
     case OP_CHEAT_PLAYER: snprintf(b, n, "< %d >", cheat_player + 1); break;
     case OP_GIVE_WEAPON: snprintf(b, n, "%s", T(cheats_weapon_name(cheat_weapon))); break;
     case OP_LIVES: snprintf(b, n, "< %d >", cheat_lives); break;
+    case OP_VEHICLE: snprintf(b, n, "%s", T(CHEATS_VEHICLES[cheat_vehicle].name)); break;
     case OP_SOLDIER: snprintf(b, n, "< %s >", CHEATS_SOLDIER_NAME[cheats_soldier(cheat_player)]); break;
     case OP_FORM: {
         int f = cheats_form(cheat_player);
@@ -249,6 +251,7 @@ static const char *help_en(int op)
     case OP_CHEATS: return "Weapons, bombs, lives, invincibility";
     case OP_DEBUG_PAGE: return "The developers' own debug switches and hidden menu";
     case OP_GIVE_WEAPON: return "</>: choose, Enter/A: give it (during a mission)";
+    case OP_VEHICLE: return "</>: choose, Enter/A: it appears in front of you";
     case OP_SOLDIER: return "Takes effect when the player respawns";
     case OP_FORM: return "Fat lasts until you die or change it; mummy until cured";
     case OP_D_KILLS: return "Press D in game: every enemy on screen dies";
@@ -319,6 +322,11 @@ static void do_action(int op, int d)
     case OP_GIVE_WEAPON:
         if (d) cheat_weapon = cycle(cheat_weapon, d, CHEATS_WEAPONS);
         else if (cheats_give_weapon(cheat_player, cheat_weapon)) close_menu();
+        else fe_notify(T("Only during a mission"));
+        break;
+    case OP_VEHICLE:
+        if (d) cheat_vehicle = cycle(cheat_vehicle, d, CHEATS_VEHICLE_COUNT);
+        else if (cheats_spawn_vehicle(cheat_vehicle)) close_menu();
         else fe_notify(T("Only during a mission"));
         break;
     case OP_MAX_BOMBS:
@@ -445,7 +453,7 @@ void menu_draw(SDL_Renderer *r, int w, int h)
         y = 70;
     }
     /* options panel */
-    const float row_h = p->n > 9 ? 18 : 20, panel_w = 360;
+    const float row_h = p->n > 10 ? 16 : p->n > 9 ? 18 : 20, panel_w = 360;
     float x0 = cx - panel_w / 2;
     SDL_SetRenderDrawColor(r, 0, 0, 0, 140);
     SDL_FRect panel = {x0 - 10, y - 8, panel_w + 20, p->n * row_h + 12};

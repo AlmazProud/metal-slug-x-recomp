@@ -76,7 +76,7 @@ static void script_apply(void)
 }
 
 /* PD_CHEAT=frame,kind,player,value[;...]: cheats applied before that frame (tests). kind:
-   weapon, bombs, lives, soldier, form, devmenu (poke: research). */
+   weapon, bombs, lives, soldier, form, vehicle, spawntype, devmenu (poke: research). */
 static void cheats_test(void)
 {
     const char *e = getenv("PD_CHEAT");
@@ -92,6 +92,8 @@ static void cheats_test(void)
             else if (!strcmp(kind, "lives")) ok = cheats_set_lives(player, value);
             else if (!strcmp(kind, "soldier")) ok = cheats_set_soldier(player, value);
             else if (!strcmp(kind, "form")) ok = cheats_set_form(player, value);
+            else if (!strcmp(kind, "vehicle")) ok = cheats_spawn_vehicle(value);
+            else if (!strcmp(kind, "spawntype")) ok = cheats_spawn_type(value);
             else if (!strcmp(kind, "devmenu")) cheats_dev_menu();
             else if (!strcmp(kind, "poke"))       /* research: player object byte, value = off*256+v */
                 ng.ram[((player ? PROFILE_PLAYER2_OBJECT : PROFILE_PLAYER1_OBJECT) + (value >> 8)) & 0xFFFF] = (uint8_t)value;
@@ -353,8 +355,30 @@ static void count_end_frame(void)
     count_frame = 0;
 }
 
+/* PD_WATCH_PC=hex[,first_frame]: logs every execution of that address (frame, return address,
+   D0-D7, A0-A6) to stdout, all through the interpreter (research). */
+static uint32_t watch_pc;
+static unsigned long long watch_from;
+
+static void watch_instr(const Cpu68k *c)
+{
+    if (c->pc != watch_pc || ng.frames < watch_from) return;
+    uint32_t sp = c->a[7];
+    printf("W f=%llu ret=%06X", (unsigned long long)ng.frames, bus_r32(sp));
+    for (int i = 0; i < 8; i++) printf(" D%d=%08X", i, c->d[i]);
+    for (int i = 0; i < 7; i++) printf(" A%d=%08X", i, c->a[i]);
+    printf(" [A0]=");
+    for (int i = 0; i < 24; i += 2) printf("%04X", bus_r16(c->a[0] + i) & 0xFFFF);
+    printf("\n");
+}
+
 static void instr_trace_init(void)
 {
+    if (getenv("PD_WATCH_PC")) {
+        sscanf(getenv("PD_WATCH_PC"), "%x,%llu", &watch_pc, &watch_from);
+        rc_interpreter_only = 1;
+        rc_trace = watch_instr;
+    }
     const char *cp = getenv("PD_COUNT_PC");
     if (cp) {
         count_pc = (uint32_t)strtoul(cp, NULL, 16);

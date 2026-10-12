@@ -86,6 +86,8 @@ Details in `docs/PHASE7B_DEBUG.md`.
 - RAM cheats in `src/port/cheats.c` (addresses in `profile.h`): weapons 0-15 through the
   pickup routine's ROM tables, bombs, lives, soldier (on respawn), form (fat / mummy; fat kept
   with a forced read limited to the PC range of 0xC0BAE: `NgForcedRead.pc_first/pc_last`).
+- Vehicles: the stage's object record routine (`0x1A0A6`) run as a nested call
+  (`ng_call68k`) on a VBlank wait; 12 vehicle types found (`0x2EC`-`0x318`).
 - Menus Extras > Cheats and Extras > Debug (EN/ES). Tests: `PD_CHEAT`, `PD_WINDOW_TEST=...,cheats|debug`.
 
 ### Phase 7I: result
