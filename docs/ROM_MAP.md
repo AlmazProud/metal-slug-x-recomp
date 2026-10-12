@@ -1,10 +1,10 @@
 # ROM_MAP: archivos de GOG/DotEmu y set `mslugx` de MAME
 
 Fuente: instalación GOG de Metal Slug X, carpeta `resources\game\`. Los archivos se copian a
-`roms\` con `INSTALAR.bat -CopiarRoms`.
+`roms\` con `INSTALL.bat -CopiarRoms`.
 
 Oráculo: MAME 0.289 (`mame -listxml mslugx`). Todo lo que aparece aquí se **verificó por
-CRC32 y SHA1** con `herramientas/extraer_roms.py`, que obtiene los hashes esperados de MAME en
+CRC32 y SHA1** con `tools/extract_roms.py`, que obtiene los hashes esperados de MAME en
 tiempo de ejecución.
 
 ## Resumen
@@ -111,7 +111,7 @@ En el código del juego aparece repetido en línea el patrón
 
 ### Confirmación en ejecución
 
-Se comprobó con `herramientas/mame/traza_proteccion.lua`. El script intercepta (taps de Lua)
+Se comprobó con `tools/mame/trace_protection.lua`. El script intercepta (taps de Lua)
 todas las lecturas y escrituras en `0x2FFFE0`–`0x2FFFEF` y compara cada lectura con un modelo
 propio de la tabla anterior, escrito a partir de esta documentación y no del dispositivo de
 MAME. Resultado en 120 s de arranque y *attract mode* (MAME 0.289, `-bios us`):

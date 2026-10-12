@@ -1,0 +1,4 @@
+# Dependencias de las herramientas de análisis:
+#   python -m pip install -r tools/requirements.txt
+numpy==2.5.4
+capstone==5.0.7

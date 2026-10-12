@@ -2,7 +2,7 @@
  *
  * ym2610.cpp envuelve ymfm::ym2610 con la misma configuración que usa MAME (fidelidad media:
  * una muestra cada 144 ciclos del YM, 8 MHz / 144 = 55 555 Hz). Los temporizadores, la línea de
- * IRQ, el estado "ocupado" y las lecturas de la ROM ADPCM los resuelve el runtime (sonido.c)
+ * IRQ, el estado "ocupado" y las lecturas de la ROM ADPCM los resuelve el runtime (sound.c)
  * implementando las funciones ng_ym_*.
  */
 #ifndef YM2610_H

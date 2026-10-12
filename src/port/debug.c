@@ -16,7 +16,7 @@
 #include <string.h>
 
 #include "neogeo.h"
-#include "perfil.h"
+#include "profile.h"
 
 #define HISTORIA 600                         /* 10 s */
 #define GRAFICO 240                          /* 4 s */

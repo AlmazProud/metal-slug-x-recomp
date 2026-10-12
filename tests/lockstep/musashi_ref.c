@@ -1,7 +1,7 @@
 /* Referencia del lockstep: Musashi puro, instrucción por instrucción, desde el reset. */
 #include "m68k.h"
 #include "m68kcpu.h"
-#include "ciclos68k.h"
+#include "cycles68k.h"
 
 void ref_reset(void)
 {
@@ -33,7 +33,7 @@ static int ajuste_actual(void)
 /* Ciclos que el código generado suma ANTES de ejecutar la instrucción: base + ajuste. */
 int ref_ciclos_base(unsigned pc) { return CYC_INSTRUCTION[m68k_read_memory_16(pc) & 0xFFFF] + ajuste_actual(); }
 
-/* Una instrucción, con el mismo ajuste de ciclos que el código generado (ciclos68k.h). */
+/* Una instrucción, con el mismo ajuste de ciclos que el código generado (cycles68k.h). */
 int ref_ejecutar_una(void)
 {
     int ajuste = ajuste_actual();

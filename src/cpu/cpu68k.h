@@ -1,10 +1,10 @@
 /* Estado del 68000 y semántica de las operaciones para el código recompilado.
  *
- * El código C que genera herramientas/recomp68k/ usa exclusivamente estas definiciones:
+ * El código C que genera tools/recomp68k/ usa exclusivamente estas definiciones:
  * registros en Cpu68k, accesos a memoria a través de las funciones de bus, y una función
  * inline por operación que calcula el resultado y los flags del CCR.
  *
- * La semántica se valida instrucción por instrucción contra Musashi (tests/diferencial/).
+ * La semántica se valida instrucción por instrucción contra Musashi (tests/differential/).
  * Referencias de comportamiento: Motorola M68000 Programmer's Reference Manual.
  */
 #ifndef CPU68K_H
@@ -24,7 +24,7 @@ typedef struct Cpu68k {
     uint8_t s, t, imask;
     int64_t ciclos;         /* ciclos de reloj del 68000 consumidos */
     uint8_t detenido;       /* STOP ejecutado: espera una interrupción */
-    /* Muestreo de interrupciones (ciclos68k.h): opcode y ciclo de inicio de la última
+    /* Muestreo de interrupciones (cycles68k.h): opcode y ciclo de inicio de la última
      * instrucción ejecutada. */
     uint16_t op;
     int64_t ini;

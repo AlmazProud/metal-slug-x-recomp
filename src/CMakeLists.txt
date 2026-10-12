@@ -1,18 +1,18 @@
 # Núcleo del port: CPU (despachador + respaldo), programa recompilado y runtime de la Neo Geo.
 
-add_library(cpu68k STATIC cpu/despachador.c cpu/interprete_musashi.c)
+add_library(cpu68k STATIC cpu/dispatcher.c cpu/musashi_interpreter.c)
 target_include_directories(cpu68k PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
 target_link_libraries(cpu68k PUBLIC musashi)
 
 # Tabla de ciclos base de Musashi para el 68000, que usa el generador.
-add_executable(volcar_ciclos ${PROJECT_SOURCE_DIR}/herramientas/recomp68k/volcar_ciclos.c)
+add_executable(volcar_ciclos ${PROJECT_SOURCE_DIR}/tools/recomp68k/dump_cycles.c)
 target_link_libraries(volcar_ciclos PRIVATE musashi)
 
-# Consulta de las reglas de muestreo de interrupciones (herramientas/verificar_muestreo.py).
-add_executable(clases_muestreo ${PROJECT_SOURCE_DIR}/herramientas/recomp68k/clases_muestreo.c)
+# Consulta de las reglas de muestreo de interrupciones (tools/verify_sampling.py).
+add_executable(clases_muestreo ${PROJECT_SOURCE_DIR}/tools/recomp68k/sampling_classes.c)
 target_link_libraries(clases_muestreo PRIVATE cpu68k)
 
-if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALISIS}/listado_bios.txt")
+if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALISIS}/listing_bios.txt")
     message(STATUS "Programa recompilado desactivado: faltan ROMs (${PD_ROMS}) o listados del análisis (${PD_ANALISIS})")
     return()
 endif()
@@ -32,17 +32,17 @@ foreach(n RANGE 0 15)
     list(APPEND PROG_C ${PROG_DIR}/programa_${num}.c)
 endforeach()
 
-set(COBERTURA ${PD_ANALISIS}/cobertura.json)
-if(EXISTS "${PD_ANALISIS}/cobertura_mision1.json")
-    list(APPEND COBERTURA ${PD_ANALISIS}/cobertura_mision1.json)
+set(COBERTURA ${PD_ANALISIS}/coverage.json)
+if(EXISTS "${PD_ANALISIS}/coverage_mission1.json")
+    list(APPEND COBERTURA ${PD_ANALISIS}/coverage_mission1.json)
 endif()
 
-file(GLOB RECOMP_PY ${PROJECT_SOURCE_DIR}/herramientas/recomp68k/*.py)
+file(GLOB RECOMP_PY ${PROJECT_SOURCE_DIR}/tools/recomp68k/*.py)
 add_custom_command(
     OUTPUT ${PROG_C}
-    COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/herramientas/recomp68k/programa.py
+    COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/recomp68k/program.py
             --roms ${PD_ROMS}
-            --listados ${PD_ANALISIS}/listado_p1.txt ${PD_ANALISIS}/listado_bios.txt
+            --listados ${PD_ANALISIS}/listing_p1.txt ${PD_ANALISIS}/listing_bios.txt
             --cobertura ${COBERTURA}
             --ciclos ${CICLOS} --salida ${PROG_DIR} --archivos 16
     DEPENDS ${RECOMP_PY} ${CICLOS}
@@ -56,10 +56,10 @@ target_compile_options(programa_recompilado PRIVATE -O1 -Wno-unused-variable -Wn
 
 # Runtime de hardware de la Neo Geo (Fase 3).
 add_library(neogeo STATIC
-    neogeo/bus.c neogeo/estado.c neogeo/maquina.c neogeo/roms.c neogeo/rtc.c neogeo/sha256.c
-    neogeo/sonido.c neogeo/video.c neogeo/z80_impl.c neogeo/ym2610.cpp)
+    neogeo/bus.c neogeo/savestate.c neogeo/machine.c neogeo/roms.c neogeo/rtc.c neogeo/sha256.c
+    neogeo/sound.c neogeo/video.c neogeo/z80_impl.c neogeo/ym2610.cpp)
 target_include_directories(neogeo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/neogeo
-                           PRIVATE ${PROJECT_SOURCE_DIR}/externo/chips)
+                           PRIVATE ${PROJECT_SOURCE_DIR}/external/chips)
 target_link_libraries(neogeo PUBLIC cpu68k ymfm)
 set_target_properties(neogeo PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 target_compile_options(neogeo PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra>)
@@ -72,7 +72,7 @@ if(NOT SDL3_FOUND)
     message(STATUS "Port desactivado: no se encontró SDL3 (CMAKE_PREFIX_PATH)")
     return()
 endif()
-set(PORT_FUENTES port/main.c port/sin_ventana.c port/ventana.c port/config.c port/debug.c port/fuente.c port/gog.c port/logo.c port/menu.c port/sonidos.c port/perfil_sonidos.c)
+set(PORT_FUENTES port/main.c port/headless.c port/window.c port/config.c port/debug.c port/font.c port/gog.c port/logo.c port/menu.c port/sounds.c port/profile_sounds.c)
 if(WIN32)
     enable_language(RC)
     list(APPEND PORT_FUENTES port/mslugx.rc)
@@ -101,13 +101,13 @@ add_test(NAME menu_sonido
 
 # Fase 4: la partida grabada del usuario (Misión 1) reproducida contra MAME, sin divergencias en RAM,
 # paleta ni imagen. Las referencias de MAME y las entradas viven en PD_ANALISIS/fase4 (fuera del repo;
-# cómo generarlas: herramientas/verificar_mision.py).
-if(EXISTS "${PD_ANALISIS}/fase4/mision1_huellas_mame.txt" AND EXISTS "${PD_ANALISIS}/fase4/mision1_entradas.txt")
+# cómo generarlas: tools/verify_mission.py).
+if(EXISTS "${PD_ANALISIS}/phase4/mission1_fingerprints_mame.txt" AND EXISTS "${PD_ANALISIS}/phase4/mission1_inputs.txt")
     add_test(NAME mision1_contra_mame
-             COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/herramientas/verificar_mision.py
+             COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/verify_mission.py
                      --exe $<TARGET_FILE:mslugx> --roms ${PD_ROMS}
-                     --entradas ${PD_ANALISIS}/fase4/mision1_entradas.txt
-                     --referencia ${PD_ANALISIS}/fase4/mision1_huellas_mame.txt
+                     --entradas ${PD_ANALISIS}/phase4/mission1_inputs.txt
+                     --referencia ${PD_ANALISIS}/phase4/mission1_fingerprints_mame.txt
                      --cuadros 11970 --fecha 2026-10-11-20-28-31-0
                      --salida ${CMAKE_CURRENT_BINARY_DIR}/mision1_huellas_port.txt)
 endif()

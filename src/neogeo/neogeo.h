@@ -7,7 +7,7 @@
  *
  * Referencia del hardware: MAME 0.289 (src/mame/snk/neogeo*.cpp, src/devices/machine/
  * upd1990a.cpp), usado SOLO como documentación. Los valores de los puertos se fijaron además
- * contra el oráculo con herramientas/mame/traza_puertos.lua.
+ * contra el oráculo con tools/mame/trace_ports.lua.
  */
 #ifndef NEOGEO_H
 #define NEOGEO_H

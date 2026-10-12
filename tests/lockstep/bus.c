@@ -1,5 +1,5 @@
 /* El código recompilado y Musashi (referencia y respaldo) usan el mismo bus: la máquina activa. */
-#include "maquina.h"
+#include "machine.h"
 
 uint32_t bus_r8(uint32_t a)  { return maq_r8(a); }
 uint32_t bus_r16(uint32_t a) { return maq_r16(a); }

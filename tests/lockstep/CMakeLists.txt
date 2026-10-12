@@ -6,7 +6,7 @@ if(NOT TARGET programa_recompilado)
     return()
 endif()
 
-add_executable(lockstep lockstep.c maquina.c bus.c musashi_ref.c)
+add_executable(lockstep lockstep.c machine.c bus.c musashi_ref.c)
 target_include_directories(lockstep PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/src/cpu)
 target_link_libraries(lockstep PRIVATE programa_recompilado)
 
@@ -14,8 +14,8 @@ add_test(NAME lockstep_reset
          COMMAND lockstep ${PD_ROMS}/mslugx_game_m68k ${PD_ROMS}/mslugx_bios_m68k 20000000)
 
 # Desde un estado real del juego (volcado de MAME en el frame 4000 de la grabación del usuario).
-if(EXISTS "${PD_ANALISIS}/estado_f4000.bin")
+if(EXISTS "${PD_ANALISIS}/state_f4000.bin")
     add_test(NAME lockstep_juego
              COMMAND lockstep ${PD_ROMS}/mslugx_game_m68k ${PD_ROMS}/mslugx_bios_m68k 120000000
-                     ${PD_ANALISIS}/estado_f4000.bin)
+                     ${PD_ANALISIS}/state_f4000.bin)
 endif()

@@ -18,12 +18,12 @@ typedef struct {
     int fecha[7], con_fecha;
 } Opciones;
 
-/* sin_ventana.c */
+/* headless.c */
 int guardar_bmp(const char *ruta);
 int sin_ventana_preparar(const Opciones *o);
 int sin_ventana_correr(const Opciones *o);
 
-/* ventana.c */
+/* window.c */
 int ventana_correr(const Opciones *o);
 
 /* gog.c: carpeta resources\game de una instalación de Metal Slug X de GOG (registro de Windows y

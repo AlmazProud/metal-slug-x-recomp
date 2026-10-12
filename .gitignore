@@ -31,11 +31,11 @@
 !*.json
 !*.toml
 !*.txt
-!herramientas/hooks/*
+!tools/hooks/*
 # Fase 3B: ymfm (BSD-3) está escrito en C++; licencias de terceros sin extensión
 !*.cpp
 !*.ipp
-!externo/**/LICENSE
+!external/**/LICENSE
 # Fase 5: manifiesto del ejecutable de Windows (XML, sin datos del juego)
 !src/port/*.manifest
 

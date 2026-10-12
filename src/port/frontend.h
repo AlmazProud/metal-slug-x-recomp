@@ -1,4 +1,4 @@
-/* Lo que el frontend con ventana (ventana.c) ofrece a los menús (menu.c) y al menú de sonido. */
+/* Lo que el frontend con ventana (window.c) ofrece a los menús (menu.c) y al menú de sonido. */
 #ifndef FRONTEND_H
 #define FRONTEND_H
 

@@ -2,7 +2,7 @@
  *
  * Páginas apiladas; cada página es una lista de opciones (enum OP_*). Una opción puede abrir otra
  * página, ejecutar una acción o cambiar un valor (← / →). El texto usa la fuente del propio juego
- * (fuente.c) sobre el juego oscurecido:
+ * (font.c) sobre el juego oscurecido:
  *   - Inicio: el demo del juego sigue corriendo de fondo, sin recibir las entradas;
  *   - Pausa: el juego queda detenido.
  */
@@ -12,11 +12,11 @@
 #include <string.h>
 
 #include "debug.h"
-#include "despachador.h"
-#include "fuente.h"
+#include "dispatcher.h"
+#include "font.h"
 #include "frontend.h"
 #include "logo.h"
-#include "sonidos.h"
+#include "sounds.h"
 
 enum {
     OP_JUGAR, OP_CONTINUAR, OP_GUARDAR, OP_CARGAR, OP_CONFIG, OP_SONIDOS, OP_EXTRAS, OP_VOLVER_INICIO,

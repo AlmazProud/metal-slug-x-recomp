@@ -6,14 +6,14 @@
  *   mslugx --sin-ventana --cuadros N [--capturas a,b,c --salida CARPETA] ...
  *
  * --roms: carpeta resources\game de la instalación de GOG. Sin esta opción, el modo con ventana
- *         la busca solo (ventana.c); el modo sin ventana usa "roms" junto al ejecutable. Los
+ *         la busca solo (window.c); el modo sin ventana usa "roms" junto al ejecutable. Los
  *         archivos se validan por SHA-256.
  * --turbo: 0 = como el original; 1 / 2 = 68000 al doble / cuádruple (sin la ralentización
  *         original). Con ventana, por defecto se usa el de mslugx.ini.
- * --sin-ventana: corre N cuadros lo más rápido posible (verificación contra MAME, sin_ventana.c):
- *   --capturas: guarda BMP de los cuadros pedidos (herramientas/comparar_capturas.py).
+ * --sin-ventana: corre N cuadros lo más rápido posible (verificación contra MAME, headless.c):
+ *   --capturas: guarda BMP de los cuadros pedidos (tools/compare_screenshots.py).
  *   --wav: guarda el audio generado (estéreo, 16 bits, 55 555 Hz).
- *   --entradas: entradas grabadas en MAME (herramientas/mame/entradas.lua, líneas "C" con tiempo,
+ *   --entradas: entradas grabadas en MAME (tools/mame/inputs.lua, líneas "C" con tiempo,
  *         o "E cuadro P1 P2 SIS MON TEST"). --huellas: huellas por cuadro y por VBlank (Fase 4).
  *   --guion: entradas por tramos: "desde hasta entrada..." (cuadros inclusive; entradas: arriba
  *         abajo izquierda derecha a b c d start1 start2 moneda1 moneda2 test).
@@ -26,7 +26,7 @@
  *   --probar-sonidos: al final abre el menú de sonido, reproduce una música y una voz (deben
  *         sonar), lo cierra y comprueba que el juego sigue idéntico a no haberlo abierto.
  *
- * Controles, menú y teclas fijas del modo con ventana: ver ventana.c.
+ * Controles, menú y teclas fijas del modo con ventana: ver window.c.
  */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -35,7 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "despachador.h"
+#include "dispatcher.h"
 #include "neogeo.h"
 #include "port.h"
 

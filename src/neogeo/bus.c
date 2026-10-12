@@ -124,7 +124,7 @@ static uint16_t leer_es_real(uint32_t a)
 }
 
 /* Escritura en E/S. `mascara`: 0xFF00 byte par, 0x00FF byte impar, 0xFFFF palabra. */
-/* Traza de escrituras en E/S y paleta (mismo formato que herramientas/mame/traza_es.lua). */
+/* Traza de escrituras en E/S y paleta (mismo formato que tools/mame/trace_io.lua). */
 static void trazar(uint32_t a, uint16_t v, uint16_t mascara)
 {
     if (ng_traza_es && ng_cpu.ciclos >= ng_traza_desde && ng_cpu.ciclos <= ng_traza_hasta)

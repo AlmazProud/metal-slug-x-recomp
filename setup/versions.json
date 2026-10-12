@@ -1,0 +1,184 @@
+{
+  "esquema": 1,
+  "nota": "Para actualizar una herramienta cambia version, url y hash (tomado de la fuente oficial indicada en 'fuente_hash') y vuelve a correr INSTALL.bat. Solo se reinstala lo que cambió.",
+  "rutas": {
+    "gog": "K:\\Metal Slug X"
+  },
+  "espacio_minimo_gb": 10,
+  "herramientas": [
+    {
+      "nombre": "7zip",
+      "version": "26.04",
+      "instalar": "7zip",
+      "comprobar": "7zr.exe",
+      "descargas": [
+        {
+          "archivo": "7zr.exe",
+          "url": "https://github.com/ip7z/7zip/releases/download/26.04/7zr.exe",
+          "algoritmo": "SHA256",
+          "hash": "256feca8e274e5da655e2a284fabafd9f554365eb164862089dacd4e8276d282",
+          "fuente_hash": "GitHub ip7z/7zip release 26.04 (digest del asset)"
+        },
+        {
+          "archivo": "7z2604-extra.7z",
+          "url": "https://github.com/ip7z/7zip/releases/download/26.04/7z2604-extra.7z",
+          "algoritmo": "SHA256",
+          "hash": "dc4b11d3399db18b063630137145f5585d8f7ac847bf3639bd1185d7d1f7cee0",
+          "fuente_hash": "GitHub ip7z/7zip release 26.04 (digest del asset)"
+        }
+      ]
+    },
+    {
+      "nombre": "python",
+      "version": "3.14.8",
+      "instalar": "archivo",
+      "tipo": "zip",
+      "subcarpeta": "tools",
+      "comprobar": "python.exe",
+      "descargas": [
+        {
+          "archivo": "python.3.14.8.nupkg",
+          "url": "https://api.nuget.org/v3-flatcontainer/python/3.14.8/python.3.14.8.nupkg",
+          "algoritmo": "SHA512",
+          "hash": "6fda33fc2daa88b944ec5280a20cf7772893dfcbc55f777d2b622a868a0b66670bdc4f51109b20ae0dde5177931cb5d1cb9d2381f1c4a17d5bc77bbdd558de6b",
+          "fuente_hash": "nuget.org catalogEntry.packageHash (SHA512) del paquete oficial 'python'"
+        }
+      ]
+    },
+    {
+      "nombre": "cmake",
+      "version": "4.4.4",
+      "instalar": "archivo",
+      "comprobar": "bin\\cmake.exe",
+      "descargas": [
+        {
+          "archivo": "cmake-4.4.4-windows-x86_64.zip",
+          "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-windows-x86_64.zip",
+          "algoritmo": "SHA256",
+          "hash": "bace36e94b31c68ab6fa295f26dfa11219e0701cf7c94b0284a7d1cb13dac536",
+          "fuente_hash": "cmake-4.4.4-SHA-256.txt oficial de Kitware (coincide con el digest de GitHub)"
+        }
+      ]
+    },
+    {
+      "nombre": "ninja",
+      "version": "1.13.2",
+      "instalar": "archivo",
+      "comprobar": "ninja.exe",
+      "descargas": [
+        {
+          "archivo": "ninja-win-1.13.2.zip",
+          "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip",
+          "algoritmo": "SHA256",
+          "hash": "07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65",
+          "fuente_hash": "GitHub ninja-build/ninja release v1.13.2 (digest del asset)"
+        }
+      ]
+    },
+    {
+      "nombre": "llvm-mingw",
+      "version": "20261006",
+      "instalar": "archivo",
+      "comprobar": "bin\\clang.exe",
+      "descargas": [
+        {
+          "archivo": "llvm-mingw-20261006-ucrt-x86_64.zip",
+          "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20261006/llvm-mingw-20261006-ucrt-x86_64.zip",
+          "algoritmo": "SHA256",
+          "hash": "317492c456aa27ee607a5919f1d2d38dcdc1112516a24d0bf4b00d078f52d17a",
+          "fuente_hash": "GitHub mstorsjo/llvm-mingw release 20261006 (digest del asset)"
+        }
+      ]
+    },
+    {
+      "nombre": "sdl3",
+      "version": "3.4.18",
+      "instalar": "archivo",
+      "comprobar": "x86_64-w64-mingw32\\bin\\SDL3.dll",
+      "descargas": [
+        {
+          "archivo": "SDL3-devel-3.4.18-mingw.zip",
+          "url": "https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-devel-3.4.18-mingw.zip",
+          "algoritmo": "SHA256",
+          "hash": "cd98158c8d025a816f430a600b4e9526524e6219ee884ec72bd498b80fd3bf58",
+          "fuente_hash": "GitHub libsdl-org/SDL release-3.4.18 (digest del asset)"
+        }
+      ]
+    },
+    {
+      "nombre": "jdk21",
+      "version": "21.0.12.1+1",
+      "instalar": "archivo",
+      "comprobar": "bin\\java.exe",
+      "descargas": [
+        {
+          "archivo": "OpenJDK21U-jdk_x64_windows_hotspot_21.0.12.1_1.zip",
+          "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_windows_hotspot_21.0.12.1_1.zip",
+          "algoritmo": "SHA256",
+          "hash": "f9d6e191ab098c0d416e7d588a24420a8621cd2f4720dab2459b8b7b2d2d8b4e",
+          "fuente_hash": "API de Adoptium (api.adoptium.net, binary.package.checksum)"
+        }
+      ]
+    },
+    {
+      "nombre": "ghidra",
+      "version": "12.1.4",
+      "instalar": "archivo",
+      "comprobar": "support\\analyzeHeadless.bat",
+      "descargas": [
+        {
+          "archivo": "ghidra_12.1.4_PUBLIC_20260921.zip",
+          "url": "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip",
+          "algoritmo": "SHA256",
+          "hash": "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db",
+          "fuente_hash": "Notas de la release Ghidra_12.1.4_build (SHA-256 publicado; coincide con el digest de GitHub)"
+        }
+      ]
+    },
+    {
+      "nombre": "mame",
+      "version": "0.289",
+      "instalar": "archivo",
+      "comprobar": "mame.exe",
+      "descargas": [
+        {
+          "archivo": "mame0289b_x64.exe",
+          "url": "https://github.com/mamedev/mame/releases/download/mame0289/mame0289b_x64.exe",
+          "algoritmo": "SHA256",
+          "hash": "a1aa7912168c9d1b05e611906bc21b8b9be3935822aead36d12a1da363150b7d",
+          "fuente_hash": "GitHub mamedev/mame release mame0289, enlazada desde mamedev.org (digest del asset)"
+        }
+      ]
+    },
+    {
+      "nombre": "imhex",
+      "version": "1.38.1",
+      "instalar": "archivo",
+      "comprobar": "imhex.exe",
+      "descargas": [
+        {
+          "archivo": "imhex-1.38.1-Windows-Portable-x86_64.zip",
+          "url": "https://github.com/WerWolv/ImHex/releases/download/v1.38.1/imhex-1.38.1-Windows-Portable-x86_64.zip",
+          "algoritmo": "SHA256",
+          "hash": "32520e57712894bc8304c4b01553223e7dda25852326184f99dfd72a09a80187",
+          "fuente_hash": "GitHub WerWolv/ImHex release v1.38.1 (digest del asset)"
+        }
+      ]
+    },
+    {
+      "nombre": "git",
+      "version": "2.56.0.2",
+      "instalar": "archivo",
+      "comprobar": "cmd\\git.exe",
+      "descargas": [
+        {
+          "archivo": "MinGit-2.56.0.2-64-bit.zip",
+          "url": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.2/MinGit-2.56.0.2-64-bit.zip",
+          "algoritmo": "SHA256",
+          "hash": "da35e72aa21c005a5a0d298cfbae110bc1609a815730ea0dde84b01a1b3cd3be",
+          "fuente_hash": "GitHub git-for-windows/git release v2.56.0.windows.2 (digest del asset)"
+        }
+      ]
+    }
+  ]
+}

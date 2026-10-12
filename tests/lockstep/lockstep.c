@@ -11,7 +11,7 @@
  * La entrada a la interrupción se emula igual en ambos lados (44 ciclos, como Musashi).
  *
  * Uso: lockstep <mslugx_game_m68k> <mslugx_bios_m68k> [ciclos] [volcado de MAME]
- * Con un volcado (herramientas/mame/volcar_estado.lua) ambos lados arrancan desde ese estado
+ * Con un volcado (tools/mame/dump_state.lua) ambos lados arrancan desde ese estado
  * del juego en lugar del reset.
  */
 #include <inttypes.h>
@@ -21,9 +21,9 @@
 #include <time.h>
 
 #include "cpu68k.h"
-#include "despachador.h"
+#include "dispatcher.h"
 #include "m68k.h"
-#include "maquina.h"
+#include "machine.h"
 
 void programa_registrar(void);
 void ref_reset(void);

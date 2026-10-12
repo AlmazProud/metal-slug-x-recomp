@@ -2,7 +2,7 @@
  *
  * En la pantalla de título del attract (cuadro ~1150 desde el encendido con la SRAM vacía), el logo
  * son los sprites 41-124 (sombra, "METAL SLUG", la X y "SUPER VEHICLE-001") más el 380 ("TM");
- * el fondo rojo son los sprites 21-40 (src/port/perfil.h). Se redibujan solo esos sprites con
+ * el fondo rojo son los sprites 21-40 (src/port/profile.h). Se redibujan solo esos sprites con
  * ng_video_capturar_sprites, se recorta el rectángulo con contenido y se guarda como PNG en la
  * carpeta del usuario: solo se genera la primera vez. El logo no entra al repositorio.
  */
@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "neogeo.h"
-#include "perfil.h"
+#include "profile.h"
 
 static SDL_Texture *tex;
 
