@@ -1,8 +1,8 @@
 @echo off
-rem Activa el entorno de Projecto Decompile SOLO en esta window de cmd.
-rem No toca el PATH global ni el registro.
+rem Activates the Projecto Decompile environment ONLY in this cmd window.
+rem Does not touch the global PATH or the registry.
 rem   call "C:\Projecto Decompile\env.bat"
-rem Funciona tanto desde la raiz como desde repo\setup (copia canonica).
+rem Works both from the root and from repo\setup (canonical copy).
 
 set "PD_ROOT=%~dp0"
 if not exist "%PD_ROOT%tools\" for %%I in ("%~dp0..\..") do set "PD_ROOT=%%~fI\"
@@ -29,4 +29,4 @@ set "CXX=clang++"
 set "PIP_CACHE_DIR=%PD_TOOLS%\_cache\pip"
 set "PYTHONNOUSERSITE=1"
 set "PYTHONUTF8=1"
-echo Entorno Projecto Decompile active en esta window (%PD_ROOT%)
+echo Projecto Decompile environment active in this window (%PD_ROOT%)

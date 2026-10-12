@@ -1,296 +1,300 @@
-# CLAUDE.md: Projecto Decompile (port nativo de Metal Slug X)
+# CLAUDE.md: Projecto Decompile (native Metal Slug X port)
 
-Port nativo para Windows de Metal Slug X (Neo Geo MVS, 1999) por **recompilación estática
-progresiva**: el código 68000 se traduce a C, el hardware Neo Geo se reimplementa como runtime
-nativo y después las funciones recompiladas se reemplazan poco a poco por C legible.
+Native Windows port of Metal Slug X (Neo Geo MVS, 1999) by **progressive static
+recompilation**: the 68000 code is translated to C, the Neo Geo hardware is reimplemented as a
+native runtime, and the recompiled functions are then gradually replaced with readable C.
 
-## Reglas obligatorias
+## Mandatory rules
 
-1. **Trae tu propio ROM.** El repo nunca contiene ROMs, BIOS, gráficos, audio ni datos
-   extraídos. Se leen de `..\roms\` en tiempo de ejecución y se validan por hash. El
-   `.gitignore` es una lista blanca: ignora todo y solo deja pasar código y documentación.
-2. **MAME solo como referencia de documentación del hardware.** No se copia código de MAME.
-   Se prefieren bibliotecas con licencia permisiva (por ejemplo Musashi o ymfm), cada una
-   documentada en `THIRD_PARTY.md`.
-3. **MAME es el oráculo.** Todo comportamiento se valida contra MAME con trazas o comparación
-   de estado. No se supone nada sin verificarlo.
-4. **Stack:** C17, CMake, Ninja, llvm-mingw y SDL3, todo tomado de `..\tools`. Las herramientas
-   de análisis se escriben en Python 3.
-5. Este archivo se actualiza al cierre de cada fase.
+1. **Bring your own ROM.** The repo never contains ROMs, BIOS, graphics, audio or extracted
+   data. They are read from `..\roms\` at run time and validated by hash. The `.gitignore` is a
+   whitelist: it ignores everything and only lets code and documentation through.
+2. **MAME only as hardware documentation.** No MAME code is copied. Permissively licensed
+   libraries are preferred (for example Musashi or ymfm), each documented in `THIRD_PARTY.md`.
+3. **MAME is the oracle.** All behaviour is validated against MAME with traces or state
+   comparison. Nothing is assumed without verification.
+4. **Stack:** C17, CMake, Ninja, llvm-mingw and SDL3, all taken from `..\tools`. Analysis tools
+   are written in Python 3.
+5. **Language:** the assistant always talks to the user in Spanish. Everything in the
+   repository (code, identifiers, comments, docs, commit messages) is written in English.
+6. This file is updated when each phase closes.
 
-**Forma de trabajar:** una fase a la vez. Antes de escribir código se presenta un plan corto
-y se espera el OK. Al cerrar cada fase se reporta qué funciona, qué falta, los riesgos y el
-siguiente paso, y se espera el visto bueno. Commits pequeños con mensajes claros. Toda
-incertidumbre (formato, protección, timing) se investiga y se verifica contra MAME.
+**Way of working:** one phase at a time. Before writing code, present a short plan and wait for
+the OK. When a phase closes, report what works, what is missing, the risks and the next step,
+and wait for approval. Small commits with clear messages. Every uncertainty (format,
+protection, timing) is investigated and verified against MAME.
 
-## Estructura
+## Structure
 
 ```
 C:\Projecto Decompile\
-  INSTALL.bat, env.ps1, env.bat, README.md   (copias de repo\setup\)
-  tools\   herramientas portables       roms\  ROMs del usuario (fuera del repo)
-  logs\    bitácoras                    repo\  este repositorio
+  tools\     portable tools               roms\   user's ROMs (outside the repo)
+  analysis\  analysis output              logs\   logs
+  repo\      this repository
+  INSTALL.bat, env.ps1, env.bat, README.md   (copies from repo\setup\)
 repo\
-  setup\      instalador (setup.ps1, versions.json, env.*, sdl3_test\)
-  src\cpu\      despachador, estado del 68000, respaldo con Musashi
-  src\neogeo\   runtime de hardware (bus, LSPC, RTC, planificador, ROMs)
-  src\port\     ejecutable SDL3 (mslugx.exe): frontend, configuración, modo sin ventana
-  tools\ análisis, recompilador (recomp68k\), scripts de MAME (mame\), comparación
-  tests\        diferencial (instrucciones) y lockstep (programa completo)
-  external\      Musashi
+  setup\        installer (setup.ps1, versions.json, env.*, sdl3_test\)
+  src\cpu\      dispatcher, 68000 state, Musashi fallback
+  src\neogeo\   hardware runtime (bus, LSPC, RTC, scheduler, ROMs, sound)
+  src\port\     SDL3 executable (mslugx.exe): frontend, configuration, headless mode
+  tools\        analysis and comparison scripts; recomp68k\ (recompiler), mame\ (MAME Lua
+                scripts), ghidra\ (headless scripts), hooks\ (pre-commit)
+  tests\        differential\ (per instruction) and lockstep\ (whole program)
+  external\     Musashi, ymfm (plus the Z80 core in chips\)
+  docs\         per-phase documentation and ROM map
 ```
 
-Compilar: `cmake -S repo -B repo\build -G Ninja -DCMAKE_BUILD_TYPE=Release` y
-`cmake --build repo\build`. El programa recompilado se genera en `build\src\programa\` a
-partir de `roms\` y `analisis\`. Jugar: `repo\build\src\mslugx.exe` (busca solo la
-instalación de GOG). Pruebas: `ctest` en `repo\build`.
+Docs: `docs/ROM_MAP.md`, `docs/PHASE1_COVERAGE.md`, `docs/PHASE3_RUNTIME.md`,
+`docs/PHASE4_VERIFICATION.md`, `docs/PHASE5_NATIVE.md`, `docs/PHASE6_REMASTER.md`,
+`docs/PHASE7_TWEAKS.md`.
 
-Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
+Build: `cmake -S repo -B repo\build -G Ninja -DCMAKE_BUILD_TYPE=Release` and
+`cmake --build repo\build`. The recompiled program is generated in `build\src\program\` from
+`roms\` and `analysis\`. Play: `repo\build\src\mslugx.exe` (finds the GOG install on its own).
+Tests: `ctest` in `repo\build`.
+
+Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 `call "C:\Projecto Decompile\env.bat"` (cmd).
 
-## State por fase
+## Status by phase
 
-| Fase | State |
+| Phase | Status |
 |---|---|
-| Entorno | **Cerrada** (2026-10-10). Verificación 16/16 OK. ROMs copiados a `roms\`. |
-| 0. Reconocimiento | **Cerrada** (2026-10-11). Ver `docs/ROM_MAP.md`. |
-| 1. Análisis 68000 | **Cerrada** (2026-10-11). Ver `docs/PHASE1_COVERAGE.md`. |
-| 2. Recompilador | **Cerrada** (2026-10-11). `ctest`: 3/3. |
-| 3A. Runtime: imagen y controles | **Cerrada** (2026-10-11). Ver `docs/PHASE3_RUNTIME.md`. |
-| 3B. Runtime: sonido (Z80 + YM2610) | **Cerrada** (2026-10-11). Ver `docs/PHASE3_RUNTIME.md`. |
-| 4. Arranque y verificación diferencial | **Cerrada** (2026-10-11). Ver `docs/PHASE4_VERIFICATION.md`. |
-| 5. Mejoras nativas | **Cerrada** (2026-10-11). Ver `docs/PHASE5_NATIVE.md`. |
-| 6A. Remaster: autodisparo y modo debug | **Cerrada** (2026-10-12). Ver `docs/PHASE6_REMASTER.md`. |
-| 6B. Remaster: catálogo de sonidos, menú de sonido, vibración | **Cerrada** (2026-10-12). |
-| 6C. Remaster: menú de inicio moderno | **Cerrada** (2026-10-12). `ctest`: 6/6. |
-| 6D. Remaster: pantalla ancha | **Descartada** por el usuario (2026-10-12): le quita la esencia al juego. |
-| 7A. V-sync y sangre roja | **Cerrada** (2026-10-12), pendiente del visto bueno. Ver `docs/PHASE7_TWEAKS.md`. `ctest`: 6/6. |
+| Environment | **Closed** (2026-10-10). Verification 16/16 OK. ROMs copied to `roms\`. |
+| 0. Reconnaissance | **Closed** (2026-10-11). See `docs/ROM_MAP.md`. |
+| 1. 68000 analysis | **Closed** (2026-10-11). See `docs/PHASE1_COVERAGE.md`. |
+| 2. Recompiler | **Closed** (2026-10-11). `ctest`: 3/3. |
+| 3A. Runtime: video and controls | **Closed** (2026-10-11). See `docs/PHASE3_RUNTIME.md`. |
+| 3B. Runtime: sound (Z80 + YM2610) | **Closed** (2026-10-11). See `docs/PHASE3_RUNTIME.md`. |
+| 4. Boot and differential verification | **Closed** (2026-10-11). See `docs/PHASE4_VERIFICATION.md`. |
+| 5. Native improvements | **Closed** (2026-10-11). See `docs/PHASE5_NATIVE.md`. |
+| 6A. Remaster: autofire and debug mode | **Closed** (2026-10-12). See `docs/PHASE6_REMASTER.md`. |
+| 6B. Remaster: sound catalog, sound menu, rumble | **Closed** (2026-10-12). |
+| 6C. Remaster: modern start menu | **Closed** (2026-10-12). `ctest`: 6/6. |
+| 6D. Remaster: widescreen | **Dropped** by the user (2026-10-12): it takes away the essence of the game. |
+| 7A. V-sync and red blood | **Closed** (2026-10-12), pending approval. See `docs/PHASE7_TWEAKS.md`. `ctest`: 6/6. |
+| 7I. English translation and GitHub preparation | In progress (2026-10-12). |
 
-### Fase 7A: resultado
+### Phase 7A: result
 
-Detalle en `docs/PHASE7_TWEAKS.md`.
+Details in `docs/PHASE7_TWEAKS.md`.
 
-- **Sangre roja:** es la opción BLOOD de los soft dips del juego (en EE. UU., OFF), en
-  `0x10FD8F`; el juego la consulta en `0x1B2BE`.
-  - La opción del port fuerza solo la lectura del código del juego (`ng_forced_read`,
-    PC < `0xC00000`). Escribir la RAM rompía el test del BIOS.
-  - Comprobado con capturas: salpicadura blanca frente a roja.
+- **Red blood:** it is the BLOOD option of the game's soft dips (OFF in the US), at
+  `0x10FD8F`; the game reads it at `0x1B2BE`.
+  - The port option forces only the game code's read (`ng_forced_read`, PC < `0xC00000`).
+    Writing the RAM broke the BIOS test.
+  - Checked with screenshots: white splatter vs. red.
 - **V-sync:**
-  - con un monitor de ~60 Hz, un cuadro por refresco, con el audio en proporción y corrección por
-    la cola;
-  - con otras frecuencias, acumulador al ritmo de la placa.
-  - Medido: 0 cortes y 0 descartes de audio en los tres casos.
-- Pruebas: `PD_SALIR_TRAS`, `PD_HZ`, `--sangre`.
+  - with a ~60 Hz monitor, one frame per refresh, with audio kept in proportion and corrected
+    from the queue;
+  - with other refresh rates, an accumulator at the board's rate.
+  - Measured: 0 audio dropouts and 0 discards in all three cases.
+- Tests: `PD_SALIR_TRAS`, `PD_HZ`, `--sangre`.
 
-### Fase 6C: resultado
+### Phase 6C: result
 
-Detalle en `docs/PHASE6_REMASTER.md`.
+Details in `docs/PHASE6_REMASTER.md`.
 
-- **Fuente** (`src/port/font.c`): la sombreada 8x8 del juego (fix del cartucho, tiles `0x300` +
-  ASCII), leída de la copia del usuario y dibujada en mayúsculas con tintas propias.
-- **Menús por páginas** (`src/port/menu.c`, interfaz `frontend.h` hacia `window.c`):
-  - Inicio: el demo sigue de fondo; "Jugar" inserta moneda + START.
-  - Pausa, Configuración (Video, Audio, Juego, Controles) y Extras.
-- **Menú de sonido:** pestaña Recientes, renombrar (F2/R) y vibración por sonido (V/X), guardados
-  en `sonidos.ini` del usuario.
+- **Font** (`src/port/font.c`): the game's shaded 8x8 font (cartridge fix, tiles `0x300` +
+  ASCII), read from the user's copy and drawn in uppercase with our own inks.
+- **Paged menus** (`src/port/menu.c`, interface `frontend.h` towards `window.c`):
+  - Start: the demo keeps running in the background; "Play" inserts a coin + START.
+  - Pause, Settings (Video, Audio, Game, Controls) and Extras.
+- **Sound menu:** Recent tab, rename (F2/R) and per-sound rumble (V/X), saved in the user's
+  `sonidos.ini`.
 
-### Fase 6B: resultado
+### Phase 6B: result
 
-Detalle en `docs/PHASE6_REMASTER.md`.
+Details in `docs/PHASE6_REMASTER.md`.
 
-- **Driver de sonido:** comandos de modo `00` (música), `10` (efectos) y `11` (voces) que quedan
-  activos; `03` reinicia el driver (el juego envía `03 03 06` antes de cada música).
-- **Catálogo:** `--catalogo-sonido` + `PD_CATALOGO_PREFIJO`; `tools/sound_catalog.py`
-  genera `src/port/profile_sounds.c` (18 músicas, 185 efectos, 61 voces).
-- **Nombres:** solo los confirmados con capturas de la partida; el resto, por número.
-- **Menú "Musica y sonidos"** (`src/port/sounds.c`): guarda el estado, avanza solo el Z80 y el YM
-  (`ng_sonido_solo_*`) y restaura al salir. Test `menu_sonido`.
-- **Vibración** por comandos de sonido (`ng_on_sound_command`): explosiones, cañón, disparos;
-  intensidad 0-100.
+- **Sound driver:** mode commands `00` (music), `10` (effects) and `11` (voices) that stay
+  active; `03` resets the driver (the game sends `03 03 06` before each music track).
+- **Catalog:** `--catalogo-sonido` + `PD_CATALOGO_PREFIJO`; `tools/sound_catalog.py`
+  generates `src/port/profile_sounds.c` (18 music tracks, 185 effects, 61 voices).
+- **Names:** only those confirmed with gameplay screenshots; the rest go by number.
+- **"Music and sounds" menu** (`src/port/sounds.c`): saves the state, advances only the Z80 and
+  the YM (`ng_sound_only_*`) and restores on exit. Test `menu_sonido`.
+- **Rumble** driven by sound commands (`ng_on_sound_command`): explosions, cannon, shots;
+  intensity 0-100.
 
-### Fase 6A: resultado
+### Phase 6A: result
 
-Detalle en `docs/PHASE6_REMASTER.md`.
+Details in `docs/PHASE6_REMASTER.md`.
 
-- **Autodisparo** por jugador: botón propio (B / G / RB) o en el disparo; 10, 7,5 o 5 por segundo.
-  La pistola no pasa de 10 disparos por segundo; se midió con el comando de sonido `F7`.
-- **Modo debug** (F3, `src/port/debug.c`):
+- **Autofire** per player: its own button (B / G / RB) or on the fire button; 10, 7.5 or 5 per
+  second. The pistol never exceeds 10 shots per second; measured with sound command `F7`.
+- **Debug mode** (F3, `src/port/debug.c`):
   - FPS;
-  - Hz de la lógica, del byte `0x10008A` (cuadros por ciclo: 2 normal, 3 o 4 ralentización);
-  - carga del 68000 (líneas fuera del bucle de espera `0x39B0`-`0x3A41`) y cuadros perdidos;
-  - gráfico;
-  - F6 cuadro a cuadro;
-  - ocultar sprites o fix;
-  - cajas de sprites, paleta y RAM.
-- `src/port/profile.h`: direcciones propias de Metal Slug X.
+  - logic Hz, from byte `0x10008A` (frames per cycle: 2 normal, 3 or 4 slowdown);
+  - 68000 load (lines outside the wait loop `0x39B0`-`0x3A41`) and dropped frames;
+  - graph;
+  - F6 frame advance;
+  - hide sprites or fix;
+  - sprite boxes, palette and RAM.
+- `src/port/profile.h`: Metal Slug X specific addresses.
 
-### Fase 5: resultado
+### Phase 5: result
 
-Detalle en `docs/PHASE5_NATIVE.md`.
+Details in `docs/PHASE5_NATIVE.md`.
 
-- **Frontend** (`src/port/`): `main.c` (opciones), `window.c`, `config.c` (`mslugx.ini` en
-  `%APPDATA%\ProjectoDecompile\mslugx\`), `gog.c` y `headless.c` (herramientas de la Fase 4,
-  sin cambios de comportamiento).
-- **ROMs:** se buscan solas: `--roms`, la carpeta recordada, `roms\` junto al exe, el registro
-  de GOG (id 2046360890) o un selector de carpeta.
-- **Imagen:** 4:3 o píxeles cuadrados; filtro nítido (escala entera + lineal), suave o píxeles;
-  scanlines; pantalla completa.
-- **Menú** (Esc o Guide): estados en 9 ranuras (también F5/F9), ralentización sí/no, volumen,
-  controles de 2 jugadores (teclado y mando), menú de servicio (F2) y reinicio.
-- **Turbo** (`CIC` en `cycles68k.h`, `cpu_turbo`): con x2, los cuadros perdidos por la
-  ralentización bajan del 10,3 % al 0,2 % (demo del attract) y del 9,0 % al 0,0 % (Misión 1).
-  Apagado no cambia nada.
-- **Estados** (`neogeo/savestate.c`, 835 KB): prueba `estado_guardado`; cargados en una máquina
-  reiniciada, reproducen RAM, imagen y audio idénticos.
-- `cmake --install build --prefix X` deja exe + SDL3.dll. Manifiesto: rutas UTF-8 y HiDPI.
+- **Frontend** (`src/port/`): `main.c` (options), `window.c`, `config.c` (`mslugx.ini` in
+  `%APPDATA%\ProjectoDecompile\mslugx\`), `gog.c` and `headless.c` (the Phase 4 tools, with no
+  behaviour changes).
+- **ROMs:** found automatically: `--roms`, the remembered folder, `roms\` next to the exe, the
+  GOG registry entry (id 2046360890) or a folder picker.
+- **Video:** 4:3 or square pixels; sharp filter (integer scale + linear), smooth or pixels;
+  scanlines; fullscreen.
+- **Menu** (Esc or Guide): save states in 9 slots (also F5/F9), slowdown on/off, volume,
+  2-player controls (keyboard and gamepad), service menu (F2) and reset.
+- **Turbo** (`CIC` in `cycles68k.h`, `cpu_turbo`): at x2, frames dropped to slowdown fall from
+  10.3 % to 0.2 % (attract demo) and from 9.0 % to 0.0 % (Mission 1). When off it changes
+  nothing.
+- **Save states** (`neogeo/savestate.c`, 835 KB): test `estado_guardado`; loaded into a reset
+  machine, they reproduce identical RAM, video and audio.
+- `cmake --install build --prefix X` leaves the exe + SDL3.dll. Manifest: UTF-8 paths and HiDPI.
 
-### Fase 4: resultado
+### Phase 4: result
 
-Detalle en `docs/PHASE4_VERIFICATION.md`.
+Details in `docs/PHASE4_VERIFICATION.md`.
 
-- **Cero divergencias en la Misión 1:** la grabación del usuario (11 969 cuadros) se reproduce
-  con la RAM y la paleta idénticas en las 11 771 VBlanks y la imagen idéntica en los 11 968
-  cuadros. Test automática: `ctest` → `mision1_contra_mame` (referencias en
-  `analisis/fase4/`, fuera del repo).
-- **Exactitud de ciclo del 68000 frente a MAME:**
-  - reset: la primera instrucción empieza en el ciclo 34;
-  - entrada a IRQ: espera al reloj E;
-  - muestreo de IRQ: reglas por familia, verificadas en 2091 casos;
-  - correcciones a la tabla de Musashi: ADD.L con registro, ADDQ.W a An, ADDA.W #, ANDI.L,
-    BSET/BCLR/BCHG con bit < 16, MULS, DIVU/DIVS exactos.
-  - Todo está en `src/cpu/cycles68k.h`, y lo comparten el código generado, el intérprete y las
-    pruebas.
+- **Zero divergences in Mission 1:** the user's recording (11 969 frames) replays with identical
+  RAM and palette in all 11 771 VBlanks and identical video in all 11 968 frames. Automatic
+  test: `ctest` → `mision1_contra_mame` (references in `analysis/phase4/`, outside the repo).
+- **68000 cycle accuracy against MAME:**
+  - reset: the first instruction starts at cycle 34;
+  - IRQ entry: waits for the E clock;
+  - IRQ sampling: per-family rules, verified on 2091 cases;
+  - fixes to Musashi's table: ADD.L with register, ADDQ.W to An, ADDA.W #, ANDI.L,
+    BSET/BCLR/BCHG with bit < 16, MULS, exact DIVU/DIVS.
+  - Everything lives in `src/cpu/cycles68k.h`, shared by the generated code, the interpreter and
+    the tests.
 - **Runtime:**
-  - entradas grabadas por tiempo;
-  - orden escritura de video / dibujo de línea como en MAME;
-  - lectura de la respuesta del Z80 a mitad de instrucción;
-  - YM2610 a 55 555 muestras/s exactas (como MAME);
-  - corregido: un temporizador del YM adelantaba el procesado de líneas.
-- **Herramientas:**
-  - en `mame/`: `fingerprints.lua`, `inputs.lua`, `cycles.lua` (traza de ciclos del depurador),
-    `trace_reads.lua` y `trace_ym.lua`;
-  - `compare_fingerprints.py`, `verify_mission.py`, `compare_cycles.py` y `audit_cycles.py`;
+  - inputs recorded by time;
+  - video write / line render order as in MAME;
+  - reading the Z80 reply in the middle of an instruction;
+  - YM2610 at exactly 55 555 samples/s (as MAME);
+  - fixed: a YM timer was running line processing ahead.
+- **Tools:**
+  - in `mame/`: `fingerprints.lua`, `inputs.lua`, `cycles.lua` (debugger cycle trace),
+    `trace_reads.lua` and `trace_ym.lua`;
+  - `compare_fingerprints.py`, `verify_mission.py`, `compare_cycles.py` and `audit_cycles.py`;
   - `sampling_queues.py` + `verify_sampling.py` + `recomp68k/sampling_classes.c`.
-- **Residual:** el sonido difiere de MAME en 0-3 muestras en el arranque de algunos efectos (el
-  Z80 atiende a veces la IRQ del YM una instrucción antes). No afecta al juego.
+- **Residual:** sound differs from MAME by 0-3 samples at the start of some effects (the Z80
+  sometimes services the YM IRQ one instruction earlier). It does not affect the game.
 
-### Fase 3B: resultado
+### Phase 3B: result
 
-- **Sound real:** Z80 (`external/chips/z80.h`, zlib) + YM2610 (`external/ymfm`, BSD-3, el mismo
-  núcleo que MAME) en `src/neogeo/sound.c`; `ym2610.cpp` es el único C++ del port (runtime de
-  C++ estático: el ejecutable solo necesita `SDL3.dll`). Audio por SDL3 a 55 555 Hz, colchón
-  de 50 ms, sin cortes.
-- **Intercalado como el planificador de MAME:** el Z80 avanza hasta cada límite de tramo del
-  68000; un comando sincroniza en el acto y abre 50 µs de intercalado fino. Comandos,
-  respuestas y lecturas coinciden con MAME a pocos µs hasta el cuadro 880.
-- **Audio contra `-wavwrite`:** correlación 1,00000 por tramo (`tools/compare_audio.py`).
-- **Numeración de cuadros corregida:** la captura N de MAME es la imagen que se completa al
-  ejecutar el cuadro N. Así coinciden 448 de 451 cuadros consecutivos (antes, 321).
+- **Real sound:** Z80 (`external/chips/z80.h`, zlib) + YM2610 (`external/ymfm`, BSD-3, the same
+  core as MAME) in `src/neogeo/sound.c`; `ym2610.cpp` is the only C++ in the port (static C++
+  runtime: the executable only needs `SDL3.dll`). Audio through SDL3 at 55 555 Hz, 50 ms
+  buffer, no dropouts.
+- **Interleaving like MAME's scheduler:** the Z80 runs up to each 68000 timeslice boundary; a
+  command syncs immediately and opens 50 µs of fine interleaving. Commands, replies and reads
+  match MAME within a few µs up to frame 880.
+- **Audio against `-wavwrite`:** correlation 1.00000 per segment (`tools/compare_audio.py`).
+- **Frame numbering fixed:** MAME's screenshot N is the image completed while running frame N.
+  With that, 448 of 451 consecutive frames match (previously 321).
 
-### Fase 3A: resultado
+### Phase 3A: result
 
-Detalle y evidencia en `docs/PHASE3_RUNTIME.md`.
+Details and evidence in `docs/PHASE3_RUNTIME.md`.
 
-- **Arranque:** el port ejecuta el BIOS MVS del usuario recompilado (no HLE), entra al juego y
-  la Misión 1 es jugable con teclado o mando (sonido: Fase 3B).
-- **Runtime (`src/neogeo/`):** mapa de memoria completo, protección, LSPC (sprites, fix,
-  reducción, paletas, autoanimación, IRQ1/IRQ2/IRQ3), uPD4990A, watchdog y SRAM persistente.
-  Los ROMs se leen de la carpeta de GOG y se validan por SHA-256.
-- **Contra MAME:**
-  - capturas idénticas píxel a píxel, colores incluidos (cifras actuales en la Fase 3B);
-  - las escrituras de E/S coinciden en orden y dato, con un desfase de unos 1 µs.
-- **Interrupciones en el límite de la instrucción:** el generador pone un punto de control
-  antes de cada instrucción. El despachador usa `rc_irq_level` para volver a `rc_event`
-  cuando la máscara baja.
-- **Fase del cuadro como en MAME:** al encender, el haz está en vpos 240; el cuadro termina en
-  el VBlank.
-- **Sustituto del Z80** con latencias medidas (comando 1: 175 929 ciclos, comando 3: 729);
-  reemplazado en la 3B.
-- **Herramientas:**
-  - `compare_screenshots.py`, `images.py` (PNG/BMP sin dependencias);
-  - en `mame/`: `screenshots.lua`, `trace_ports.lua`, `trace_sound.lua`, `z80_latency.lua` y
+- **Boot:** the port runs the user's MVS BIOS recompiled (not HLE), enters the game, and
+  Mission 1 is playable with keyboard or gamepad (sound: Phase 3B).
+- **Runtime (`src/neogeo/`):** full memory map, protection, LSPC (sprites, fix, shrinking,
+  palettes, auto-animation, IRQ1/IRQ2/IRQ3), uPD4990A, watchdog and persistent SRAM. ROMs are
+  read from the GOG folder and validated by SHA-256.
+- **Against MAME:**
+  - pixel-identical screenshots, colors included (current figures in Phase 3B);
+  - I/O writes match in order and data, with an offset of about 1 µs.
+- **Interrupts at instruction boundaries:** the generator places a checkpoint before every
+  instruction. The dispatcher uses `rc_irq_level` to return to `rc_event` when the mask is
+  lowered.
+- **Frame phase as in MAME:** at power-on the beam is at vpos 240; the frame ends at VBlank.
+- **Z80 stand-in** with measured latencies (command 1: 175 929 cycles, command 3: 729);
+  replaced in 3B.
+- **Tools:**
+  - `compare_screenshots.py`, `images.py` (dependency-free PNG/BMP);
+  - in `mame/`: `screenshots.lua`, `trace_ports.lua`, `trace_sound.lua`, `z80_latency.lua` and
     `trace_io.lua`;
-  - en el port: `--sin-ventana`, `--capturas`, `--guion`, `--traza` y `--traza-es`.
+  - in the port: `--sin-ventana`, `--capturas`, `--guion`, `--traza` and `--traza-es`.
 
-### Fase 2: resultado
+### Phase 2: result
 
-- **Musashi 4.60 (MIT) sin SoftFloat** (opción B del usuario): `external/musashi/` con
-  sustitutos propios de `m68kfpu.c` y `softfloat/*.h`. Es la referencia de semántica y el
-  intérprete de respaldo.
-- **Decodificador propio** (`tools/recomp68k/decoder.py`): Capstone decodifica
-  formatos del 68020 en modo 68000. Validado en 116 581 instrucciones; las 6 diferencias son
-  errores de Capstone.
-- **Generador** (`generator.py`): las 87 instrucciones que usa el juego, con ciclos del 68000
-  (tabla base de Musashi, volcada al compilar, más los ajustes dinámicos).
-- **Programa completo** (`program.py`): P1 y BIOS del usuario agrupados en regiones
-  (componentes conexos del grafo de control), cada instrucción emitida una sola vez y entrada
-  por `switch(c->pc)`. 124 193 instrucciones, 3 318 regiones, 31,7 MB de C en `build/`.
-- **Despachador** (`src/cpu/dispatcher.c`): JSR/BSR = llamada nativa verificada
-  (`rc_call`); puntos de control en los saltos hacia atrás; respaldo con Musashi en RAM, P2 y
-  código no visto.
-- **Pruebas** (`ctest`):
-  - `diferencial_cpu`: 4 253 instrucciones reales (3 356 opcodes) × 64 estados = 272 192 casos,
-    0 diferencias en registros, SR, PC, memoria y ciclos. Una prueba de mutación confirma que
-    el arnés detecta errores.
-  - `lockstep_reset`: programa completo contra Musashi desde el reset.
-  - `lockstep_juego`: desde un estado real (volcado de MAME en el frame 4000 de
-    `mision1.inp`): 120M ciclos, 591 VBlank, 10,1M instrucciones, memoria idéntica, un solo paso
-    interpretado. El programa recompilado es unas 5 veces más rápido que Musashi.
-- **Grabación del usuario:** `analisis/inp/mision1.inp`, 11 969 frames, hasta la Esfinge.
-  Se reproduce determinista (`tools/mame/final_state.lua`); para reproducirla se usa
-  siempre una nvram vacía. Cobertura con ella: 40 404 PCs de P1.
+- **Musashi 4.60 (MIT) without SoftFloat** (user's option B): `external/musashi/` with our own
+  stand-ins for `m68kfpu.c` and `softfloat/*.h`. It is the semantics reference and the fallback
+  interpreter.
+- **Own decoder** (`tools/recomp68k/decoder.py`): Capstone decodes 68020 formats in 68000 mode.
+  Validated on 116 581 instructions; the 6 differences are Capstone bugs.
+- **Generator** (`generator.py`): the 87 instructions the game uses, with 68000 cycle counts
+  (Musashi's base table, dumped at build time, plus the dynamic adjustments).
+- **Whole program** (`program.py`): the user's P1 and BIOS grouped into regions (connected
+  components of the control-flow graph), each instruction emitted only once and entry through
+  `switch(c->pc)`. 124 193 instructions, 3 318 regions, 31.7 MB of C in `build/`.
+- **Dispatcher** (`src/cpu/dispatcher.c`): JSR/BSR = verified native call (`rc_call`);
+  checkpoints on backward branches; Musashi fallback for RAM, P2 and unseen code.
+- **Tests** (`ctest`):
+  - `diferencial_cpu`: 4 253 real instructions (3 356 opcodes) × 64 states = 272 192 cases,
+    0 differences in registers, SR, PC, memory and cycles. A mutation test confirms the harness
+    catches errors.
+  - `lockstep_reset`: whole program against Musashi from reset.
+  - `lockstep_juego`: from a real state (MAME dump at frame 4000 of `mision1.inp`): 120M
+    cycles, 591 VBlanks, 10.1M instructions, identical memory, a single interpreted step. The
+    recompiled program is about 5 times faster than Musashi.
+- **User's recording:** `analysis/inp/mision1.inp`, 11 969 frames, up to the Sphinx. It replays
+  deterministically (`tools/mame/final_state.lua`); an empty nvram is always used to replay it.
+  Coverage with it: 40 404 P1 PCs.
 
-### Fase 1: resultado
+### Phase 1: result
 
-- **Herramientas:**
-  - `tools/coverage.py` + `mame/coverage.lua`: cobertura dinámica en MAME. Usa la
-    traza del depurador por partes, un bot de entrada, los cambios de banco y las lecturas de
-    datos.
-  - `tools/analyze68k.py`: desensamblado recursivo con Capstone, heurísticas A/B,
-    validación contra MAME y comparación con Ghidra.
-  - `tools/ghidra/*.java`: siembra de raíces y exportación de funciones en headless.
-- **Mapa de memoria:**
-  - P1 está fijo en `0x000000`.
-  - P2 se ve por bancos de 1 MB en `0x200000–0x2FFFFF`; se cambia con una escritura en
-    `0x2FFFF0` (banco = dato & 7). En la traza se usan los bancos 0–3.
-- **Entradas:**
-  - VBlank (IRQ1) en `0x22AC`, timer (IRQ2) en `0x2322`.
+- **Tools:**
+  - `tools/coverage.py` + `mame/coverage.lua`: dynamic coverage in MAME. Uses the debugger
+    trace in chunks, an input bot, bank switches and data reads.
+  - `tools/analyze68k.py`: recursive disassembly with Capstone, A/B heuristics, validation
+    against MAME and comparison with Ghidra.
+  - `tools/ghidra/*.java`: root seeding and headless function export.
+- **Memory map:**
+  - P1 is fixed at `0x000000`.
+  - P2 is seen in 1 MB banks at `0x200000–0x2FFFFF`; switched with a write to `0x2FFFF0`
+    (bank = data & 7). Banks 0–3 are used in the trace.
+- **Entry points:**
+  - VBlank (IRQ1) at `0x22AC`, timer (IRQ2) at `0x2322`.
   - USER `0x2432`, PLAYER_START `0x2658`, DEMO_END `0x2800`, COIN_SOUND `0x27F6`.
-  - Las excepciones del 68000 van a `0x22A2` (salto por `$10.w`).
-- **Resultado (traza de 300 s):**
-  - 26 406 direcciones de P1 ejecutadas.
-  - 4 488 funciones; 46 % de P1 es código (12,6 % confirmado y el resto heurístico).
-  - Todo lo que MAME ejecutó lo alcanza el análisis.
-- **Precisión:** 130 bytes heurísticos sobre datos demostrados (heurística A). Ghidra, en
-  comparación, encuentra el 55,5 % de lo ejecutado sin MAME; el análisis propio, el 51,3 %.
-- **Código fuera de P1:**
-  - 2 instrucciones en P2 (banco 1, `0x299178`, llamado desde `0x44EC`);
-  - una rutina copiada a RAM (`0x10FC00`, `jmp $7C00(a5)` en `0x10EA`).
-  - Implicación para la Fase 2: el dispatcher debe considerar el banco activo y recurrir al
-    intérprete en RAM y en código no visto.
+  - 68000 exceptions go to `0x22A2` (jump through `$10.w`).
+- **Result (300 s trace):**
+  - 26 406 P1 addresses executed.
+  - 4 488 functions; 46 % of P1 is code (12.6 % confirmed and the rest heuristic).
+  - Everything MAME executed is reached by the analysis.
+- **Precision:** 130 heuristic bytes over proven data (heuristic A). Ghidra, by comparison,
+  finds 55.5 % of what was executed without MAME; our own analysis, 51.3 %.
+- **Code outside P1:**
+  - 2 instructions in P2 (bank 1, `0x299178`, called from `0x44EC`);
+  - a routine copied to RAM (`0x10FC00`, `jmp $7C00(a5)` at `0x10EA`).
+  - Implication for Phase 2: the dispatcher must take the active bank into account and fall
+    back to the interpreter for RAM and unseen code.
 
-### Fase 0: resultado
+### Phase 0: result
 
-- **Extractor:** `tools/extract_roms.py` reconstruye el set de MAME en `roms\mame\`
-  a partir de los archivos de DotEmu. 15 archivos coinciden exactos (CRC32 + SHA1) con
-  `mame -listxml`; sigue siendo MAME quien da los hashes.
-- **P1 de GOG:** es distinto del de MAME (CRC `60c33b1a`). El origen no está identificado y se
-  investigará en la Fase 1. El port y el oráculo usan el mismo P1, el de GOG.
-- **`sm1.sm1`:** GOG no lo incluye. Se sustituye con M1, como arranca la AES. Verificado:
-  arranca, entra en attract mode y el sonido funciona.
-- **Formatos de DotEmu:** fix y sprites vienen desempaquetados a 4 bits por píxel en orden de
-  filas. La conversión es reversible y está documentada.
-- **Protección:** ALTERA en `0x2FFFE0`–`0x2FFFEF`, que devuelve bits de una tabla en P1
-  (`0x0DEDD2`). Confirmada con `tools/mame/trace_protection.lua`: 127 206 de 127 206
-  lecturas coinciden con el modelo.
-- **Arrancar el oráculo:** `mame mslugx -bios us -rompath "<raíz>\roms\mame"`.
-- **Hook pre-commit:** rechaza binarios, archivos de más de 1 MB y copias de ROMs.
+- **Extractor:** `tools/extract_roms.py` rebuilds the MAME set in `roms\mame\` from the DotEmu
+  files. 15 files match exactly (CRC32 + SHA1) with `mame -listxml`; MAME remains the source of
+  the hashes.
+- **GOG P1:** it differs from MAME's (CRC `60c33b1a`). Its origin is unidentified and will be
+  investigated in Phase 1. The port and the oracle use the same P1, GOG's.
+- **`sm1.sm1`:** GOG does not include it. It is replaced with M1, the way the AES boots.
+  Verified: it boots, enters attract mode and sound works.
+- **DotEmu formats:** fix and sprites come unpacked at 4 bits per pixel in row order. The
+  conversion is reversible and documented.
+- **Protection:** ALTERA at `0x2FFFE0`–`0x2FFFEF`, which returns bits from a table in P1
+  (`0x0DEDD2`). Confirmed with `tools/mame/trace_protection.lua`: 127 206 of 127 206 reads
+  match the model.
+- **Starting the oracle:** `mame mslugx -bios us -rompath "<root>\roms\mame"`.
+- **Pre-commit hook:** rejects binaries, files over 1 MB and ROM copies.
 
-### Fase Entorno: resultado
+### Environment phase: result
 
-Versiones fijadas en `setup/versions.json` (todas con hash verificado de la fuente oficial):
+Versions pinned in `setup/versions.json` (all with hashes verified against the official source):
 
-| Herramienta | Versión |
+| Tool | Version |
 |---|---|
 | 7-Zip | 26.04 |
 | Python | 3.14.8 (NuGet) |
@@ -304,83 +308,83 @@ Versiones fijadas en `setup/versions.json` (todas con hash verificado de la fuen
 | ImHex | 1.38.1 |
 | MinGit | 2.56.0.2 |
 
-Verificado bajo la ruta con espacio: CMake, Ninja, clang, llvm-windres y SDL3 (compila y abre
-la ventana), y Ghidra headless (importa un PE). Ghidra no deja nada en `%APPDATA%`,
-`%LOCALAPPDATA%` ni `%TEMP%`.
+Verified under the path with a space: CMake, Ninja, clang, llvm-windres and SDL3 (builds and
+opens the window), and Ghidra headless (imports a PE). Ghidra leaves nothing in `%APPDATA%`,
+`%LOCALAPPDATA%` or `%TEMP%`.
 
-ROMs: 13 archivos `mslugx_*` copiados desde GOG a `roms\`, con `roms\MANIFEST.sha256`
-verificado.
+ROMs: 13 `mslugx_*` files copied from GOG to `roms\`, with `roms\MANIFEST.sha256` verified.
 
-## Decisiones
+## Decisions
 
-- **Python desde NuGet** en lugar del embeddable: trae pip y venv sin parches. Python 3.14
-  porque la 3.15 era demasiado reciente.
-- **El instalador se versiona en `repo/setup/`.** `INSTALL.bat` de la raíz lo llama desde
-  ahí y la raíz se calcula como el padre de `repo`.
-- **MinGit portable** en lugar del Git del sistema, para que todo quede en una sola carpeta.
-- **Llamar `.bat` con rutas que tienen espacio:** se usa `cmd /d /s /c "..."` (función
-  `Invoke-Proceso` de setup.ps1). Si no, cmd elimina las comillas exteriores y la ruta se rompe.
-- **El hash de Python es SHA512**, porque NuGet solo publica ese. El resto usa SHA256.
-- **Identidad de git** configurada solo en este repo (`git config --local`).
-- **Ghidra portable mediante la ruta corta 8.3** (opción B). `setup.ps1` escribe en
-  `launch.properties` las propiedades `application.settingsdir`, `cachedir`, `tempdir` y
-  `java.io.tmpdir` apuntando a `C:/PROJEC~1/tools/_cache/ghidra/...`. La ruta corta se
-  recalcula en cada ejecución. Si la unidad no tiene nombres 8.3, el instalador avisa y Ghidra
-  usa sus rutas por defecto. Se descartó poner comillas (opción A) porque `LaunchSupport` las
-  toma literalmente.
-- **Archivos de texto:** los `.bat` y `.ps1` usan CRLF (fijado en `.gitattributes`). Los
-  `.ps1` llevan BOM UTF-8, porque PowerShell 5.1 los lee como ANSI si no lo tienen.
+- **Python from NuGet** instead of the embeddable package: it ships pip and venv without
+  patches. Python 3.14 because 3.15 was too recent.
+- **The installer is versioned in `repo/setup/`.** The root `INSTALL.bat` calls it from there,
+  and the root is computed as the parent of `repo`.
+- **Portable MinGit** instead of the system Git, so everything stays in a single folder.
+- **Calling `.bat` files with paths containing a space:** use `cmd /d /s /c "..."` (function
+  `Invoke-Proceso` in setup.ps1). Otherwise cmd strips the outer quotes and the path breaks.
+- **The Python hash is SHA512**, because NuGet only publishes that one. Everything else uses
+  SHA256.
+- **Git identity** configured only in this repo (`git config --local`).
+- **Portable Ghidra through the 8.3 short path** (option B). `setup.ps1` writes into
+  `launch.properties` the properties `application.settingsdir`, `cachedir`, `tempdir` and
+  `java.io.tmpdir`, pointing to `C:/PROJEC~1/tools/_cache/ghidra/...`. The short path is
+  recomputed on every run. If the drive has no 8.3 names, the installer warns and Ghidra uses
+  its default paths. Quoting (option A) was rejected because `LaunchSupport` takes the quotes
+  literally.
+- **Text files:** `.bat` and `.ps1` use CRLF (pinned in `.gitattributes`). `.ps1` files carry a
+  UTF-8 BOM, because PowerShell 5.1 reads them as ANSI without one.
 
-## Hallazgos
+## Findings
 
-- **Instalación GOG** en `K:\Metal Slug X`. No trae un set de MAME: son archivos de DotEmu en
+- **GOG install** at `K:\Metal Slug X`. It does not ship a MAME set: they are DotEmu files in
   `resources\game\` (`mslugx_game_m68k` 5 MB, `mslugx_tiles` 48 MB, `mslugx_adpcm` 10 MB,
   `mslugx_game_z80`, `mslugx_game_sfix`, `mslugx_bios_m68k`, `mslugx_bios_sfix`,
-  `mslugx_zoom_table`, entre otros). Lo más probable es que no coincidan byte a byte con el
-  set `mslugx` de MAME y que haya que reconstruir el formato de MAME en la Fase 0.
-- **Ghidra y los espacios:** con su configuración original, Ghidra 12.1.4 funciona bajo una
-  ruta con espacio. Lo que falla es que `launch.bat` (línea 185) concatena los `VMARGS` de
-  `launch.properties` sin comillas, y `LaunchSupport` toma las comillas literalmente. Por eso
-  no se puede redirigir `application.settingsdir`, `cachedir` ni `tmpdir` a una ruta con espacio.
-  Ghidra sí respeta `application.settingsdir` también para `java_home.save`.
+  `mslugx_zoom_table`, among others). Most likely they do not match MAME's `mslugx` set byte for
+  byte, and MAME's format will have to be rebuilt in Phase 0.
+- **Ghidra and spaces:** with its original configuration, Ghidra 12.1.4 works under a path with
+  a space. What fails is that `launch.bat` (line 185) concatenates the `VMARGS` from
+  `launch.properties` without quotes, and `LaunchSupport` takes the quotes literally. That is
+  why `application.settingsdir`, `cachedir` and `tmpdir` cannot be redirected to a path with a
+  space. Ghidra does honour `application.settingsdir` for `java_home.save` too.
 
-## Pendientes
+## To do
 
-- [ ] **Siguiente fase** tras el visto bueno de la 7A: 7B, debug estilo Sonic (plan corto y OK
-      antes de escribir código).
-- [ ] **Hoja de ruta pedida por el usuario** (para el resultado final):
-  - [ ] **Debug estilo Sonic:** elegir misión, personaje, aparecer armas. Primero buscar un modo
-        debug oculto de los desarrolladores ("debug dips"); si no hay, construirlo desde la RAM.
-  - [ ] **Nombres de sonidos y vibración del láser:** el usuario los identifica con la pestaña
-        Recientes; pasar sus nombres al perfil (`tools/sound_catalog.py`).
-- [ ] **Nombres de sonidos:** 12 músicas y la mayoría de las voces y efectos van por número. Hacen
-      falta grabaciones de otras misiones (el attract no tiene música).
-- [ ] **Perfil de juego** para portar otros Metal Slug (lo propuso el usuario): separar lo
-      específico de mslugx (`src/port/profile.h`, `roms.c`, protección en `bus.c`).
-- [ ] **Demo del attract sin recompilar:** en 12 000 cuadros sin entradas, 35 millones de pasos
-      van por el intérprete (la cobertura de la recompilación viene de la Misión 1). Agregar esa
-      cobertura si hace falta rendimiento; hoy rinde unos 1000 cuadros/s igual.
-- [ ] **Z80 como MAME a nivel de muestra:** cuándo atiende la IRQ del YM2610 el Z80 de MAME
-      (primer caso a los 15,1 s de la grabación, PC 0x0010). Hoy el audio coincide salvo
-      corrimientos de 0-3 muestras.
-- [ ] **Muestreo de IRQ sin trazas:** DIVU/DIVS con operando en memoria, CHK, TRAPV, MOVEP.
-- [ ] **Orden de las escrituras de 32 bits:** `MOVE.L` a `-(An)` escribe primero la palabra baja
-      en el 68000 y en MAME; el port, siempre la alta.
-- [ ] **Límites de tramo de MAME que el port aún no usa** para el intercalado con el Z80: por
-      ejemplo, los temporizadores del uPD4990A.
-- [ ] **Flags indefinidos que siguen a Musashi:** N/V de ABCD/SBCD y N/Z en el desbordamiento de
-      DIVU/DIVS. Hay que confirmarlos contra MAME (los ciclos de DIV ya son exactos).
-- [ ] **DIVS 0x80000000/-1:** se implementa como el hardware (V=1); Musashi devuelve 0. Si
-      aparece en una prueba, es una diferencia conocida.
-- [ ] **Código de P2:** banco 1, 144 PCs; hoy lo ejecuta el intérprete. Recompilarlo por
-      banco si el rendimiento lo pide.
-- [ ] Descartar raíces de la heurística A cuyo código pise datos demostrados por MAME
-      (hoy: 130 bytes).
-- [ ] Más grabaciones (otras misiones) para ampliar la verificación de la Fase 4 más allá de la
-      Misión 1.
-- [ ] 99 saltos o llamadas indirectos sin destino observado (por ejemplo `0x22AA` y `0x2354`).
-- [ ] Identificar en qué difiere el P1 de GOG del de MAME (Fase 1).
-- [ ] Lua en MAME: las suscripciones (`add_machine_stop_notifier`, taps) deben guardarse en
-      variables globales; si no, Lua las recolecta en silencio. No llamar `io` a una variable
-      local: tapa la biblioteca `io` de Lua. Cada corrida de MAME con nvram vacía necesita una
-      carpeta nueva: MAME guarda la nvram al salir. `tracelog` no funciona en la traza del Z80.
+- [ ] **Next phase** after 7A approval and the 7I translation: 7B, debug mode (short plan and OK
+      before writing code).
+- [ ] **Roadmap requested by the user** (for the final result):
+  - [ ] **Sonic-style debug (7B):** pick mission, character, spawn weapons. A hidden developer
+        menu was found in the ROM: force BIOS dev mode (`0x10FE80`) for the cartridge's reads;
+        in game, holding SELECT + D opens the pause, and doing it again opens the menu (SET
+        DEBUG DIP, stage select, TEST STAGE, sound test, COLOR BAR); debug dips at
+        `0x10F000`/`0x10F001`. Expose it from the port; build from RAM whatever is missing.
+  - [ ] **Sound names and laser rumble:** the user identifies them with the Recent tab; move
+        their names into the profile (`tools/sound_catalog.py`).
+- [ ] **Sound names:** 12 music tracks and most voices and effects go by number. Recordings of
+      other missions are needed (the attract mode has no music).
+- [ ] **Game profile** to port other Metal Slug games (proposed by the user): split out what is
+      mslugx-specific (`src/port/profile.h`, `roms.c`, protection in `bus.c`).
+- [ ] **Attract demo not recompiled:** in 12 000 frames without input, 35 million steps go
+      through the interpreter (recompilation coverage comes from Mission 1). Add that coverage
+      if performance requires it; it still runs at about 1000 frames/s today.
+- [ ] **Sample-accurate Z80 like MAME:** when MAME's Z80 services the YM2610 IRQ (first case at
+      15.1 s into the recording, PC 0x0010). Today audio matches except for 0-3 sample shifts.
+- [ ] **IRQ sampling without traces:** DIVU/DIVS with a memory operand, CHK, TRAPV, MOVEP.
+- [ ] **Order of 32-bit writes:** `MOVE.L` to `-(An)` writes the low word first on the 68000
+      and in MAME; the port always writes the high word first.
+- [ ] **MAME timeslice boundaries the port does not use yet** for Z80 interleaving: for example
+      the uPD4990A timers.
+- [ ] **Undefined flags that follow Musashi:** N/V of ABCD/SBCD and N/Z on DIVU/DIVS overflow.
+      They must be confirmed against MAME (DIV cycle counts are already exact).
+- [ ] **DIVS 0x80000000/-1:** implemented as the hardware does (V=1); Musashi returns 0. If it
+      shows up in a test, it is a known difference.
+- [ ] **P2 code:** bank 1, 144 PCs; currently run by the interpreter. Recompile it per bank if
+      performance requires it.
+- [ ] Discard heuristic A roots whose code overlaps data proven by MAME (today: 130 bytes).
+- [ ] More recordings (other missions) to extend Phase 4 verification beyond Mission 1.
+- [ ] 99 indirect jumps or calls with no observed target (for example `0x22AA` and `0x2354`).
+- [ ] Identify how GOG's P1 differs from MAME's (Phase 1).
+- [ ] Lua in MAME: subscriptions (`add_machine_stop_notifier`, taps) must be kept in global
+      variables; otherwise Lua silently garbage-collects them. Do not name a local variable
+      `io`: it shadows Lua's `io` library. Each MAME run with an empty nvram needs a fresh
+      folder: MAME saves the nvram on exit. `tracelog` does not work in the Z80 trace.

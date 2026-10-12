@@ -1,12 +1,12 @@
 @echo off
-rem Punto de entrada unico del instalador de Projecto Decompile.
-rem Ejecuta setup.ps1 con ExecutionPolicy Bypass SOLO para este proceso.
-rem Options (se pasan a setup.ps1):  -CopiarRoms  -SinRoms  -SoloVerificar  -Gog "ruta"
+rem Single entry point of the Projecto Decompile installer.
+rem Runs setup.ps1 with ExecutionPolicy Bypass ONLY for this process.
+rem Options (passed to setup.ps1):  -CopyRoms  -NoRoms  -VerifyOnly  -Gog "path"
 setlocal
 set "PD_SETUP=%~dp0setup.ps1"
 if not exist "%PD_SETUP%" set "PD_SETUP=%~dp0repo\setup\setup.ps1"
 if not exist "%PD_SETUP%" (
-  echo No se encontro setup.ps1 ni en "%~dp0" ni en "%~dp0repo\setup".
+  echo setup.ps1 was not found in "%~dp0" nor in "%~dp0repo\setup".
   exit /b 1
 )
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PD_SETUP%" %*

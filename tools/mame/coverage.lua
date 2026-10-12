@@ -1,65 +1,65 @@
--- Cobertura dinámica del 68000 en MAME (requiere -debug -debugger none).
--- La lanza tools/coverage.py; no se usa sola.
+-- Dynamic 68000 coverage in MAME (requires -debug -debugger none).
+-- Launched by tools/coverage.py; not used on its own.
 --
--- Variables de entorno:
---   PD_TRAZA_DIR  carpeta (ruta SIN espacios, p. ej. 8.3) donde se escriben traza_NNNN.txt
---   PD_FRAMES     frames por archivo de traza (por defecto 300)
---   PD_JUGAR      1 = bot simple que inserta monedas y juega (por defecto 1)
+-- Environment variables:
+--   PD_TRAZA_DIR  folder (path WITHOUT spaces, e.g. 8.3) where traza_NNNN.txt files are written
+--   PD_FRAMES     frames per trace file (300 by default)
+--   PD_JUGAR      1 = simple bot that inserts coins and plays (1 by default)
 --
--- Cada cambio de bank de P2 (escritura en 0x2FFFF0) se anota en la traza como
--- "BANK n" con tracelog, para que el analizador sepa qué bank está active.
+-- Every P2 bank change (write to 0x2FFFF0) is noted in the trace as
+-- "BANK n" with tracelog, so the analyzer knows which bank is active.
 
 local dbg = manager.machine.debugger
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
 local screen = manager.machine.screens[":screen"]
 local dir = os.getenv("PD_TRAZA_DIR")
-local por_archivo = tonumber(os.getenv("PD_FRAMES") or "300")
-local jugar = (os.getenv("PD_JUGAR") or "1") == "1"
-local parte = 0
+local per_file = tonumber(os.getenv("PD_FRAMES") or "300")
+local play = (os.getenv("PD_JUGAR") or "1") == "1"
+local part = 0
 
-local function nueva_traza()
-    dbg:command(string.format("trace %s\\traza_%04d.txt,maincpu,noloop", dir, parte))
-    parte = parte + 1
+local function new_trace()
+    dbg:command(string.format("trace %s\\traza_%04d.txt,maincpu,noloop", dir, part))
+    part = part + 1
 end
 
-banco_tap = mem:install_write_tap(0x2FFFF0, 0x2FFFFF, "pd_cov_bank", function(offset, data, mask)
+bank_tap = mem:install_write_tap(0x2FFFF0, 0x2FFFFF, "pd_cov_bank", function(offset, data, mask)
     dbg:command(string.format('tracelog "BANK %d\\n"', data & 7))
 end)
 
--- Lecturas sobre P1. Incluyen las búsquedas de instrucciones; coverage.py les resta los bytes
--- de las instrucciones ejecutadas para quedarse con las lecturas de data.
-local leidas = {}
-lectura_tap = mem:install_read_tap(0x000000, 0x0FFFFF, "pd_cov_rd", function(offset, data, mask)
-    leidas[offset & 0xFFFFE] = true
+-- Reads from P1. They include instruction fetches; coverage.py subtracts the bytes
+-- of executed instructions to keep only the data reads.
+local reads = {}
+read_tap = mem:install_read_tap(0x000000, 0x0FFFFF, "pd_cov_rd", function(offset, data, mask)
+    reads[offset & 0xFFFFE] = true
 end)
 
--- Bot de entrada: no busca jugar bien, solo recorrer la mayor cantidad de código posible.
-local campos = {}
-for _, puerto in pairs(manager.machine.ioport.ports) do
-    for name, campo in pairs(puerto.fields) do campos[name] = campo end
+-- Input bot: it does not try to play well, only to walk through as much code as possible.
+local fields = {}
+for _, port in pairs(manager.machine.ioport.ports) do
+    for name, field in pairs(port.fields) do fields[name] = field end
 end
-local function poner(name, v) if campos[name] then campos[name]:set_value(v) end end
+local function set(name, v) if fields[name] then fields[name]:set_value(v) end end
 
-cuadro_sub = emu.add_machine_frame_notifier(function()
+frame_sub = emu.add_machine_frame_notifier(function()
     local f = screen:frame_number()
-    if f % por_archivo == 0 then nueva_traza() end
-    if not jugar or f < 600 then return end
-    local c = f % 900                                  -- cada 15 s: moneda + START (continúa)
-    poner("Coin 1", (c >= 0 and c < 6) and 1 or 0)
-    poner("1 Player Start", (c >= 60 and c < 66) and 1 or 0)
-    poner("P1 Right", (f % 240 < 200) and 1 or 0)     -- casi siempre a la derecha
-    poner("P1 Left", (f % 240 >= 215) and 1 or 0)
-    poner("P1 Up", (f % 500 >= 470) and 1 or 0)
-    poner("P1 Button 1", (f % 6 < 3) and 1 or 0)      -- disparo
-    poner("P1 Button 2", (f % 90 < 8) and 1 or 0)     -- salto
-    poner("P1 Button 3", (f % 400 < 4) and 1 or 0)    -- granada
+    if f % per_file == 0 then new_trace() end
+    if not play or f < 600 then return end
+    local c = f % 900                                  -- every 15 s: coin + START (continue)
+    set("Coin 1", (c >= 0 and c < 6) and 1 or 0)
+    set("1 Player Start", (c >= 60 and c < 66) and 1 or 0)
+    set("P1 Right", (f % 240 < 200) and 1 or 0)     -- almost always to the right
+    set("P1 Left", (f % 240 >= 215) and 1 or 0)
+    set("P1 Up", (f % 500 >= 470) and 1 or 0)
+    set("P1 Button 1", (f % 6 < 3) and 1 or 0)      -- fire
+    set("P1 Button 2", (f % 90 < 8) and 1 or 0)     -- jump
+    set("P1 Button 3", (f % 400 < 4) and 1 or 0)    -- grenade
 end)
 
-fin_sub = emu.add_machine_stop_notifier(function()
+stop_sub = emu.add_machine_stop_notifier(function()
     dbg:command("trace off,maincpu")
     local l = io.open(dir .. "\\lecturas_p1.txt", "w")
-    for a in pairs(leidas) do l:write(string.format("%X\n", a)) end
+    for a in pairs(reads) do l:write(string.format("%X\n", a)) end
     l:close()
-    local f = io.open(dir .. "\\FIN", "w"); f:write(tostring(parte)); f:close()
+    local f = io.open(dir .. "\\FIN", "w"); f:write(tostring(part)); f:close()
 end)

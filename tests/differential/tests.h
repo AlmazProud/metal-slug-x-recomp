@@ -4,9 +4,9 @@
 #include "cpu68k.h"
 
 typedef struct {
-    uint32_t dir;                 /* dirección de la instrucción en P1 */
-    void (*fn)(Cpu68k *c);        /* la instrucción recompilada */
-    const char *text;            /* desensamblado (decodificador propio) */
+    uint32_t addr;                /* address of the instruction in P1 */
+    void (*fn)(Cpu68k *c);        /* the recompiled instruction */
+    const char *text;             /* disassembly (our own decoder) */
 } Test;
 
 extern const Test tests[];

@@ -1,19 +1,19 @@
--- Lecturas del 68000 en los puertos de entrada (0x300000-0x39FFFF) dentro de una window de
--- tiempo: hour (us), PC, dirección, value y máscara. Mismo formato que la opción del port
--- PD_TRAZA_LECTURAS. Variables: PD_DESDE_US, PD_HASTA_US, PD_TRAZA.
+-- 68000 reads from the input ports (0x300000-0x39FFFF) within a time
+-- window: time (us), PC, address, value and mask. Same format as the port's
+-- PD_TRAZA_LECTURAS option. Variables: PD_DESDE_US, PD_HASTA_US, PD_TRAZA.
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
-local desde = tonumber(os.getenv("PD_DESDE_US") or "0")
-local hasta = tonumber(os.getenv("PD_HASTA_US") or "1e12")
-local lineas = {}
+local first = tonumber(os.getenv("PD_DESDE_US") or "0")
+local last = tonumber(os.getenv("PD_HASTA_US") or "1e12")
+local lines = {}
 rtap_lect = mem:install_read_tap(0x300000, 0x39FFFF, "pd_lect", function(offset, data, mask)
     local t = manager.machine.time:as_double() * 1e6
-    if t >= desde and t <= hasta and (offset & 0xFE0000) ~= 0x320000 then
-        table.insert(lineas, string.format("%.3f pc=%06X %06X %04X/%04X", t, cpu.state["PC"].value, offset, data & mask, mask))
+    if t >= first and t <= last and (offset & 0xFE0000) ~= 0x320000 then
+        table.insert(lines, string.format("%.3f pc=%06X %06X %04X/%04X", t, cpu.state["PC"].value, offset, data & mask, mask))
     end
 end)
-notificador_fin_lect = emu.add_machine_stop_notifier(function()
+reads_stop_sub = emu.add_machine_stop_notifier(function()
     local f = io.open(os.getenv("PD_TRAZA") or "traza_lecturas.txt", "w")
-    for _, s in ipairs(lineas) do f:write(s .. "\n") end
+    for _, s in ipairs(lines) do f:write(s .. "\n") end
     f:close()
 end)

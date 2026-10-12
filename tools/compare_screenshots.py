@@ -1,10 +1,10 @@
-"""Compara screenshots del port (port_NNNNNN.bmp) con las de MAME (mame_NNNNNN.png) cuadro a cuadro.
+"""Compares the port's screenshots (port_NNNNNN.bmp) with MAME's (mame_NNNNNN.png) frame by frame.
 
-Uso:
-  python compare_screenshots.py --port CARPETA --mame CARPETA [--output CARPETA]
+Usage:
+  python compare_screenshots.py --port FOLDER --mame FOLDER [--output FOLDER]
 
-Para cada cuadro presente en ambas carpetas informa cuántos píxeles difieren y, con --output,
-escribe una imagen MAME | port | diferencias (en rojo) para revisarla.
+For each frame present in both folders, reports how many pixels differ and, with --output,
+writes a MAME | port | differences (in red) image for review.
 """
 from __future__ import annotations
 
@@ -14,13 +14,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import imagenes  # noqa: E402
+import images  # noqa: E402
 
 
-def frames(carpeta: Path, prefijo: str, ext: str) -> dict[int, Path]:
+def frames(folder: Path, prefix: str, ext: str) -> dict[int, Path]:
     r = {}
-    for f in carpeta.glob(f"{prefijo}_*.{ext}"):
-        m = re.fullmatch(rf"{prefijo}_(\d+)\.{ext}", f.name)
+    for f in folder.glob(f"{prefix}_*.{ext}"):
+        m = re.fullmatch(rf"{prefix}_(\d+)\.{ext}", f.name)
         if m:
             r[int(m.group(1))] = f
     return r
@@ -35,34 +35,34 @@ def main() -> int:
 
     p = frames(a.port, "port", "bmp")
     m = frames(a.mame, "mame", "png")
-    comunes = sorted(set(p) & set(m))
-    if not comunes:
-        print("No hay frames en común")
+    common = sorted(set(p) & set(m))
+    if not common:
+        print("No frames in common")
         return 1
     if a.output:
         a.output.mkdir(parents=True, exist_ok=True)
     total_ok = 0
-    for n in comunes:
-        wp, hp, rp = imagenes.leer(p[n])
-        wm, hm, rm = imagenes.leer(m[n])
+    for n in common:
+        wp, hp, rp = images.read(p[n])
+        wm, hm, rm = images.read(m[n])
         if (wp, hp) != (wm, hm):
-            print(f"cuadro {n}: tamaños distintos port {wp}x{hp}, MAME {wm}x{hm}")
+            print(f"frame {n}: different sizes port {wp}x{hp}, MAME {wm}x{hm}")
             continue
-        distintos = sum(1 for i in range(0, len(rp), 3) if rp[i:i + 3] != rm[i:i + 3])
-        estado = "IDENTICO" if distintos == 0 else f"{distintos} píxeles distintos ({100 * distintos / (wp * hp):.2f}%)"
-        print(f"cuadro {n:6d}: {estado}")
-        total_ok += distintos == 0
-        if a.output and distintos:
+        differing = sum(1 for i in range(0, len(rp), 3) if rp[i:i + 3] != rm[i:i + 3])
+        status = "IDENTICAL" if differing == 0 else f"{differing} differing pixels ({100 * differing / (wp * hp):.2f}%)"
+        print(f"frame {n:6d}: {status}")
+        total_ok += differing == 0
+        if a.output and differing:
             diff = bytearray()
             for i in range(0, len(rp), 3):
                 diff += b"\xff\x00\x00" if rp[i:i + 3] != rm[i:i + 3] else bytes(v // 4 for v in rm[i:i + 3])
-            filas = bytearray()
+            rows = bytearray()
             for y in range(hp):
                 s = slice(y * wp * 3, (y + 1) * wp * 3)
-                filas += rm[s] + rp[s] + diff[s]
-            imagenes.escribir_png(a.output / f"cmp_{n:06d}.png", imagenes.escalar((wp * 3, hp, bytes(filas)), 2))
-    print(f"idénticos: {total_ok}/{len(comunes)}")
-    return 0 if total_ok == len(comunes) else 1
+                rows += rm[s] + rp[s] + diff[s]
+            images.write_png(a.output / f"cmp_{n:06d}.png", images.scale((wp * 3, hp, bytes(rows)), 2))
+    print(f"identical: {total_ok}/{len(common)}")
+    return 0 if total_ok == len(common) else 1
 
 
 if __name__ == "__main__":

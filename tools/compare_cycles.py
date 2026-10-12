@@ -1,13 +1,13 @@
-"""Compara trazas de cycles por instrucción del 68000: MAME (tools/mame/cycles.lua) contra
-el port (variable PD_TRAZA_INSTR). Cada línea útil empieza por "C=<ciclo> <PC>:".
+"""Compares per-instruction 68000 cycle traces: MAME (tools/mame/cycles.lua) against
+the port (PD_TRAZA_INSTR variable). Each useful line starts with "C=<cycle> <PC>:".
 
-Uso:
+Usage:
   python compare_cycles.py MAME.txt PORT.txt [--max 20]
 
-Alinea ambas trazas en la primera instrucción de MAME (mismo PC, ciclo más cercano) y las recorre
-a la par. Informa el desfase inicial, cada instrucción cuya duración difiere (con su
-desensamblado de MAME) y la primera divergencia de flujo (PC distinto). Las inputs a
-interrupciones se reconocen por la línea "(interrupted at ...)" de MAME.
+Aligns both traces on MAME's first instruction (same PC, closest cycle) and walks them
+in lockstep. Reports the initial offset, every instruction whose duration differs (with its
+MAME disassembly) and the first control-flow divergence (different PC). Interrupt entries
+are recognized by MAME's "(interrupted at ...)" line.
 """
 from __future__ import annotations
 
@@ -17,13 +17,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-LINEA = re.compile(r"^C=(\d+) ([0-9A-F]+):\s*(.*)$")
+LINE = re.compile(r"^C=(\d+) ([0-9A-F]+):\s*(.*)$")
 
 
-def leer(ruta: Path) -> list[tuple[int, int, str]]:
+def read_trace(path: Path) -> list[tuple[int, int, str]]:
     r = []
-    for l in ruta.read_text(encoding="utf-8", errors="replace").splitlines():
-        m = LINEA.match(l)
+    for l in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        m = LINE.match(l)
         if m:
             r.append((int(m.group(1)), int(m.group(2), 16), m.group(3).strip()))
     return r
@@ -35,16 +35,16 @@ def main() -> int:
     ap.add_argument("port", type=Path)
     ap.add_argument("--max", type=int, default=20)
     a = ap.parse_args()
-    m, p = leer(a.mame), leer(a.port)
+    m, p = read_trace(a.mame), read_trace(a.port)
     c0, pc0, _ = m[0]
     cand = [i for i, (c, pc, _) in enumerate(p) if pc == pc0]
     if not cand:
-        print("el PC inicial de MAME no aparece en la traza del port")
+        print("MAME's initial PC does not appear in the port trace")
         return 1
     j = min(cand, key=lambda i: abs(p[i][0] - c0))
-    print(f"alineado: MAME C={c0} PC={pc0:06X}; port C={p[j][0]} (desfase port-MAME {p[j][0] - c0:+d} cycles)")
-    distintas = Counter()
-    ejemplos = {}
+    print(f"aligned: MAME C={c0} PC={pc0:06X}; port C={p[j][0]} (port-MAME offset {p[j][0] - c0:+d} cycles)")
+    differing = Counter()
+    examples = {}
     n = 0
     for i in range(len(m) - 1):
         if j + 1 >= len(p):
@@ -52,21 +52,21 @@ def main() -> int:
         (cm, pcm, txt), (cm2, pcm2, _) = m[i], m[i + 1]
         (cp, pcp, _), (cp2, pcp2, _) = p[j], p[j + 1]
         if pcm != pcp:
-            print(f"FLUJO DISTINTO en la instrucción {i}: MAME {pcm:06X} ({txt}) C={cm}; port {pcp:06X} C={cp} "
-                  f"(desfase {cp - cm:+d})")
+            print(f"FLOW DIVERGES at instruction {i}: MAME {pcm:06X} ({txt}) C={cm}; port {pcp:06X} C={cp} "
+                  f"(offset {cp - cm:+d})")
             break
         dm, dp = cm2 - cm, cp2 - cp
         if pcm2 == pcp2 and dm != dp:
-            clave = (txt.split()[0] if txt else "?", pcm)
-            distintas[clave] += 1
-            if clave not in ejemplos:
-                ejemplos[clave] = f"{pcm:06X} {txt:<32} MAME {dm} cycles, port {dp} (siguiente {pcm2:06X})"
+            key = (txt.split()[0] if txt else "?", pcm)
+            differing[key] += 1
+            if key not in examples:
+                examples[key] = f"{pcm:06X} {txt:<32} MAME {dm} cycles, port {dp} (next {pcm2:06X})"
         n += 1
         j += 1
-    print(f"instrucciones recorridas a la par: {n}")
-    print(f"instrucciones con duración distinta: {sum(distintas.values())} (en {len(distintas)} sitios)")
-    for clave, k in distintas.most_common(a.max):
-        print(f"  x{k:<6} {ejemplos[clave]}")
+    print(f"instructions walked in lockstep: {n}")
+    print(f"instructions with a different duration: {sum(differing.values())} (at {len(differing)} sites)")
+    for key, k in differing.most_common(a.max):
+        print(f"  x{k:<6} {examples[key]}")
     return 0
 
 

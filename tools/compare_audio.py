@@ -1,14 +1,14 @@
-"""Compara el audio del port (--wav) con el de MAME (-wavwrite), ambos WAV PCM de 16 bits.
+"""Compares the port's audio (--wav) with MAME's (-wavwrite), both 16-bit PCM WAV files.
 
-Uso:
+Usage:
   python compare_audio.py PORT.wav MAME.wav [--max-desfase-ms 50]
 
-Busca el desfase (en muestras) que mejor alinea ambas señales y reporta, para ese desfase:
-  - correlación de Pearson global y por second (1.0 = idénticas salvo scale);
-  - error relativo (RMS de la diferencia / RMS de MAME);
-  - cuántas muestras coinciden exactamente.
-MAME remuestrea la output del YM2610 (55 555,5 Hz) a la frecuencia pedida con -samplerate, así
-que no se espera igualdad bit a bit; una correlación cercana a 1 indica el mismo contenido.
+Finds the offset (in samples) that best aligns both signals and reports, for that offset:
+  - Pearson correlation, overall and per second (1.0 = identical up to scale);
+  - relative error (RMS of the difference / RMS of MAME);
+  - how many samples match exactly.
+MAME resamples the YM2610 output (55 555.5 Hz) to the rate requested with -samplerate, so
+bit-exact equality is not expected; a correlation close to 1 means the same content.
 """
 from __future__ import annotations
 
@@ -20,10 +20,10 @@ from pathlib import Path
 import numpy as np
 
 
-def leer(ruta: Path) -> tuple[int, np.ndarray]:
-    with wave.open(str(ruta), "rb") as w:
+def read_wav(path: Path) -> tuple[int, np.ndarray]:
+    with wave.open(str(path), "rb") as w:
         if w.getsampwidth() != 2:
-            raise ValueError(f"{ruta}: se esperan muestras de 16 bits")
+            raise ValueError(f"{path}: 16-bit samples expected")
         data = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float64)
         return w.getframerate(), data.reshape(-1, w.getnchannels())
 
@@ -35,51 +35,51 @@ def main() -> int:
     ap.add_argument("--max-desfase-ms", type=float, default=50.0)
     a = ap.parse_args()
 
-    hz_p, p = leer(a.port)
-    hz_m, m = leer(a.mame)
-    print(f"port: {len(p)} muestras a {hz_p} Hz ({len(p) / hz_p:.2f} s); MAME: {len(m)} a {hz_m} Hz ({len(m) / hz_m:.2f} s)")
+    hz_p, p = read_wav(a.port)
+    hz_m, m = read_wav(a.mame)
+    print(f"port: {len(p)} samples at {hz_p} Hz ({len(p) / hz_p:.2f} s); MAME: {len(m)} at {hz_m} Hz ({len(m) / hz_m:.2f} s)")
     if hz_p != hz_m:
-        print("frecuencias distintas: graba MAME con -samplerate igual a la del port")
+        print("different sample rates: record MAME with -samplerate equal to the port's")
         return 2
     pm, mm = p.mean(axis=1), m.mean(axis=1)
     n = min(len(pm), len(mm))
     pm, mm = pm[:n], mm[:n]
 
-    # Desfase por correlación cruzada (FFT) dentro de +-max.
+    # Offset by cross-correlation (FFT) within +-max.
     max_d = int(a.max_desfase_ms * hz_p / 1000)
-    tam = 1 << int(np.ceil(np.log2(2 * n)))
-    cc = np.fft.irfft(np.fft.rfft(pm, tam) * np.conj(np.fft.rfft(mm, tam)), tam)
-    candidatos = np.concatenate([cc[:max_d + 1], cc[-max_d:]])
-    idx = int(np.argmax(candidatos))
-    d = idx if idx <= max_d else idx - len(candidatos)
-    # d > 0: el port va adelantado... se alinea port[i + d] con mame[i]
+    size = 1 << int(np.ceil(np.log2(2 * n)))
+    cc = np.fft.irfft(np.fft.rfft(pm, size) * np.conj(np.fft.rfft(mm, size)), size)
+    candidates = np.concatenate([cc[:max_d + 1], cc[-max_d:]])
+    idx = int(np.argmax(candidates))
+    d = idx if idx <= max_d else idx - len(candidates)
+    # d > 0: the port is ahead... port[i + d] is aligned with mame[i]
     if d >= 0:
         ps, ms = p[d:], m[:len(p) - d]
     else:
         ps, ms = p[:len(p) + d], m[-d:]
     k = min(len(ps), len(ms))
     ps, ms = ps[:k], ms[:k]
-    print(f"desfase óptimo: {d} muestras ({1000 * d / hz_p:+.2f} ms; positivo = el port va detrás)")
+    print(f"best offset: {d} samples ({1000 * d / hz_p:+.2f} ms; positive = the port lags behind)")
 
-    for c, name in enumerate(("izquierdo", "derecho")):
+    for c, name in enumerate(("left", "right")):
         x, y = ps[:, c], ms[:, c]
         corr = float(np.corrcoef(x, y)[0, 1]) if x.std() and y.std() else float("nan")
         err = float(np.sqrt(np.mean((x - y) ** 2)) / max(np.sqrt(np.mean(y ** 2)), 1e-9))
-        exactas = int(np.sum(x == y))
-        print(f"canal {name}: correlación {corr:.5f}  error relativo {100 * err:.2f}%  "
-              f"muestras exactas {exactas}/{k} ({100 * exactas / k:.1f}%)")
+        exact = int(np.sum(x == y))
+        print(f"{name} channel: correlation {corr:.5f}  relative error {100 * err:.2f}%  "
+              f"exact samples {exact}/{k} ({100 * exact / k:.1f}%)")
 
-    print("correlación por second (mezcla mono):")
-    filas = []
+    print("correlation per second (mono mix):")
+    rows = []
     for s in range(k // hz_p):
         x = ps[s * hz_p:(s + 1) * hz_p].mean(axis=1)
         y = ms[s * hz_p:(s + 1) * hz_p].mean(axis=1)
         if y.std() < 1:
-            filas.append(f"{s:3d}s silencio" + (" (port también)" if x.std() < 1 else f" (port rms {x.std():.0f})"))
+            rows.append(f"{s:3d}s silence" + (" (port too)" if x.std() < 1 else f" (port rms {x.std():.0f})"))
         else:
-            filas.append(f"{s:3d}s {np.corrcoef(x, y)[0, 1]:.4f}")
-    for i in range(0, len(filas), 5):
-        print("   " + "   ".join(filas[i:i + 5]))
+            rows.append(f"{s:3d}s {np.corrcoef(x, y)[0, 1]:.4f}")
+    for i in range(0, len(rows), 5):
+        print("   " + "   ".join(rows[i:i + 5]))
     return 0
 
 

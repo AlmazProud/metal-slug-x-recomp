@@ -1,34 +1,34 @@
-/* Datos propios de Metal Slug X que usa el port, encontrados en el análisis (listado de P1) y
- * confirmados con la partida grabada de la Misión 1. Primer paso hacia un "perfil de juego".
+/* Metal Slug X specific data used by the port, found during the analysis (P1 listing) and
+ * confirmed with the recorded Mission 1 playthrough. A first step towards a "game profile".
  */
 #ifndef PROFILE_H
 #define PROFILE_H
 
-/* Bucle principal: espera la VBlank en 0x39B0-0x3A3E (bclr #7,-$7F75(a5); beq) y sale en 0x3A42. */
+/* Main loop: waits for VBlank at 0x39B0-0x3A3E (bclr #7,-$7F75(a5); beq) and exits at 0x3A42. */
 #define PROFILE_WAIT_START 0x39B0u
 #define PROFILE_WAIT_END 0x3A42u
 
-/* Al salir de la espera, el juego copia en -$7F76(a5) = 0x10008A cuántas VBlanks duró el ciclo de
- * lógica: 2 normalmente (30 Hz), 3 o 4 con la ralentización (20 o 15 Hz). Offset en la RAM. */
+/* On leaving the wait, the game stores at -$7F76(a5) = 0x10008A how many VBlanks the logic cycle
+ * took: normally 2 (30 Hz), 3 or 4 with slowdown (20 or 15 Hz). Offset in RAM. */
 #define PROFILE_RAM_FRAMES_PER_TICK 0x008Au
 
-/* Sangre: las opciones del juego en el menú de service del BIOS (soft dips, tabla de la cabecera
- * del P ROM) incluyen "BLOOD OFF/ON"; en EE. UU. y Europa viene en OFF (blood blanca). El BIOS
- * copia las opciones a 0x10FD84: dos tiempos, dos cuentas y diez opciones desde 0x10FD8A
- * (CONTINUE, DIFFICULTY, PLAY TIME, DEMO SOUND, PLAY MANUAL, BLOOD...). El juego la consulta en
- * 0x1B2BE (tst.b $10FD8F). Escribir ese byte desde el encendido rompe el test de RAM del BIOS: se
- * fuerza solo la lectura del código del juego (ng_forced_read, byte bajo de la palabra). */
-/* Dips de depuración del juego: dos bytes que solo valen con el mode desarrollo del BIOS
- * (0x10FE80); si no, el juego los borra en cada cuadro (0x2592). Se fuerzan como la blood. */
+/* Blood: the game options in the BIOS service menu (soft dips, table in the P ROM header)
+ * include "BLOOD OFF/ON"; in the US and Europe it defaults to OFF (white blood). The BIOS
+ * copies the options to 0x10FD84: two times, two counts and ten options from 0x10FD8A
+ * (CONTINUE, DIFFICULTY, PLAY TIME, DEMO SOUND, PLAY MANUAL, BLOOD...). The game checks it at
+ * 0x1B2BE (tst.b $10FD8F). Writing that byte from power-on breaks the BIOS RAM test: only the
+ * game code's read is forced (ng_forced_read, low byte of the word). */
+/* Game debug dips: two bytes that only take effect with the BIOS development mode
+ * (0x10FE80); otherwise the game clears them every frame (0x2592). Forced like the blood. */
 #define PROFILE_DIPS_WORD 0x10F000
-/* Modo desarrollo del BIOS (byte alto de la palabra): abre el menú oculto de los desarrolladores. */
+/* BIOS development mode (high byte of the word): opens the developers' hidden menu. */
 #define PROFILE_DEVMODE_WORD 0x10FE80
 #define PROFILE_BLOOD_WORD 0x10FD8Eu
 #define PROFILE_BLOOD_MASK 0x00FFu
 
-/* Logo de la screen de título (attract, cuadro ~1150 desde el encendido con la SRAM vacía):
- * sprites 41-124 (shadow, "METAL SLUG", X, "SUPER VEHICLE-001") y 380 ("TM", primer tile 0x309CA,
- * que sirve para reconocer el momento). El fondo rojo son los sprites 21-40. */
+/* Title screen logo (attract, frame ~1150 from power-on with empty SRAM):
+ * sprites 41-124 (shadow, "METAL SLUG", X, "SUPER VEHICLE-001") and 380 ("TM", first tile 0x309CA,
+ * used to recognize the moment). The red background is sprites 21-40. */
 #define PROFILE_LOGO_FIRST 41
 #define PROFILE_LOGO_LAST 124
 #define PROFILE_LOGO_TM 380

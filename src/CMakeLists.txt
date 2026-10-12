@@ -1,30 +1,30 @@
-# Núcleo del port: CPU (despachador + respaldo), programa recompilado y runtime de la Neo Geo.
+# Port core: CPU (dispatcher + fallback), recompiled program and Neo Geo runtime.
 
 add_library(cpu68k STATIC cpu/dispatcher.c cpu/musashi_interpreter.c)
 target_include_directories(cpu68k PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cpu)
 target_link_libraries(cpu68k PUBLIC musashi)
 
-# Tabla de cycles base de Musashi para el 68000, que usa el generador.
+# Musashi's base 68000 cycle table, used by the generator.
 add_executable(volcar_ciclos ${PROJECT_SOURCE_DIR}/tools/recomp68k/dump_cycles.c)
 target_link_libraries(volcar_ciclos PRIVATE musashi)
 
-# Consulta de las reglas de muestreo de interrupciones (tools/verify_sampling.py).
+# Query for the interrupt sampling rules (tools/verify_sampling.py).
 add_executable(clases_muestreo ${PROJECT_SOURCE_DIR}/tools/recomp68k/sampling_classes.c)
 target_link_libraries(clases_muestreo PRIVATE cpu68k)
 
 if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALYSIS}/listing_bios.txt")
-    message(STATUS "Programa recompilado desactivado: faltan ROMs (${PD_ROMS}) o listados del análisis (${PD_ANALYSIS})")
+    message(STATUS "Recompiled program disabled: ROMs (${PD_ROMS}) or analysis listings (${PD_ANALYSIS}) are missing")
     return()
 endif()
 
-set(CICLOS ${CMAKE_CURRENT_BINARY_DIR}/ciclos_68000.bin)
-add_custom_command(OUTPUT ${CICLOS} COMMAND volcar_ciclos ${CICLOS} DEPENDS volcar_ciclos VERBATIM)
+set(CYCLES_BIN ${CMAKE_CURRENT_BINARY_DIR}/cycles_68000.bin)
+add_custom_command(OUTPUT ${CYCLES_BIN} COMMAND volcar_ciclos ${CYCLES_BIN} DEPENDS volcar_ciclos VERBATIM)
 
 set(PROG_DIR ${CMAKE_CURRENT_BINARY_DIR}/program)
 set(PROG_C ${PROG_DIR}/program_registry.c)
 foreach(n RANGE 0 15)
-    string(LENGTH "${n}" largo)
-    if(largo EQUAL 1)
+    string(LENGTH "${n}" len)
+    if(len EQUAL 1)
         set(num "00${n}")
     else()
         set(num "0${n}")
@@ -32,9 +32,9 @@ foreach(n RANGE 0 15)
     list(APPEND PROG_C ${PROG_DIR}/program_${num}.c)
 endforeach()
 
-set(COBERTURA ${PD_ANALYSIS}/coverage.json)
+set(COVERAGE ${PD_ANALYSIS}/coverage.json)
 if(EXISTS "${PD_ANALYSIS}/coverage_mission1.json")
-    list(APPEND COBERTURA ${PD_ANALYSIS}/coverage_mission1.json)
+    list(APPEND COVERAGE ${PD_ANALYSIS}/coverage_mission1.json)
 endif()
 
 file(GLOB RECOMP_PY ${PROJECT_SOURCE_DIR}/tools/recomp68k/*.py)
@@ -43,18 +43,18 @@ add_custom_command(
     COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/recomp68k/program.py
             --roms ${PD_ROMS}
             --listados ${PD_ANALYSIS}/listing_p1.txt ${PD_ANALYSIS}/listing_bios.txt
-            --cobertura ${COBERTURA}
-            --cycles ${CICLOS} --output ${PROG_DIR} --archivos 16
-    DEPENDS ${RECOMP_PY} ${CICLOS}
-    COMMENT "Recompilando P1 y BIOS del usuario a C"
+            --cobertura ${COVERAGE}
+            --cycles ${CYCLES_BIN} --output ${PROG_DIR} --archivos 16
+    DEPENDS ${RECOMP_PY} ${CYCLES_BIN}
+    COMMENT "Recompiling the user's P1 and BIOS to C"
     VERBATIM)
 
-# Código generado a partir de la copia del usuario: vive solo en build/.
+# Code generated from the user's copy: it lives only in build/.
 add_library(recompiled_program STATIC ${PROG_C})
 target_link_libraries(recompiled_program PUBLIC cpu68k)
 target_compile_options(recompiled_program PRIVATE -O1 -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-label)
 
-# Runtime de hardware de la Neo Geo (Fase 3).
+# Neo Geo hardware runtime (Phase 3).
 add_library(neogeo STATIC
     neogeo/bus.c neogeo/savestate.c neogeo/machine.c neogeo/roms.c neogeo/rtc.c neogeo/sha256.c
     neogeo/sound.c neogeo/video.c neogeo/z80_impl.c neogeo/ym2610.cpp)
@@ -63,45 +63,45 @@ target_include_directories(neogeo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/neogeo
 target_link_libraries(neogeo PUBLIC cpu68k ymfm)
 set_target_properties(neogeo PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
 target_compile_options(neogeo PRIVATE $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra>)
-# z80.h (tercero) genera avisos propios; se compila sin ellos.
+# z80.h (third party) produces its own warnings; it is compiled without them.
 set_source_files_properties(neogeo/z80_impl.c PROPERTIES COMPILE_OPTIONS "-w")
 
-# Ejecutable del port (SDL3).
+# Port executable (SDL3).
 find_package(SDL3 CONFIG)
 if(NOT SDL3_FOUND)
-    message(STATUS "Port desactivado: no se encontró SDL3 (CMAKE_PREFIX_PATH)")
+    message(STATUS "Port disabled: SDL3 not found (CMAKE_PREFIX_PATH)")
     return()
 endif()
-set(PORT_FUENTES port/main.c port/headless.c port/window.c port/config.c port/debug.c port/font.c port/gog.c port/logo.c port/menu.c port/sounds.c port/profile_sounds.c)
+set(PORT_SOURCES port/main.c port/headless.c port/window.c port/config.c port/debug.c port/font.c port/gog.c port/logo.c port/menu.c port/sounds.c port/profile_sounds.c)
 if(WIN32)
     enable_language(RC)
-    list(APPEND PORT_FUENTES port/mslugx.rc)
+    list(APPEND PORT_SOURCES port/mslugx.rc)
 endif()
-add_executable(mslugx WIN32 ${PORT_FUENTES})
+add_executable(mslugx WIN32 ${PORT_SOURCES})
 target_link_libraries(mslugx PRIVATE neogeo recompiled_program SDL3::SDL3)
 target_compile_options(mslugx PRIVATE -Wall -Wextra)
-# Runtime de C++ (por ymfm) enlazado estático: el ejecutable solo necesita SDL3.dll.
+# C++ runtime (for ymfm) linked statically: the executable only needs SDL3.dll.
 target_link_options(mslugx PRIVATE -static-libstdc++ -static-libgcc)
 set_target_properties(mslugx PROPERTIES LINKER_LANGUAGE CXX)
 add_custom_command(TARGET mslugx POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:mslugx> $<TARGET_FILE_DIR:mslugx>
     COMMAND_EXPAND_LISTS)
 
-# Distribución (Fase 5): cmake --install build --prefix <carpeta> deja el ejecutable y SDL3.dll.
-# El ejecutable contiene código traducido de la copia del usuario: es para uso personal.
+# Distribution (Phase 5): cmake --install build --prefix <folder> installs the executable and SDL3.dll.
+# The executable contains code translated from the user's copy: it is for personal use.
 install(TARGETS mslugx RUNTIME DESTINATION .)
 install(FILES $<TARGET_RUNTIME_DLLS:mslugx> DESTINATION .)
 
-# Fase 5: un estado guardado, cargado en una máquina reiniciada, reproduce RAM, imagen y audio.
+# Phase 5: a save state, loaded into a reset machine, reproduces RAM, image and audio.
 add_test(NAME estado_guardado
          COMMAND mslugx --roms ${PD_ROMS} --sin-window --frames 3000 --probar-estado 600)
-# Fase 6B: el menú de sonido suena y, al cerrarlo, el juego sigue idéntico.
+# Phase 6B: the sound menu is audible and, after closing it, the game stays identical.
 add_test(NAME menu_sonido
          COMMAND mslugx --roms ${PD_ROMS} --sin-window --frames 3000 --probar-sonidos)
 
-# Fase 4: la partida grabada del usuario (Misión 1) reproducida contra MAME, sin divergencias en RAM,
-# palette ni imagen. Las referencias de MAME y las inputs viven en PD_ANALYSIS/fase4 (fuera del repo;
-# cómo generarlas: tools/verify_mission.py).
+# Phase 4: the user's recorded game (Mission 1) replayed against MAME, with no divergences in RAM,
+# palette or image. The MAME references and the inputs live in PD_ANALYSIS/phase4 (outside the repo;
+# how to generate them: tools/verify_mission.py).
 if(EXISTS "${PD_ANALYSIS}/phase4/mission1_fingerprints_mame.txt" AND EXISTS "${PD_ANALYSIS}/phase4/mission1_inputs.txt")
     add_test(NAME mision1_contra_mame
              COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/verify_mission.py

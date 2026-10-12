@@ -1,6 +1,6 @@
-// Pre-script de Ghidra: desensambla y crea funciones en las direcciones (hex, una por línea)
-// del archivo indicado como primer argumento. Uso desde analyzeHeadless:
-//   -preScript SeedRoots.java <archivo_raices>
+// Ghidra pre-script: disassembles and creates functions at the addresses (hex, one per line)
+// of the file given as the first argument. Usage from analyzeHeadless:
+//   -preScript SeedRoots.java <roots_file>
 // @category ProjectoDecompile
 
 import ghidra.app.cmd.disassemble.DisassembleCommand;
@@ -10,7 +10,7 @@ import ghidra.program.model.address.Address;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class SembrarRaices extends GhidraScript {
+public class SeedRoots extends GhidraScript {
     @Override
     protected void run() throws Exception {
         String[] args = getScriptArgs();
@@ -23,6 +23,6 @@ public class SembrarRaices extends GhidraScript {
             if (getFunctionAt(a) == null) createFunction(a, null);
             n++;
         }
-        println("PD: raices sembradas: " + n);
+        println("PD: roots seeded: " + n);
     }
 }

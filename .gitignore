@@ -1,19 +1,19 @@
 # =====================================================================
-# Projecto Decompile - .gitignore ESTRICTO (lista blanca)
+# Projecto Decompile - STRICT .gitignore (whitelist)
 #
-# Regla 1 del proyecto: el repo NUNCA contiene ROMs, BIOS, gráficos,
-# audio ni bloques de datos extraídos. Por eso se ignora TODO por defecto
-# y solo se permiten tipos de archivo de código y documentación.
-# Si necesitas un tipo nuevo, agrégalo abajo de forma explícita y justifícalo.
+# Project rule 1: the repo NEVER contains ROMs, BIOS, graphics,
+# audio or extracted data blocks. That is why EVERYTHING is ignored by
+# default and only code and documentation file types are allowed.
+# If you need a new type, add it below explicitly and justify it.
 # =====================================================================
 
-# 1) Ignorar todo...
+# 1) Ignore everything...
 *
 
-# 2) ...pero permitir entrar en carpetas (para que la lista blanca funcione)
+# 2) ...but allow descending into folders (so the whitelist works)
 !*/
 
-# 3) Lista blanca: código, scripts, build y documentación
+# 3) Whitelist: code, scripts, build and documentation
 !.gitignore
 !.gitattributes
 !*.md
@@ -32,14 +32,14 @@
 !*.toml
 !*.txt
 !tools/hooks/*
-# Fase 3B: ymfm (BSD-3) está escrito en C++; licencias de terceros sin extensión
+# Phase 3B: ymfm (BSD-3) is written in C++; third-party licenses without extension
 !*.cpp
 !*.ipp
 !external/**/LICENSE
-# Fase 5: manifiesto del ejecutable de Windows (XML, sin datos del juego)
+# Phase 5: Windows executable manifest (XML, no game data)
 !src/port/*.manifest
 
-# 4) Siempre ignorado, aunque coincida con la lista blanca
+# 4) Always ignored, even if it matches the whitelist
 build/
 out/
 _build*/

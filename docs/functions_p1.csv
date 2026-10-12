@@ -1,4 +1,4 @@
-inicio,fin,bytes_codigo,instrucciones,llamadas,motivos
+start,end,code_bytes,instructions,calls,reasons
 000122,C1936E,1296,268,810,cabecera_USER
 000128,0026FA,168,39,2,cabecera_PLAYER_START llamada
 00012E,002802,8,2,0,cabecera_DEMO_END llamada

@@ -1,22 +1,22 @@
-"""Generador de C a partir de instrucciones 68000 decodificadas (decoder.py).
+"""C generator for decoded 68000 instructions (decoder.py).
 
-Traduce una instrucción a sentencias C que operan sobre `Cpu68k *c` (src/cpu/cpu68k.h).
-El control de flujo se expresa con macros que define quien incluye el código generado:
+Translates an instruction into C statements that operate on `Cpu68k *c` (src/cpu/cpu68k.h).
+Control flow is expressed through macros defined by whoever includes the generated code:
 
-    PD_SALTO(destino)      salto a una dirección conocida
-    PD_SALTO_DIN(expr)     salto a una dirección calculada en tiempo de ejecución
-    PD_SIGUIENTE(dir)      continuar con la instrucción siguiente (dir = su dirección)
-    PD_EXCEPCION(vector, return_pc)
+    PD_JUMP(target)        jump to a known address
+    PD_JUMP_DYN(expr)      jump to an address computed at run time
+    PD_NEXT(addr)          continue with the next instruction (addr = its address)
+    PD_EXCEPTION(vector, return_pc)
 
-Así el mismo generador sirve para las tests diferenciales (una función por instrucción)
-y para el port (funciones completas con etiquetas).
+This way the same generator serves the differential tests (one function per instruction)
+and the port (whole functions with labels).
 
-El código C generado se deriva del programa del juego: se genera en tiempo de compilación a
-partir de los ROMs del usuario y nunca se versiona.
+The generated C code is derived from the game program: it is generated at build time from
+the user's ROMs and is never committed.
 """
 from __future__ import annotations
 
-from decoder import EA, Instr, TAMAÑO_BYTES
+from decoder import EA, Instr, SIZE_BYTES
 
 MASK = {"b": "MASK_B", "w": "MASK_W", "l": "MASK_L"}
 MSB = {"b": "MSB_B", "w": "MSB_W", "l": "MSB_L"}
@@ -25,141 +25,141 @@ CC_C = {"t": "CC_T", "f": "CC_F", "hi": "CC_HI", "ls": "CC_LS", "cc": "CC_CC", "
         "ge": "CC_GE", "lt": "CC_LT", "gt": "CC_GT", "le": "CC_LE"}
 
 
-# Ciclos de las excepciones del 68000 (tabla de Musashi 4.60 para el 68000, MIT).
-CICLOS_EXCEPCION = {4: 34, 5: 38, 6: 40, 7: 34, 8: 34, **{32 + n: 34 for n in range(16)}}
+# 68000 exception cycles (Musashi 4.60 table for the 68000, MIT).
+EXCEPTION_CYCLES = {4: 34, 5: 38, 6: 40, 7: 34, 8: 34, **{32 + n: 34 for n in range(16)}}
 
-# Ciclos base por opcode (tests/differential/dump_cycles.c -> archivo de 65536 bytes).
-CICLOS_BASE: bytes | None = None
-
-
-def cargar_ciclos(ruta) -> None:
-    global CICLOS_BASE
-    with open(ruta, "rb") as f:
-        CICLOS_BASE = f.read()
-    assert len(CICLOS_BASE) == 0x10000
+# Base cycles per opcode (tools/recomp68k/dump_cycles.c -> 65536-byte file).
+BASE_CYCLES: bytes | None = None
 
 
-class NoSoportada(Exception):
+def load_cycles(path) -> None:
+    global BASE_CYCLES
+    with open(path, "rb") as f:
+        BASE_CYCLES = f.read()
+    assert len(BASE_CYCLES) == 0x10000
+
+
+class Unsupported(Exception):
     pass
 
 
-def _rd(tam: str) -> str:
-    return {"b": "bus_r8", "w": "bus_r16", "l": "bus_r32"}[tam]
+def _rd(size: str) -> str:
+    return {"b": "bus_r8", "w": "bus_r16", "l": "bus_r32"}[size]
 
 
-def _wr(tam: str) -> str:
-    return {"b": "bus_w8", "w": "bus_w16", "l": "bus_w32"}[tam]
+def _wr(size: str) -> str:
+    return {"b": "bus_w8", "w": "bus_w16", "l": "bus_w32"}[size]
 
 
-class Emisor:
-    """Emite C para una instrucción. `lineas` acumula las sentencias."""
+class Emitter:
+    """Emits C for one instruction. `lines` accumulates the statements."""
 
     def __init__(self, ins: Instr):
         self.i = ins
-        self.lineas: list[str] = []
+        self.lines: list[str] = []
         self.n = 0
 
-    # ------------------------------------------------------------ utilidades
-    def tmp(self, prefijo="t") -> str:
+    # ------------------------------------------------------------ helpers
+    def tmp(self, prefix="t") -> str:
         self.n += 1
-        return f"{prefijo}{self.n}"
+        return f"{prefix}{self.n}"
 
     def e(self, s: str) -> None:
-        self.lineas.append(s)
+        self.lines.append(s)
 
-    def sig(self) -> int:
-        return (self.i.dir + self.i.largo) & 0xFFFFFF
+    def next_addr(self) -> int:
+        return (self.i.addr + self.i.length) & 0xFFFFFF
 
-    def indice(self, ea: EA) -> str:
+    def index(self, ea: EA) -> str:
         r = f"c->a[{ea.xi & 7}]" if ea.xi >= 8 else f"c->d[{ea.xi & 7}]"
-        return r if ea.xi_largo else f"sext16({r} & 0xFFFF)"
+        return r if ea.xi_long else f"sext16({r} & 0xFFFF)"
 
-    def paso(self, ea: EA, tam: str) -> int:
-        n = TAMAÑO_BYTES[tam]
+    def step(self, ea: EA, size: str) -> int:
+        n = SIZE_BYTES[size]
         return 2 if (n == 1 and ea.reg == 7) else n
 
-    def direccion(self, ea: EA, tam: str | None) -> str:
-        """Calcula la dirección efectiva (con efectos de (An)+ / -(An)) y devuelve una variable."""
+    def address(self, ea: EA, size: str | None) -> str:
+        """Computes the effective address (with (An)+ / -(An) side effects) and returns a variable."""
         v = self.tmp("ea")
         m = ea.mode
         if m == "(An)":
             self.e(f"uint32_t {v} = c->a[{ea.reg}];")
         elif m == "(An)+":
-            self.e(f"uint32_t {v} = c->a[{ea.reg}]; c->a[{ea.reg}] += {self.paso(ea, tam)};")
+            self.e(f"uint32_t {v} = c->a[{ea.reg}]; c->a[{ea.reg}] += {self.step(ea, size)};")
         elif m == "-(An)":
-            self.e(f"c->a[{ea.reg}] -= {self.paso(ea, tam)}; uint32_t {v} = c->a[{ea.reg}];")
+            self.e(f"c->a[{ea.reg}] -= {self.step(ea, size)}; uint32_t {v} = c->a[{ea.reg}];")
         elif m == "d16(An)":
             self.e(f"uint32_t {v} = c->a[{ea.reg}] + (uint32_t)({ea.disp});")
         elif m == "d8(An,Xi)":
-            self.e(f"uint32_t {v} = c->a[{ea.reg}] + (uint32_t)({ea.disp}) + {self.indice(ea)};")
+            self.e(f"uint32_t {v} = c->a[{ea.reg}] + (uint32_t)({ea.disp}) + {self.index(ea)};")
         elif m in ("abs.w", "abs.l"):
             self.e(f"uint32_t {v} = 0x{ea.value & 0xFFFFFFFF:X}u;")
         elif m == "d16(PC)":
             self.e(f"uint32_t {v} = 0x{(ea.pc_ext + ea.disp) & 0xFFFFFFFF:X}u;")
         elif m == "d8(PC,Xi)":
-            self.e(f"uint32_t {v} = 0x{(ea.pc_ext + ea.disp) & 0xFFFFFFFF:X}u + {self.indice(ea)};")
+            self.e(f"uint32_t {v} = 0x{(ea.pc_ext + ea.disp) & 0xFFFFFFFF:X}u + {self.index(ea)};")
         else:
-            raise NoSoportada(f"dirección de {m}")
+            raise Unsupported(f"address of {m}")
         return v
 
-    def leer(self, ea: EA, tam: str, dir_var: str | None = None) -> str:
-        """Lee un operando; para memoria, `dir_var` permite reutilizar una dirección ya calculada."""
+    def read(self, ea: EA, size: str, addr_var: str | None = None) -> str:
+        """Reads an operand; for memory, `addr_var` lets an already computed address be reused."""
         v = self.tmp("v")
         m = ea.mode
         if m == "Dn":
-            self.e(f"uint32_t {v} = c->d[{ea.reg}] & {MASK[tam]};")
+            self.e(f"uint32_t {v} = c->d[{ea.reg}] & {MASK[size]};")
         elif m == "An":
-            self.e(f"uint32_t {v} = c->a[{ea.reg}] & {MASK[tam]};")
+            self.e(f"uint32_t {v} = c->a[{ea.reg}] & {MASK[size]};")
         elif m == "#imm":
             self.e(f"uint32_t {v} = 0x{ea.value & 0xFFFFFFFF:X}u;")
         else:
-            d = dir_var or self.direccion(ea, tam)
-            self.e(f"uint32_t {v} = {_rd(tam)}({d});")
+            d = addr_var or self.address(ea, size)
+            self.e(f"uint32_t {v} = {_rd(size)}({d});")
         return v
 
-    def escribir(self, ea: EA, tam: str, value: str, dir_var: str | None = None) -> None:
+    def write(self, ea: EA, size: str, value: str, addr_var: str | None = None) -> None:
         m = ea.mode
         if m == "Dn":
-            self.e(f"set_d(c, {ea.reg}, {value}, {MASK[tam]});")
+            self.e(f"set_d(c, {ea.reg}, {value}, {MASK[size]});")
         elif m == "An":
             self.e(f"c->a[{ea.reg}] = {value};")
         else:
-            d = dir_var or self.direccion(ea, tam)
-            self.e(f"{_wr(tam)}({d}, {value});")
+            d = addr_var or self.address(ea, size)
+            self.e(f"{_wr(size)}({d}, {value});")
 
-    def leer_modificar(self, ea: EA, tam: str):
-        """Para operaciones lectura-modificación-escritura: calcula la dirección una sola vez."""
-        if ea.es_memoria():
-            d = self.direccion(ea, tam)
-            return self.leer(ea, tam, d), d
-        return self.leer(ea, tam), None
+    def read_modify(self, ea: EA, size: str):
+        """For read-modify-write operations: computes the address only once."""
+        if ea.is_memory():
+            d = self.address(ea, size)
+            return self.read(ea, size, d), d
+        return self.read(ea, size), None
 
-    def privilegiada(self) -> None:
-        self.e(f"if (!c->s) {{ {self.excepcion(8, self.i.dir)} }}")
+    def privileged(self) -> None:
+        self.e(f"if (!c->s) {{ {self.exception(8, self.i.addr)} }}")
 
-    # ------------------------------------------------------------ emisión
-    def emitir(self) -> list[str]:
+    # ------------------------------------------------------------ emission
+    def emit(self) -> list[str]:
         i = self.i
         f = getattr(self, "op_" + i.op, None)
         if f is None:
-            raise NoSoportada(i.op)
-        if CICLOS_BASE is not None:
-            self.e(f"PD_INI(0x{self.i.opcode:04X}u); c->cycles += CIC({self.base()}{self.ajuste()});")
+            raise Unsupported(i.op)
+        if BASE_CYCLES is not None:
+            self.e(f"PD_BEGIN(0x{self.i.opcode:04X}u); c->cycles += CIC({self.base()}{self.adjustment()});")
         f()
-        return self.lineas
+        return self.lines
 
-    def ajuste(self) -> str:
-        """Llamada a cycles_adjust (src/cpu/cycles68k.h) para las familias con cycles corregidos
-        contra MAME; vacía en el resto (no hace falta llamarla)."""
+    def adjustment(self) -> str:
+        """Call to cycles_adjust (src/cpu/cycles68k.h) for the families whose cycles are corrected
+        against MAME; empty for the rest (no need to call it)."""
         op = self.i.opcode
         mode = (op >> 3) & 7
-        familia = ((((op & 0xF1C0) in (0xD1C0, 0x91C0, 0xD080, 0x9080, 0xC080, 0x8080)) and mode <= 1)
-                   or (op & 0xF1FF) in (0xD0FC, 0x90FC)
-                   or (op & 0xF1F8) == 0x5048
-                   or (op & 0xFFF8) == 0x0280
-                   or (op & 0xFFF8) in (0x0840, 0x0880, 0x08C0)
-                   or (op & 0xF1F8) in (0x0140, 0x0180, 0x01C0))
-        if not familia:
+        family = ((((op & 0xF1C0) in (0xD1C0, 0x91C0, 0xD080, 0x9080, 0xC080, 0x8080)) and mode <= 1)
+                  or (op & 0xF1FF) in (0xD0FC, 0x90FC)
+                  or (op & 0xF1F8) == 0x5048
+                  or (op & 0xFFF8) == 0x0280
+                  or (op & 0xFFF8) in (0x0840, 0x0880, 0x08C0)
+                  or (op & 0xF1F8) in (0x0140, 0x0180, 0x01C0))
+        if not family:
             return ""
         ext = 0
         if (op & 0xFFF8) in (0x0840, 0x0880, 0x08C0) and self.i.ops:
@@ -167,65 +167,65 @@ class Emisor:
         return f" + cycles_adjust(c, 0x{op:04X}u, 0x{ext:X}u)"
 
     def base(self) -> int:
-        return CICLOS_BASE[self.i.opcode] if CICLOS_BASE is not None else 0
+        return BASE_CYCLES[self.i.opcode] if BASE_CYCLES is not None else 0
 
     def cycles(self, n) -> str:
-        """Sentencia que suma `n` cycles (text C o entero); vacía si no hay tabla de cycles."""
-        return f"c->cycles += CIC({n}); " if CICLOS_BASE is not None else ""
+        """Statement that adds `n` cycles (C text or integer); empty if there is no cycle table."""
+        return f"c->cycles += CIC({n}); " if BASE_CYCLES is not None else ""
 
-    def excepcion(self, vector: int, pc: int) -> str:
-        """Sentencia de excepción: su costo reemplaza al de la instrucción."""
-        return f"{self.cycles(CICLOS_EXCEPCION[vector] - self.base())}PD_EXCEPCION({vector}, 0x{pc:X}u);"
+    def exception(self, vector: int, pc: int) -> str:
+        """Exception statement: its cost replaces the instruction's."""
+        return f"{self.cycles(EXCEPTION_CYCLES[vector] - self.base())}PD_EXCEPTION({vector}, 0x{pc:X}u);"
 
-    def fin(self) -> None:
-        self.e(f"PD_SIGUIENTE(0x{self.sig():X}u);")
+    def finish(self) -> None:
+        self.e(f"PD_NEXT(0x{self.next_addr():X}u);")
 
-    # --- movimientos
+    # --- moves
     def op_move(self):
-        t = self.i.tam
-        s = self.leer(self.i.ops[0], t)
+        t = self.i.size
+        s = self.read(self.i.ops[0], t)
         r = self.tmp()
         self.e(f"uint32_t {r} = op_logic(c, {s}, {MASK[t]}, {MSB[t]});")
-        self.escribir(self.i.ops[1], t, r)
-        self.fin()
+        self.write(self.i.ops[1], t, r)
+        self.finish()
 
     def op_moveq(self):
         self.e(f"c->d[{self.i.ops[1].reg}] = op_logic(c, 0x{self.i.ops[0].value:X}u, MASK_L, MSB_L);")
-        self.fin()
+        self.finish()
 
     def op_movea(self):
-        t = self.i.tam
-        s = self.leer(self.i.ops[0], t)
+        t = self.i.size
+        s = self.read(self.i.ops[0], t)
         self.e(f"c->a[{self.i.ops[1].reg}] = {'sext16(' + s + ')' if t == 'w' else s};")
-        self.fin()
+        self.finish()
 
     def op_lea(self):
-        d = self.direccion(self.i.ops[0], None)
+        d = self.address(self.i.ops[0], None)
         self.e(f"c->a[{self.i.ops[1].reg}] = {d};")
-        self.fin()
+        self.finish()
 
     def op_pea(self):
-        d = self.direccion(self.i.ops[0], None)
+        d = self.address(self.i.ops[0], None)
         self.e(f"c->a[7] -= 4; bus_w32(c->a[7], {d});")
-        self.fin()
+        self.finish()
 
     def op_clr(self):
-        t = self.i.tam
+        t = self.i.size
         ea = self.i.ops[0]
-        if ea.es_memoria():
-            d = self.direccion(ea, t)
-            self.e(f"(void){_rd(t)}({d});")      # el 68000 lee antes de escribir en CLR
-            self.escribir(ea, t, "0", d)
+        if ea.is_memory():
+            d = self.address(ea, t)
+            self.e(f"(void){_rd(t)}({d});")      # the 68000 reads before writing in CLR
+            self.write(ea, t, "0", d)
         else:
-            self.escribir(ea, t, "0")
+            self.write(ea, t, "0")
         self.e("c->n = 0; c->z = 1; c->v = 0; c->c = 0;")
-        self.fin()
+        self.finish()
 
     def op_tst(self):
-        t = self.i.tam
-        s = self.leer(self.i.ops[0], t)
+        t = self.i.size
+        s = self.read(self.i.ops[0], t)
         self.e(f"(void)op_logic(c, {s}, {MASK[t]}, {MSB[t]});")
-        self.fin()
+        self.finish()
 
     def op_exg(self):
         a, b = self.i.ops
@@ -233,209 +233,209 @@ class Emisor:
         rb = f"c->{'d' if b.mode == 'Dn' else 'a'}[{b.reg}]"
         t = self.tmp()
         self.e(f"uint32_t {t} = {ra}; {ra} = {rb}; {rb} = {t};")
-        self.fin()
+        self.finish()
 
     def op_swap(self):
         r = self.i.ops[0].reg
         self.e(f"c->d[{r}] = op_logic(c, c->d[{r}] >> 16 | c->d[{r}] << 16, MASK_L, MSB_L);")
-        self.fin()
+        self.finish()
 
     def op_ext(self):
         r = self.i.ops[0].reg
-        if self.i.tam == "w":
+        if self.i.size == "w":
             self.e(f"set_d(c, {r}, op_logic(c, sext8(c->d[{r}] & 0xFF), MASK_W, MSB_W), MASK_W);")
         else:
             self.e(f"c->d[{r}] = op_logic(c, sext16(c->d[{r}] & 0xFFFF), MASK_L, MSB_L);")
-        self.fin()
+        self.finish()
 
-    # --- aritmética y lógica binaria
-    def _binaria(self, funcion: str, escribe=True):
-        t = self.i.tam
+    # --- binary arithmetic and logic
+    def _binary(self, func: str, writes=True):
+        t = self.i.size
         src, dst = self.i.ops
-        s = self.leer(src, t)
-        d, dir_ = self.leer_modificar(dst, t)
+        s = self.read(src, t)
+        d, addr = self.read_modify(dst, t)
         r = self.tmp()
-        if funcion == "cmp":
+        if func == "cmp":
             self.e(f"op_cmp(c, {s}, {d}, {MASK[t]}, {MSB[t]});")
-        elif funcion in ("and", "or", "eor"):
-            opc = {"and": "&", "or": "|", "eor": "^"}[funcion]
+        elif func in ("and", "or", "eor"):
+            opc = {"and": "&", "or": "|", "eor": "^"}[func]
             self.e(f"uint32_t {r} = op_logic(c, {d} {opc} {s}, {MASK[t]}, {MSB[t]});")
         else:
-            self.e(f"uint32_t {r} = op_{funcion}(c, {s}, {d}, {MASK[t]}, {MSB[t]});")
-        if escribe and funcion != "cmp":
-            self.escribir(dst, t, r, dir_)
-        self.fin()
+            self.e(f"uint32_t {r} = op_{func}(c, {s}, {d}, {MASK[t]}, {MSB[t]});")
+        if writes and func != "cmp":
+            self.write(dst, t, r, addr)
+        self.finish()
 
-    def op_add(self):  self._binaria("add")
-    def op_addi(self): self._binaria("add")
-    def op_sub(self):  self._binaria("sub")
-    def op_subi(self): self._binaria("sub")
-    def op_cmp(self):  self._binaria("cmp")
-    def op_cmpi(self): self._binaria("cmp")
-    def op_and(self):  self._binaria("and")
-    def op_andi(self): self._binaria("and")
-    def op_or(self):   self._binaria("or")
-    def op_ori(self):  self._binaria("or")
-    def op_eor(self):  self._binaria("eor")
-    def op_eori(self): self._binaria("eor")
+    def op_add(self):  self._binary("add")
+    def op_addi(self): self._binary("add")
+    def op_sub(self):  self._binary("sub")
+    def op_subi(self): self._binary("sub")
+    def op_cmp(self):  self._binary("cmp")
+    def op_cmpi(self): self._binary("cmp")
+    def op_and(self):  self._binary("and")
+    def op_andi(self): self._binary("and")
+    def op_or(self):   self._binary("or")
+    def op_ori(self):  self._binary("or")
+    def op_eor(self):  self._binary("eor")
+    def op_eori(self): self._binary("eor")
 
-    def _quick(self, funcion: str):
+    def _quick(self, func: str):
         src, dst = self.i.ops
-        if dst.mode == "An":                         # ADDQ/SUBQ a An: 32 bits, sin flags
-            signo = "+" if funcion == "add" else "-"
-            self.e(f"c->a[{dst.reg}] {signo}= {src.value};")
-            self.fin()
+        if dst.mode == "An":                         # ADDQ/SUBQ to An: 32 bits, no flags
+            sign = "+" if func == "add" else "-"
+            self.e(f"c->a[{dst.reg}] {sign}= {src.value};")
+            self.finish()
             return
-        self._binaria(funcion)
+        self._binary(func)
 
     def op_addq(self): self._quick("add")
     def op_subq(self): self._quick("sub")
 
-    def _arit_a(self, signo: str):
-        t = self.i.tam
-        s = self.leer(self.i.ops[0], t)
+    def _arith_a(self, sign: str):
+        t = self.i.size
+        s = self.read(self.i.ops[0], t)
         v = f"sext16({s})" if t == "w" else s
-        self.e(f"c->a[{self.i.ops[1].reg}] {signo}= {v};")
-        self.fin()
+        self.e(f"c->a[{self.i.ops[1].reg}] {sign}= {v};")
+        self.finish()
 
-    def op_adda(self): self._arit_a("+")
-    def op_suba(self): self._arit_a("-")
+    def op_adda(self): self._arith_a("+")
+    def op_suba(self): self._arith_a("-")
 
     def op_cmpa(self):
-        t = self.i.tam
-        s = self.leer(self.i.ops[0], t)
+        t = self.i.size
+        s = self.read(self.i.ops[0], t)
         v = f"sext16({s})" if t == "w" else s
         self.e(f"op_cmp(c, {v}, c->a[{self.i.ops[1].reg}], MASK_L, MSB_L);")
-        self.fin()
+        self.finish()
 
     def op_cmpm(self):
-        t = self.i.tam
-        s = self.leer(self.i.ops[0], t)
-        d = self.leer(self.i.ops[1], t)
+        t = self.i.size
+        s = self.read(self.i.ops[0], t)
+        d = self.read(self.i.ops[1], t)
         self.e(f"op_cmp(c, {s}, {d}, {MASK[t]}, {MSB[t]});")
-        self.fin()
+        self.finish()
 
-    def _extendida(self, funcion: str):
-        t = self.i.tam
+    def _extended(self, func: str):
+        t = self.i.size
         src, dst = self.i.ops
         if src.mode == "Dn":
-            s = self.leer(src, t)
-            d = self.leer(dst, t)
+            s = self.read(src, t)
+            d = self.read(dst, t)
             r = self.tmp()
-            self.e(f"uint32_t {r} = op_{funcion}(c, {s}, {d}, {MASK[t]}, {MSB[t]});")
-            self.escribir(dst, t, r)
+            self.e(f"uint32_t {r} = op_{func}(c, {s}, {d}, {MASK[t]}, {MSB[t]});")
+            self.write(dst, t, r)
         else:                                         # -(Ay),-(Ax)
-            s = self.leer(EA("-(An)", src.reg), t)
-            dd = self.direccion(EA("-(An)", dst.reg), t)
-            d = self.leer(dst, t, dd)
+            s = self.read(EA("-(An)", src.reg), t)
+            dd = self.address(EA("-(An)", dst.reg), t)
+            d = self.read(dst, t, dd)
             r = self.tmp()
-            self.e(f"uint32_t {r} = op_{funcion}(c, {s}, {d}, {MASK[t]}, {MSB[t]});")
-            self.escribir(dst, t, r, dd)
-        self.fin()
+            self.e(f"uint32_t {r} = op_{func}(c, {s}, {d}, {MASK[t]}, {MSB[t]});")
+            self.write(dst, t, r, dd)
+        self.finish()
 
-    def op_addx(self): self._extendida("addx")
-    def op_subx(self): self._extendida("subx")
+    def op_addx(self): self._extended("addx")
+    def op_subx(self): self._extended("subx")
 
-    def _unaria(self, expr: str):
-        t = self.i.tam
-        d, dir_ = self.leer_modificar(self.i.ops[0], t)
+    def _unary(self, expr: str):
+        t = self.i.size
+        d, addr = self.read_modify(self.i.ops[0], t)
         r = self.tmp()
         self.e(f"uint32_t {r} = {expr.format(d=d, M=MASK[t], S=MSB[t])};")
-        self.escribir(self.i.ops[0], t, r, dir_)
-        self.fin()
+        self.write(self.i.ops[0], t, r, addr)
+        self.finish()
 
-    def op_neg(self):  self._unaria("op_neg(c, {d}, {M}, {S})")
-    def op_negx(self): self._unaria("op_negx(c, {d}, {M}, {S})")
-    def op_not(self):  self._unaria("op_logic(c, ~{d}, {M}, {S})")
+    def op_neg(self):  self._unary("op_neg(c, {d}, {M}, {S})")
+    def op_negx(self): self._unary("op_negx(c, {d}, {M}, {S})")
+    def op_not(self):  self._unary("op_logic(c, ~{d}, {M}, {S})")
 
-    # --- control de flujo
+    # --- control flow
     def op_bra(self):
-        self.e(f"PD_SALTO(0x{self.i.destino:X}u);")
+        self.e(f"PD_JUMP(0x{self.i.target:X}u);")
 
     def op_bcc(self):
-        self.e(f"if (cond(c, {CC_C[self.i.cc]})) {{ PD_SALTO(0x{self.i.destino:X}u); }}")
-        self.e(self.cycles(2 if self.i.largo == 4 else -2))
-        self.fin()
+        self.e(f"if (cond(c, {CC_C[self.i.cc]})) {{ PD_JUMP(0x{self.i.target:X}u); }}")
+        self.e(self.cycles(2 if self.i.length == 4 else -2))
+        self.finish()
 
     def op_bsr(self):
-        self.e(f"c->a[7] -= 4; bus_w32(c->a[7], 0x{self.sig():X}u);")
-        self.e(f"PD_LLAMADA(0x{self.i.destino:X}u, 0x{self.sig():X}u);")
+        self.e(f"c->a[7] -= 4; bus_w32(c->a[7], 0x{self.next_addr():X}u);")
+        self.e(f"PD_CALL(0x{self.i.target:X}u, 0x{self.next_addr():X}u);")
 
     def op_jsr(self):
-        d = self.direccion(self.i.ops[0], None)
-        self.e(f"c->a[7] -= 4; bus_w32(c->a[7], 0x{self.sig():X}u);")
-        self.e(f"PD_LLAMADA_DIN({d}, 0x{self.sig():X}u);")
+        d = self.address(self.i.ops[0], None)
+        self.e(f"c->a[7] -= 4; bus_w32(c->a[7], 0x{self.next_addr():X}u);")
+        self.e(f"PD_CALL_DYN({d}, 0x{self.next_addr():X}u);")
 
     def op_jmp(self):
-        d = self.direccion(self.i.ops[0], None)
-        self.e(f"PD_SALTO_DIN({d});")
+        d = self.address(self.i.ops[0], None)
+        self.e(f"PD_JUMP_DYN({d});")
 
     def op_rts(self):
         t = self.tmp()
         self.e(f"uint32_t {t} = bus_r32(c->a[7]); c->a[7] += 4;")
-        self.e(f"PD_RETORNO({t});")
+        self.e(f"PD_RETURN({t});")
 
     def op_rtr(self):
         t = self.tmp()
         self.e(f"cpu_set_ccr(c, bus_r16(c->a[7])); c->a[7] += 2;")
         self.e(f"uint32_t {t} = bus_r32(c->a[7]); c->a[7] += 4;")
-        self.e(f"PD_RETORNO({t});")
+        self.e(f"PD_RETURN({t});")
 
     def op_rte(self):
-        self.privilegiada()
+        self.privileged()
         sr, pc = self.tmp(), self.tmp()
         self.e(f"uint32_t {sr} = bus_r16(c->a[7]); uint32_t {pc} = bus_r32(c->a[7] + 2); c->a[7] += 6;")
         self.e(f"cpu_set_sr(c, {sr});")
-        self.e(f"PD_SALTO_DIN({pc});")
+        self.e(f"PD_JUMP_DYN({pc});")
 
     def op_dbcc(self):
         r = self.i.ops[0].reg
         self.e(f"if (!cond(c, {CC_C[self.i.cc]})) {{")
         self.e(f"    uint32_t cnt = (c->d[{r}] - 1) & 0xFFFF; set_d(c, {r}, cnt, MASK_W);")
-        self.e(f"    if (cnt != 0xFFFF) {{ {self.cycles(-2)}PD_SALTO(0x{self.i.destino:X}u); }}")
+        self.e(f"    if (cnt != 0xFFFF) {{ {self.cycles(-2)}PD_JUMP(0x{self.i.target:X}u); }}")
         self.e(f"    {self.cycles(2)}")
         self.e("}")
-        self.fin()
+        self.finish()
 
     def op_scc(self):
         ea = self.i.ops[0]
         v = f"(cond(c, {CC_C[self.i.cc]}) ? 0xFFu : 0u)"
-        if ea.es_memoria():
-            d = self.direccion(ea, "b")
-            self.e(f"(void)bus_r8({d});")             # Scc lee antes de escribir
-            self.escribir(ea, "b", v, d)
+        if ea.is_memory():
+            d = self.address(ea, "b")
+            self.e(f"(void)bus_r8({d});")             # Scc reads before writing
+            self.write(ea, "b", v, d)
         else:
-            self.escribir(ea, "b", v)
-            if self.i.cc != "t":                  # ST Dn ya trae su costo completo en la tabla base
+            self.write(ea, "b", v)
+            if self.i.cc != "t":                  # ST Dn already has its full cost in the base table
                 self.e(f"if (cond(c, {CC_C[self.i.cc]})) {{ {self.cycles(2)}}}")
-        self.fin()
+        self.finish()
 
     def op_nop(self):
-        self.fin()
+        self.finish()
 
     def op_trap(self):
-        self.e(self.excepcion(32 + self.i.dato, self.sig()))
+        self.e(self.exception(32 + self.i.data, self.next_addr()))
 
     def op_trapv(self):
-        self.e(f"if (c->v) {{ {self.excepcion(7, self.sig())} }}")
-        self.fin()
+        self.e(f"if (c->v) {{ {self.exception(7, self.next_addr())} }}")
+        self.finish()
 
     def op_illegal(self):
-        self.e(self.excepcion(4, self.i.dir))
+        self.e(self.exception(4, self.i.addr))
 
     def op_link(self):
         r = self.i.ops[0].reg
-        self.e(f"c->a[7] -= 4; bus_w32(c->a[7], c->a[{r}]); c->a[{r}] = c->a[7]; c->a[7] += (uint32_t)({self.i.dato});")
-        self.fin()
+        self.e(f"c->a[7] -= 4; bus_w32(c->a[7], c->a[{r}]); c->a[{r}] = c->a[7]; c->a[7] += (uint32_t)({self.i.data});")
+        self.finish()
 
     def op_unlk(self):
         r = self.i.ops[0].reg
         self.e(f"c->a[7] = c->a[{r}]; c->a[{r}] = bus_r32(c->a[7]); c->a[7] += 4;")
-        self.fin()
+        self.finish()
 
 
     # --- bits
-    def _bit(self, accion: str):
+    def _bit(self, action: str):
         src, dst = self.i.ops
         t = "l" if dst.mode == "Dn" else "b"
         modulo = 31 if t == "l" else 7
@@ -443,36 +443,36 @@ class Emisor:
             nbit = f"{src.value & modulo}u"
         else:
             nbit = f"(c->d[{src.reg}] & {modulo}u)"
-        d, dir_ = self.leer_modificar(dst, t)
+        d, addr = self.read_modify(dst, t)
         m = self.tmp("m")
         self.e(f"uint32_t {m} = 1u << {nbit}; c->z = ({d} & {m}) == 0;")
-        if accion != "btst":
-            expr = {"bchg": f"{d} ^ {m}", "bclr": f"{d} & ~{m}", "bset": f"{d} | {m}"}[accion]
-            self.escribir(dst, t, expr, dir_)
-        self.fin()
+        if action != "btst":
+            expr = {"bchg": f"{d} ^ {m}", "bclr": f"{d} & ~{m}", "bset": f"{d} | {m}"}[action]
+            self.write(dst, t, expr, addr)
+        self.finish()
 
     def op_btst(self): self._bit("btst")
     def op_bchg(self): self._bit("bchg")
     def op_bclr(self): self._bit("bclr")
     def op_bset(self): self._bit("bset")
 
-    # --- desplazamientos y rotaciones
-    def _shift(self, tipo: str, izq: bool):
-        t = self.i.tam
-        if len(self.i.ops) == 1:                      # en memoria: una posición, .w
-            d, dir_ = self.leer_modificar(self.i.ops[0], "w")
+    # --- shifts and rotates
+    def _shift(self, kind: str, left: bool):
+        t = self.i.size
+        if len(self.i.ops) == 1:                      # in memory: one position, .w
+            d, addr = self.read_modify(self.i.ops[0], "w")
             r = self.tmp()
-            self.e(f"uint32_t {r} = op_shift(c, SH_{tipo.upper()}, {int(izq)}, 1, {d}, MASK_W, MSB_W);")
-            self.escribir(self.i.ops[0], "w", r, dir_)
+            self.e(f"uint32_t {r} = op_shift(c, SH_{kind.upper()}, {int(left)}, 1, {d}, MASK_W, MSB_W);")
+            self.write(self.i.ops[0], "w", r, addr)
         else:
             cnt_ea, dst = self.i.ops
             cnt = f"{cnt_ea.value}u" if cnt_ea.mode == "#imm" else f"(c->d[{cnt_ea.reg}] & 63u)"
             self.e(self.cycles(f"2 * {cnt}"))
             r = self.tmp()
-            self.e(f"uint32_t {r} = op_shift(c, SH_{tipo.upper()}, {int(izq)}, {cnt}, "
+            self.e(f"uint32_t {r} = op_shift(c, SH_{kind.upper()}, {int(left)}, {cnt}, "
                    f"c->d[{dst.reg}] & {MASK[t]}, {MASK[t]}, {MSB[t]});")
-            self.escribir(dst, t, r)
-        self.fin()
+            self.write(dst, t, r)
+        self.finish()
 
     def op_asl(self):  self._shift("as", True)
     def op_asr(self):  self._shift("as", False)
@@ -483,30 +483,30 @@ class Emisor:
     def op_rol(self):  self._shift("ro", True)
     def op_ror(self):  self._shift("ro", False)
 
-    # --- multiplicación y división
-    def _mul(self, con_signo: bool):
-        s = self.leer(self.i.ops[0], "w")
+    # --- multiplication and division
+    def _mul(self, signed: bool):
+        s = self.read(self.i.ops[0], "w")
         r = self.i.ops[1].reg
-        if CICLOS_BASE is not None:
-            self.e(f"c->cycles += CIC({'cycles_muls' if con_signo else 'cycles_mulu'}({s}));")
-        if con_signo:
+        if BASE_CYCLES is not None:
+            self.e(f"c->cycles += CIC({'cycles_muls' if signed else 'cycles_mulu'}({s}));")
+        if signed:
             expr = f"(uint32_t)((int32_t)(int16_t){s} * (int32_t)(int16_t)(c->d[{r}] & 0xFFFF))"
         else:
             expr = f"{s} * (c->d[{r}] & 0xFFFF)"
         self.e(f"c->d[{r}] = op_logic(c, {expr}, MASK_L, MSB_L);")
-        self.fin()
+        self.finish()
 
     def op_mulu(self): self._mul(False)
     def op_muls(self): self._mul(True)
 
-    def _div(self, con_signo: bool):
-        s = self.leer(self.i.ops[0], "w")
+    def _div(self, signed: bool):
+        s = self.read(self.i.ops[0], "w")
         r = self.i.ops[1].reg
-        self.e(f"if ({s} == 0) {{ {self.excepcion(5, self.sig())} }}")
-        if CICLOS_BASE is not None:
-            self.e(f"c->cycles += CIC(cycles_adjust_div{'s' if con_signo else 'u'}(c->d[{r}], {s}));")
-        self.e(f"op_div{'s' if con_signo else 'u'}(c, {r}, {s});")
-        self.fin()
+        self.e(f"if ({s} == 0) {{ {self.exception(5, self.next_addr())} }}")
+        if BASE_CYCLES is not None:
+            self.e(f"c->cycles += CIC(cycles_adjust_div{'s' if signed else 'u'}(c->d[{r}], {s}));")
+        self.e(f"op_div{'s' if signed else 'u'}(c, {r}, {s});")
+        self.finish()
 
     def op_divu(self): self._div(False)
     def op_divs(self): self._div(True)
@@ -515,167 +515,167 @@ class Emisor:
     def _regs(self, mask: int) -> list[str]:
         return [f"c->{'d' if n < 8 else 'a'}[{n & 7}]" for n in range(16) if mask >> n & 1]
 
-    def op_movem_carga(self):
-        t = self.i.tam
+    def op_movem_load(self):
+        t = self.i.size
         ea = self.i.ops[0]
-        n = TAMAÑO_BYTES[t]
-        self.e(self.cycles(bin(self.i.lista).count("1") * (8 if t == "l" else 4)))
+        n = SIZE_BYTES[t]
+        self.e(self.cycles(bin(self.i.reglist).count("1") * (8 if t == "l" else 4)))
         if ea.mode == "(An)+":
             p = self.tmp("p")
             self.e(f"uint32_t {p} = c->a[{ea.reg}];")
         else:
-            p = self.direccion(ea, t)
-        for reg in self._regs(self.i.lista):
+            p = self.address(ea, t)
+        for reg in self._regs(self.i.reglist):
             v = f"sext16(bus_r16({p}))" if t == "w" else f"bus_r32({p})"
             self.e(f"{reg} = {v}; {p} += {n};")
         if ea.mode == "(An)+":
             self.e(f"c->a[{ea.reg}] = {p};")
-        self.fin()
+        self.finish()
 
-    def op_movem_guarda(self):
-        t = self.i.tam
+    def op_movem_store(self):
+        t = self.i.size
         ea = self.i.ops[0]
-        n = TAMAÑO_BYTES[t]
-        self.e(self.cycles(bin(self.i.lista).count("1") * (8 if t == "l" else 4)))
-        regs = self._regs(self.i.lista)
-        cop = self.tmp("r")
-        self.e(f"uint32_t {cop}[16]; memcpy({cop}, c->d, 32); memcpy({cop} + 8, c->a, 32);")
-        idx = [k for k in range(16) if self.i.lista >> k & 1]
+        n = SIZE_BYTES[t]
+        self.e(self.cycles(bin(self.i.reglist).count("1") * (8 if t == "l" else 4)))
+        regs = self._regs(self.i.reglist)
+        snap = self.tmp("r")
+        self.e(f"uint32_t {snap}[16]; memcpy({snap}, c->d, 32); memcpy({snap} + 8, c->a, 32);")
+        idx = [k for k in range(16) if self.i.reglist >> k & 1]
         if ea.mode == "-(An)":
             p = self.tmp("p")
             self.e(f"uint32_t {p} = c->a[{ea.reg}];")
             for k in reversed(idx):
-                self.e(f"{p} -= {n}; {_wr(t)}({p}, {cop}[{k}]);")
+                self.e(f"{p} -= {n}; {_wr(t)}({p}, {snap}[{k}]);")
             self.e(f"c->a[{ea.reg}] = {p};")
         else:
-            p = self.direccion(ea, t)
+            p = self.address(ea, t)
             for k in idx:
-                self.e(f"{_wr(t)}({p}, {cop}[{k}]); {p} += {n};")
+                self.e(f"{_wr(t)}({p}, {snap}[{k}]); {p} += {n};")
         del regs
-        self.fin()
+        self.finish()
 
     def op_movep(self):
-        t = self.i.tam
+        t = self.i.size
         a, b = self.i.ops
-        if a.mode == "Dn":                            # registro -> memoria
-            d = self.direccion(b, None)
+        if a.mode == "Dn":                            # register -> memory
+            d = self.address(b, None)
             r = a.reg
-            desplaz = [24, 16, 8, 0] if t == "l" else [8, 0]
-            for k, s in enumerate(desplaz):
+            shifts = [24, 16, 8, 0] if t == "l" else [8, 0]
+            for k, s in enumerate(shifts):
                 self.e(f"bus_w8({d} + {2 * k}, (c->d[{r}] >> {s}) & 0xFF);")
         else:
-            d = self.direccion(a, None)
+            d = self.address(a, None)
             r = b.reg
             if t == "l":
                 self.e(f"c->d[{r}] = bus_r8({d}) << 24 | bus_r8({d} + 2) << 16 | bus_r8({d} + 4) << 8 | bus_r8({d} + 6);")
             else:
                 self.e(f"set_d(c, {r}, bus_r8({d}) << 8 | bus_r8({d} + 2), MASK_W);")
-        self.fin()
+        self.finish()
 
     # --- BCD
-    def _bcd(self, funcion: str):
+    def _bcd(self, func: str):
         src, dst = self.i.ops
         if src.mode == "Dn":
-            s = self.leer(src, "b")
-            d = self.leer(dst, "b")
+            s = self.read(src, "b")
+            d = self.read(dst, "b")
             r = self.tmp()
-            self.e(f"uint32_t {r} = op_{funcion}(c, {s}, {d});")
-            self.escribir(dst, "b", r)
+            self.e(f"uint32_t {r} = op_{func}(c, {s}, {d});")
+            self.write(dst, "b", r)
         else:
-            s = self.leer(EA("-(An)", src.reg), "b")
-            dd = self.direccion(EA("-(An)", dst.reg), "b")
-            d = self.leer(dst, "b", dd)
+            s = self.read(EA("-(An)", src.reg), "b")
+            dd = self.address(EA("-(An)", dst.reg), "b")
+            d = self.read(dst, "b", dd)
             r = self.tmp()
-            self.e(f"uint32_t {r} = op_{funcion}(c, {s}, {d});")
-            self.escribir(dst, "b", r, dd)
-        self.fin()
+            self.e(f"uint32_t {r} = op_{func}(c, {s}, {d});")
+            self.write(dst, "b", r, dd)
+        self.finish()
 
     def op_abcd(self): self._bcd("abcd")
     def op_sbcd(self): self._bcd("sbcd")
 
     def op_nbcd(self):
-        d, dir_ = self.leer_modificar(self.i.ops[0], "b")
+        d, addr = self.read_modify(self.i.ops[0], "b")
         r = self.tmp()
         self.e(f"uint32_t {r} = op_sbcd(c, {d}, 0);")
-        self.escribir(self.i.ops[0], "b", r, dir_)
-        self.fin()
+        self.write(self.i.ops[0], "b", r, addr)
+        self.finish()
 
-    # --- otras
+    # --- others
     def op_chk(self):
-        s = self.leer(self.i.ops[0], "w")
+        s = self.read(self.i.ops[0], "w")
         r = self.i.ops[1].reg
         self.e(f"{{ int32_t v = (int16_t)(c->d[{r}] & 0xFFFF), lim = (int16_t){s};")
         self.e("  c->z = (v == 0); c->v = 0; c->c = 0;")
-        self.e(f"  if (v < 0) {{ c->n = 1; {self.excepcion(6, self.sig())} }}")
-        self.e(f"  if (v > lim) {{ c->n = 0; {self.excepcion(6, self.sig())} }} }}")
-        self.fin()
+        self.e(f"  if (v < 0) {{ c->n = 1; {self.exception(6, self.next_addr())} }}")
+        self.e(f"  if (v > lim) {{ c->n = 0; {self.exception(6, self.next_addr())} }} }}")
+        self.finish()
 
     def op_tas(self):
-        d, dir_ = self.leer_modificar(self.i.ops[0], "b")
+        d, addr = self.read_modify(self.i.ops[0], "b")
         self.e(f"(void)op_logic(c, {d}, MASK_B, MSB_B);")
-        self.escribir(self.i.ops[0], "b", f"{d} | 0x80u", dir_)
-        self.fin()
+        self.write(self.i.ops[0], "b", f"{d} | 0x80u", addr)
+        self.finish()
 
     def _ccr(self, opc: str):
         v = self.i.ops[0].value & 0x1F
         self.e(f"cpu_set_ccr(c, (cpu_get_sr(c) & 0x1F) {opc} 0x{v:X}u);")
-        self.fin()
+        self.finish()
 
     def op_andi_ccr(self): self._ccr("&")
     def op_ori_ccr(self):  self._ccr("|")
     def op_eori_ccr(self): self._ccr("^")
 
     def _sr(self, opc: str):
-        self.privilegiada()
+        self.privileged()
         v = self.i.ops[0].value & 0xFFFF
         self.e(f"cpu_set_sr(c, (cpu_get_sr(c) {opc} 0x{v:X}u) & 0xA71Fu);")
-        self.e(f"PD_SR_CAMBIADO(0x{self.sig():X}u);")
+        self.e(f"PD_SR_CHANGED(0x{self.next_addr():X}u);")
 
     def op_andi_sr(self): self._sr("&")
     def op_ori_sr(self):  self._sr("|")
     def op_eori_sr(self): self._sr("^")
 
     def op_move_to_ccr(self):
-        s = self.leer(self.i.ops[0], "w")
+        s = self.read(self.i.ops[0], "w")
         self.e(f"cpu_set_ccr(c, {s});")
-        self.fin()
+        self.finish()
 
     def op_move_to_sr(self):
-        self.privilegiada()
-        s = self.leer(self.i.ops[0], "w")
+        self.privileged()
+        s = self.read(self.i.ops[0], "w")
         self.e(f"cpu_set_sr(c, {s} & 0xA71Fu);")
-        self.e(f"PD_SR_CAMBIADO(0x{self.sig():X}u);")
+        self.e(f"PD_SR_CHANGED(0x{self.next_addr():X}u);")
 
     def op_move_from_sr(self):
         ea = self.i.ops[0]
-        if ea.es_memoria():
-            d = self.direccion(ea, "w")
-            self.e(f"(void)bus_r16({d});")            # el 68000 lee antes de escribir
-            self.escribir(ea, "w", "cpu_get_sr(c)", d)
+        if ea.is_memory():
+            d = self.address(ea, "w")
+            self.e(f"(void)bus_r16({d});")            # the 68000 reads before writing
+            self.write(ea, "w", "cpu_get_sr(c)", d)
         else:
-            self.escribir(ea, "w", "cpu_get_sr(c)")
-        self.fin()
+            self.write(ea, "w", "cpu_get_sr(c)")
+        self.finish()
 
     def op_move_to_usp(self):
-        self.privilegiada()
+        self.privileged()
         self.e(f"c->usp = c->a[{self.i.ops[0].reg}];")
-        self.fin()
+        self.finish()
 
     def op_move_from_usp(self):
-        self.privilegiada()
+        self.privileged()
         self.e(f"c->a[{self.i.ops[0].reg}] = c->usp;")
-        self.fin()
+        self.finish()
 
     def op_stop(self):
-        self.privilegiada()
+        self.privileged()
         self.e(f"cpu_set_sr(c, 0x{self.i.ops[0].value & 0xA71F:X}u);")
-        self.e(f"PD_STOP(0x{self.sig():X}u);")
+        self.e(f"PD_STOP(0x{self.next_addr():X}u);")
 
     def op_reset(self):
-        self.privilegiada()
-        self.e(self.cycles(132) + "PD_RESET_EXTERNO();")
-        self.fin()
+        self.privileged()
+        self.e(self.cycles(132) + "PD_EXTERNAL_RESET();")
+        self.finish()
 
 
-def emitir(ins: Instr) -> list[str]:
-    return Emisor(ins).emitir()
+def emit(ins: Instr) -> list[str]:
+    return Emitter(ins).emit()

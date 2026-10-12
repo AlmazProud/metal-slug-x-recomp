@@ -1,4 +1,4 @@
-/* El código recompilado y Musashi (referencia y respaldo) usan el mismo bus: la máquina active. */
+/* The recompiled code and Musashi (reference and fallback) share the same bus: the active machine. */
 #include "machine.h"
 
 uint32_t bus_r8(uint32_t a)  { return mach_r8(a); }

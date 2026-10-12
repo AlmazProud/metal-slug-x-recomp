@@ -1,150 +1,150 @@
-# ROM_MAP: archivos de GOG/DotEmu y set `mslugx` de MAME
+# ROM_MAP: GOG/DotEmu files and MAME's `mslugx` set
 
-Fuente: instalación GOG de Metal Slug X, carpeta `resources\game\`. Los archivos se copian a
-`roms\` con `INSTALL.bat -CopiarRoms`.
+Source: GOG installation of Metal Slug X, folder `resources\game\`. The files are copied to
+`roms\` with `INSTALL.bat -CopiarRoms`.
 
-Oráculo: MAME 0.289 (`mame -listxml mslugx`). Todo lo que aparece aquí se **verificó por
-CRC32 y SHA1** con `tools/extract_roms.py`, que obtiene los hashes esperados de MAME en
-tiempo de ejecución.
+Oracle: MAME 0.289 (`mame -listxml mslugx`). Everything listed here was **verified by CRC32
+and SHA1** with `tools/extract_roms.py`, which obtains the expected hashes from MAME at run
+time.
 
-## Resumen
+## Summary
 
-| Archivo DotEmu | Bytes | Tipo | ROM de MAME | Transformación | Verificado |
+| DotEmu file | Bytes | Type | MAME ROM | Transformation | Verified |
 |---|---|---|---|---|---|
-| `mslugx_game_m68k` [0, 1 MB) | 1 048 576 | **P** (68000) | `250-p1.p1` | ninguna | **DISTINTO**: ver P1 |
-| `mslugx_game_m68k` [1 MB, 5 MB) | 4 194 304 | **P** (68000) | `250-p2.ep1` | ninguna | OK |
-| `mslugx_game_sfix` | 131 072 | **S** (fix del juego) | `250-s1.s1` | formato fix (ver abajo) | OK |
-| `mslugx_game_z80` | 131 072 | **M** (Z80) | `250-m1.m1` | ninguna | OK |
-| `mslugx_adpcm` [0, 4 MB) | 4 194 304 | **V** (ADPCM-A) | `250-v1.v1` | ninguna | OK |
-| `mslugx_adpcm` [4 MB, 8 MB) | 4 194 304 | **V** | `250-v2.v2` | ninguna | OK |
-| `mslugx_adpcm` [8 MB, 10 MB) | 2 097 152 | **V** | `250-v3.v3` | ninguna | OK |
-| `mslugx_tiles` [0, 16 MB) | 16 777 216 | **C** (sprites) | `250-c1.c1` + `250-c2.c2` | formato sprite (ver abajo) | OK |
-| `mslugx_tiles` [16 MB, 32 MB) | 16 777 216 | **C** | `250-c3.c3` + `250-c4.c4` | formato sprite | OK |
-| `mslugx_tiles` [32 MB, 48 MB) | 16 777 216 | **C** | `250-c5.c5` + `250-c6.c6` | formato sprite | OK |
-| `mslugx_bios_m68k` | 131 072 | BIOS 68000 | `sp-u2.sp1` (MVS EE. UU., `-bios us`) | ninguna | OK |
-| `mslugx_bios_sfix` | 131 072 | Fix del sistema | `sfix.sfix` | formato fix | OK |
-| `mslugx_zoom_table` | 131 072 | Tabla de zoom del LSPC (L0) | `000-lo.lo` | ninguna | OK |
-| — | — | BIOS Z80 | `sm1.sm1` | **GOG no lo incluye**; se usa una copia de M1 (ver abajo) | SUSTITUTO |
-| `mslugx_spr_usage` | 98 304 | Metadatos de DotEmu | — | 2 bits por tile de sprite (393 216 tiles) | n/a |
-| `mslugx_gfix_usage` | 4 096 | Metadatos de DotEmu | — | 1 byte por tile de fix (4 096 tiles) | n/a |
-| `mslugx_howtoplay`, `mslugx_stage`, `mslugx_multi_stage` | ~19 KB | Datos de menús de DotEmu | — | no forman parte del hardware | n/a |
+| `mslugx_game_m68k` [0, 1 MB) | 1 048 576 | **P** (68000) | `250-p1.p1` | none | **DIFFERENT**: see P1 |
+| `mslugx_game_m68k` [1 MB, 5 MB) | 4 194 304 | **P** (68000) | `250-p2.ep1` | none | OK |
+| `mslugx_game_sfix` | 131 072 | **S** (game fix) | `250-s1.s1` | fix format (see below) | OK |
+| `mslugx_game_z80` | 131 072 | **M** (Z80) | `250-m1.m1` | none | OK |
+| `mslugx_adpcm` [0, 4 MB) | 4 194 304 | **V** (ADPCM-A) | `250-v1.v1` | none | OK |
+| `mslugx_adpcm` [4 MB, 8 MB) | 4 194 304 | **V** | `250-v2.v2` | none | OK |
+| `mslugx_adpcm` [8 MB, 10 MB) | 2 097 152 | **V** | `250-v3.v3` | none | OK |
+| `mslugx_tiles` [0, 16 MB) | 16 777 216 | **C** (sprites) | `250-c1.c1` + `250-c2.c2` | sprite format (see below) | OK |
+| `mslugx_tiles` [16 MB, 32 MB) | 16 777 216 | **C** | `250-c3.c3` + `250-c4.c4` | sprite format | OK |
+| `mslugx_tiles` [32 MB, 48 MB) | 16 777 216 | **C** | `250-c5.c5` + `250-c6.c6` | sprite format | OK |
+| `mslugx_bios_m68k` | 131 072 | 68000 BIOS | `sp-u2.sp1` (US MVS, `-bios us`) | none | OK |
+| `mslugx_bios_sfix` | 131 072 | System fix | `sfix.sfix` | fix format | OK |
+| `mslugx_zoom_table` | 131 072 | LSPC zoom table (L0) | `000-lo.lo` | none | OK |
+| — | — | Z80 BIOS | `sm1.sm1` | **GOG does not include it**; a copy of M1 is used (see below) | STAND-IN |
+| `mslugx_spr_usage` | 98 304 | DotEmu metadata | — | 2 bits per sprite tile (393 216 tiles) | n/a |
+| `mslugx_gfix_usage` | 4 096 | DotEmu metadata | — | 1 byte per fix tile (4 096 tiles) | n/a |
+| `mslugx_howtoplay`, `mslugx_stage`, `mslugx_multi_stage` | ~19 KB | DotEmu menu data | — | not part of the hardware | n/a |
 
-## Formatos
+## Formats
 
 ### P (68000)
 
-DotEmu guarda P1 y P2 concatenados, con el mismo orden de bytes que los archivos `.p` de MAME.
-MAME los carga con `ROM_LOAD16_WORD_SWAP`, así que la vista del 68000 (big-endian) se obtiene
-intercambiando cada par de bytes. Esa vista empieza con el vector SSP `0x0010F300`, el vector
-PC `0x00C00402` (punto de entrada del BIOS) y `NEO-GEO` en 0x100.
+DotEmu stores P1 and P2 concatenated, with the same byte order as MAME's `.p` files. MAME
+loads them with `ROM_LOAD16_WORD_SWAP`, so the 68000 (big-endian) view is obtained by swapping
+each byte pair. That view starts with the SSP vector `0x0010F300`, the PC vector `0x00C00402`
+(BIOS entry point) and `NEO-GEO` at 0x100.
 
-### S / sfix (fix layer, tiles de 8x8)
+### S / sfix (fix layer, 8x8 tiles)
 
-- **DotEmu:** 4 bits por píxel en orden de filas. Cada tile ocupa 32 bytes: 8 filas de 4
-  bytes, y cada byte guarda 2 píxeles (el nibble bajo es el de la izquierda).
-- **Neo Geo:** cada tile de 32 bytes está organizado por columnas, en 4 grupos de 8 bytes (un
-  byte por fila). El par de píxeles k = 0, 1, 2, 3 (píxeles 0-1, 2-3, 4-5, 6-7) va en el
-  grupo 2, 3, 0, 1 respectivamente. El byte se copia tal cual, sin cambiar el orden de nibbles.
-- **Cómo se determinó:** probando las 24 permutaciones de grupos × 2 órdenes de nibble contra
-  el CRC de MAME. Coincidió una sola variante, la misma para `sfix.sfix` y para `250-s1.s1`.
+- **DotEmu:** 4 bits per pixel in row order. Each tile takes 32 bytes: 8 rows of 4 bytes, and
+  each byte holds 2 pixels (the low nibble is the left one).
+- **Neo Geo:** each 32-byte tile is organized by columns, in 4 groups of 8 bytes (one byte per
+  row). Pixel pair k = 0, 1, 2, 3 (pixels 0-1, 2-3, 4-5, 6-7) goes in group 2, 3, 0, 1
+  respectively. The byte is copied as is, without changing the nibble order.
+- **How it was determined:** by trying the 24 group permutations × 2 nibble orders against
+  MAME's CRC. Only one variant matched, the same one for `sfix.sfix` and for `250-s1.s1`.
 
-### C (sprites, tiles de 16x16)
+### C (sprites, 16x16 tiles)
 
-- **DotEmu:** 4 bits por píxel en orden de filas. Cada tile ocupa 128 bytes: 16 filas de 8
-  bytes, con el nibble bajo como píxel izquierdo. Los tiles están en el mismo orden que en la
-  región `sprites` de MAME.
-- **Neo Geo:** en la región entrelazada (C impar en bytes pares, C par en bytes impares), cada
-  tile ocupa 128 bytes:
-  - la mitad izquierda (x = 0–7) está en 0x40–0x7F y la mitad derecha (x = 8–15) en 0x00–0x3F;
-  - cada fila usa 4 bytes: +0 plano 0, +1 plano 2, +2 plano 1, +3 plano 3;
-  - dentro de cada byte de plano, el píxel x de la mitad ocupa el **bit 7 − x**.
+- **DotEmu:** 4 bits per pixel in row order. Each tile takes 128 bytes: 16 rows of 8 bytes,
+  with the low nibble as the left pixel. Tiles are in the same order as in MAME's `sprites`
+  region.
+- **Neo Geo:** in the interleaved region (odd C in even bytes, even C in odd bytes), each tile
+  takes 128 bytes:
+  - the left half (x = 0–7) is at 0x40–0x7F and the right half (x = 8–15) at 0x00–0x3F;
+  - each row uses 4 bytes: +0 plane 0, +1 plane 2, +2 plane 1, +3 plane 3;
+  - within each plane byte, pixel x of the half occupies **bit 7 − x**.
 
-  Los C impares (c1, c3, c5) contienen los planos 0-1 y los pares (c2, c4, c6), los planos 2-3.
-- **Cómo se determinó:** con la organización por tile documentada en MAME
-  (`neogeo_spr.cpp`, usada solo como referencia) y un barrido de 192 variantes (orden de
-  nibbles, orden de bits, mitades y asignación de planos) contra el CRC de `250-c1.c1`. Hubo
-  una sola coincidencia, y después los 6 C ROMs coincidieron en CRC32 y SHA1.
-- La conversión es una permutación de bits, por lo tanto **reversible** y sin pérdida.
+  The odd C ROMs (c1, c3, c5) hold planes 0-1 and the even ones (c2, c4, c6), planes 2-3.
+- **How it was determined:** with the per-tile layout documented in MAME (`neogeo_spr.cpp`,
+  used only as a reference) and a sweep of 192 variants (nibble order, bit order, halves and
+  plane assignment) against the CRC of `250-c1.c1`. There was a single match, and afterwards
+  all 6 C ROMs matched in CRC32 and SHA1.
+- The conversion is a bit permutation, therefore **reversible** and lossless.
 
-## P1: contenido distinto del de MAME
+## P1: contents differ from MAME's
 
-- El P1 de GOG da CRC `60c33b1a` y SHA1 `8999bfc42b233cdb58778857c87d9f3187c61025`. MAME espera
-  CRC `81f1f60b` y SHA1 `4c19f2e9824e606178ac1c9d4b0516fbaa625035`.
-- No se explica por el orden de bytes: P2 coincide con el mismo tratamiento, y se probaron P1
-  directo y con bytes intercambiados.
-- La protección **no** fue retirada: el código conserva unas 460 rutinas en línea que leen
-  `0x2FFFE0` y la tabla en `0x0DEDD2`.
-- Hipótesis pendientes de verificar: un parche de DotEmu en algún punto de P1, o una revisión
-  distinta del P1. Sin el P1 original no se puede localizar la diferencia por comparación
-  directa. Se investigará en la Fase 1 (desensamblado). Con el P1 de GOG, MAME arranca y
-  corre el attract mode con normalidad.
-- Consecuencia: el port y el oráculo deben usar **el mismo P1, el de GOG**. MAME lo acepta con
-  una advertencia de checksum; no es un error fatal.
+- GOG's P1 gives CRC `60c33b1a` and SHA1 `8999bfc42b233cdb58778857c87d9f3187c61025`. MAME
+  expects CRC `81f1f60b` and SHA1 `4c19f2e9824e606178ac1c9d4b0516fbaa625035`.
+- Byte order does not explain it: P2 matches with the same treatment, and P1 was tried both
+  as is and byte-swapped.
+- The protection was **not** removed: the code keeps about 460 inline routines that read
+  `0x2FFFE0` and the table at `0x0DEDD2`.
+- Hypotheses still to verify: a DotEmu patch somewhere in P1, or a different P1 revision.
+  Without the original P1 the difference cannot be located by direct comparison. It will be
+  investigated in Phase 1 (disassembly). With GOG's P1, MAME boots and runs the attract mode
+  normally.
+- Consequence: the port and the oracle must use **the same P1, GOG's**. MAME accepts it with a
+  checksum warning; it is not a fatal error.
 
-## Protección de mslugx
+## mslugx protection
 
-Referencia: MAME 0.289, archivos `src/devices/bus/neogeo/prot_mslugx.cpp`, `mslugx.cpp` y
-`src/mame/snk/neogeo.cpp` (líneas 1439-1440). Solo se usan como documentación del hardware.
+Reference: MAME 0.289, files `src/devices/bus/neogeo/prot_mslugx.cpp`, `mslugx.cpp` and
+`src/mame/snk/neogeo.cpp` (lines 1439-1440). They are used only as hardware documentation.
 
-- **Hardware:** placa NEO-MVS PROGEOP con un CPLD ALTERA EPM7128 conectado a 250-P1.
-- **Ventana de E/S:** `0x2FFFE0`–`0x2FFFEF` (lectura y escritura de 16 bits).
-- **State interno:** `command` (16 bits) y `counter`.
+- **Hardware:** NEO-MVS PROGEOP board with an ALTERA EPM7128 CPLD connected to 250-P1.
+- **I/O window:** `0x2FFFE0`–`0x2FFFEF` (16-bit reads and writes).
+- **Internal state:** `command` (16 bits) and `counter`.
 
-| Escritura en | Efecto |
+| Write to | Effect |
 |---|---|
-| `0x2FFFE0` | `command = 0` (inicio de lectura) |
-| `0x2FFFE2`, `0x2FFFE4` | `command \|= dato` (se pulsan con el dato y luego con 0) |
-| `0x2FFFE6` | sin efecto (¿fin?) |
-| `0x2FFFEA` | `counter = 0`, `command = 0` (inicialización) |
+| `0x2FFFE0` | `command = 0` (start of read) |
+| `0x2FFFE2`, `0x2FFFE4` | `command \|= data` (pulsed with the data and then with 0) |
+| `0x2FFFE6` | no effect (end?) |
+| `0x2FFFEA` | `counter = 0`, `command = 0` (initialization) |
 
-**Lectura** (cualquier dirección de la ventana): devuelve un único bit, de una tabla de bits
-que está en el propio P1, en `0x0DEDD2`, empezando por el bit más significativo:
+**Read** (any address in the window): returns a single bit from a bit table stored in P1
+itself, at `0x0DEDD2`, starting with the most significant bit:
 
-- si `command = 0x0001`: devuelve el bit `counter` de la tabla y luego hace `counter++`
-  (MAME anota que este caso se usa en las rutinas `$3BDC` y `$3C30`, registro D7);
-- si `command = 0x0FFF`: devuelve el bit número `word[0x10F00A] − 1` (el resto de los
-  accesos, registro D2; MAME anota que el cálculo exacto del índice es incierto);
-- cualquier otro valor: devuelve 0 y registra el acceso como desconocido.
+- if `command = 0x0001`: returns bit `counter` of the table and then does `counter++`
+  (MAME notes that this case is used in routines `$3BDC` and `$3C30`, register D7);
+- if `command = 0x0FFF`: returns bit number `word[0x10F00A] − 1` (the rest of the accesses,
+  register D2; MAME notes that the exact index calculation is uncertain);
+- any other value: returns 0 and logs the access as unknown.
 
-En el código del juego aparece repetido en línea el patrón
-`lea $0DEDD2,a0 / lea $2FFFE0,a1 / ...`: unas 460 referencias, por ejemplo en `0x0039BC`.
+The game code repeats the pattern `lea $0DEDD2,a0 / lea $2FFFE0,a1 / ...` inline: about 460
+references, for example at `0x0039BC`.
 
-### Confirmación en ejecución
+### Runtime confirmation
 
-Se comprobó con `tools/mame/trace_protection.lua`. El script intercepta (taps de Lua)
-todas las lecturas y escrituras en `0x2FFFE0`–`0x2FFFEF` y compara cada lectura con un modelo
-propio de la tabla anterior, escrito a partir de esta documentación y no del dispositivo de
-MAME. Resultado en 120 s de arranque y *attract mode* (MAME 0.289, `-bios us`):
+Checked with `tools/mame/trace_protection.lua`. The script intercepts (Lua taps) every read
+and write in `0x2FFFE0`–`0x2FFFEF` and compares each read with our own model of the table
+above, written from this documentation and not from MAME's device. Result over 120 s of boot
+and *attract mode* (MAME 0.289, `-bios us`):
 
-| Dato | Valor |
+| Item | Value |
 |---|---|
-| Lecturas | 127 206, todas iguales al modelo (0 diferencias) |
-| Lecturas con `command=0x0001` | 12 420. Desde PC `0x003BDA` (8 192) y `0x003C2E` (4 228); coincide con la nota de MAME "$3bdc / $3c30". |
-| Lecturas con `command=0x0FFF` | 114 786, casi todas desde PC `0x003A04` |
-| PCs distintos que leen | 9: las rutinas en línea se ejecutan poco en el attract mode |
-| Escrituras | `+0` 127 210, `+2` y `+4` 254 416 cada una, `+6` 229 592, `+A` 8 |
+| Reads | 127 206, all equal to the model (0 differences) |
+| Reads with `command=0x0001` | 12 420. From PC `0x003BDA` (8 192) and `0x003C2E` (4 228); matches MAME's note "$3bdc / $3c30". |
+| Reads with `command=0x0FFF` | 114 786, almost all from PC `0x003A04` |
+| Distinct PCs that read | 9: the inline routines rarely run in attract mode |
+| Writes | `+0` 127 210, `+2` and `+4` 254 416 each, `+6` 229 592, `+A` 8 |
 
-Para el port, la protección puede reimplementarse exactamente así en el bus de memoria (Fase 3).
+For the port, the protection can be reimplemented exactly like this in the memory bus
+(Phase 3).
 
-## Archivos que requiere MAME y que GOG no trae
+## Files MAME requires that GOG does not ship
 
-- **`sm1.sm1`** (BIOS del Z80 en la placa MVS, CRC `94416d67`): sin él, MAME no arranca
+- **`sm1.sm1`** (Z80 BIOS on the MVS board, CRC `94416d67`): without it, MAME does not boot
   (`Required files are missing`).
-  - **Decisión (opción B, aprobada por el usuario):** el extractor escribe una copia de
-    `250-m1.m1` como `sm1.sm1`, marcada como `SUSTITUTO` en el reporte. Así el Z80 arranca
-    directo desde el programa de sonido del juego, igual que en la Neo Geo AES (que no tiene
-    SM1). MAME avisa del checksum pero corre.
-  - Si el usuario coloca un `sm1.sm1` auténtico en `roms/mame/neogeo/`, el extractor lo
-    detecta por CRC y no lo sobrescribe.
-  - **Verificación:**
-    - MAME arranca, completa el BIOS y entra en el attract mode del juego.
-    - En 60 s de audio grabado (`-wavwrite`) hay 44 s con sonido a niveles normales; los
-      ~10 s iniciales de silencio corresponden al arranque del BIOS.
-  - **Riesgo residual:** la secuencia de arranque del Z80 difiere de una MVS real hasta que
-    el BIOS conmuta al M1. No afecta al port, cuyo runtime arrancará el Z80 desde M1 como la
-    AES. Si en la Fase 4 aparece una divergencia de audio al inicio, este es el primer
-    sospechoso.
-- Para arrancar con el set reconstruido:
-  `mame mslugx -bios us -rompath "<raíz>\roms\mame"`.
-- Las demás opciones de BIOS (`sp-s2`, uni-bios, etc.) no hacen falta si se arranca con
+  - **Decision (option B, approved by the user):** the extractor writes a copy of
+    `250-m1.m1` as `sm1.sm1`, marked as `SUSTITUTO` in the report. This way the Z80 boots
+    straight from the game's sound program, just like on the Neo Geo AES (which has no SM1).
+    MAME warns about the checksum but runs.
+  - If the user places a genuine `sm1.sm1` in `roms/mame/neogeo/`, the extractor detects it by
+    CRC and does not overwrite it.
+  - **Verification:**
+    - MAME boots, completes the BIOS and enters the game's attract mode.
+    - In 60 s of recorded audio (`-wavwrite`) there are 44 s of sound at normal levels; the
+      initial ~10 s of silence correspond to the BIOS boot.
+  - **Residual risk:** the Z80 boot sequence differs from a real MVS until the BIOS switches
+    to M1. It does not affect the port, whose runtime will boot the Z80 from M1 like the AES.
+    If an audio divergence shows up at startup in Phase 4, this is the first suspect.
+- To boot with the rebuilt set:
+  `mame mslugx -bios us -rompath "<root>\roms\mame"`.
+- The other BIOS options (`sp-s2`, uni-bios, etc.) are not needed when booting with
   `-bios us`.

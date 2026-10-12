@@ -1,7 +1,7 @@
-/* Intérprete de respaldo: ejecuta UNA instrucción con Musashi sincronizando el estado con
- * Cpu68k. Se usa para el código sin versión recompilada (RAM, window de P2, código no visto).
- * Las funciones de memoria de Musashi (m68k_read_memory_*, m68k_write_memory_*) las aporta
- * el anfitrión y deben usar el mismo bus que el código recompilado. */
+/* Fallback interpreter: runs ONE instruction with Musashi, synchronising the state with
+ * Cpu68k. Used for code without a recompiled version (RAM, P2 window, code not seen).
+ * Musashi's memory functions (m68k_read_memory_*, m68k_write_memory_*) are provided by
+ * the host and must use the same bus as the recompiled code. */
 #include "cycles68k.h"
 #include "dispatcher.h"
 #include "m68k.h"
@@ -12,7 +12,7 @@ void rc_interpreter_init(void)
     m68k_init();
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     m68k_pulse_reset();
-    m68k_execute(1);            /* consume los cycles del reset sin ejecutar instrucciones */
+    m68k_execute(1);            /* consumes the reset cycles without running instructions */
 }
 
 void rc_interpreter_step(Cpu68k *c)
@@ -27,14 +27,14 @@ void rc_interpreter_step(Cpu68k *c)
     }
     m68k_set_reg(M68K_REG_PC, c->pc);
 
-    /* Misma convención que el código generado: los cycles base de la instrucción se suman
-     * ANTES de ejecutarla, así los periféricos que dependen del tiempo (contador de línea)
-     * ven el mismo value en ambos caminos. */
-    uint32_t pc_previo = c->pc, op = m68k_read_memory_16(c->pc) & 0xFFFF;
+    /* Same convention as the generated code: the instruction's base cycles are added
+     * BEFORE executing it, so time-dependent peripherals (line counter) see the same
+     * value on both paths. */
+    uint32_t prev_pc = c->pc, op = m68k_read_memory_16(c->pc) & 0xFFFF;
     int base = CYC_INSTRUCTION[op];
-    int ajuste = cycles_adjust_previous(c);         /* con el estado previo, como el generador */
+    int adjust = cycles_adjust_previous(c);         /* with the prior state, like the generator */
     c->op = (uint16_t)op; c->start_cycle = c->cycles;
-    c->cycles += CIC(base + ajuste);
+    c->cycles += CIC(base + adjust);
     c->cycles += CIC(m68k_execute(1)) - CIC(base);
 
     for (int i = 0; i < 8; i++) {
@@ -50,5 +50,5 @@ void rc_interpreter_step(Cpu68k *c)
     c->ssp = m68k_get_reg(NULL, M68K_REG_ISP);
     c->pc = m68k_get_reg(NULL, M68K_REG_PC) & 0xFFFFFF;
     if (CPU_STOPPED) c->stopped = 1;
-    (void)pc_previo;
+    (void)prev_pc;
 }

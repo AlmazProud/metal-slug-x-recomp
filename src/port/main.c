@@ -1,32 +1,32 @@
-/* Metal Slug X, port nativo: opciones de línea de comandos y arranque.
+/* Metal Slug X, native port: command-line options and startup.
  *
- * Uso:
- *   mslugx [--roms CARPETA] [--scale N] [--turbo N] [--sram-vacia] [--sin-audio]
- *          [--date AAAA-MM-DD-hh-mm-ss-D]
- *   mslugx --sin-window --frames N [--screenshots a,b,c --output CARPETA] ...
+ * Usage:
+ *   mslugx [--roms FOLDER] [--scale N] [--turbo N] [--sram-vacia] [--sin-audio]
+ *          [--date YYYY-MM-DD-hh-mm-ss-D]
+ *   mslugx --sin-window --frames N [--screenshots a,b,c --output FOLDER] ...
  *
- * --roms: carpeta resources\game de la instalación de GOG. Sin esta opción, el mode con window
- *         la busca solo (window.c); el mode sin window usa "roms" junto al ejecutable. Los
- *         archivos se validan por SHA-256.
- * --turbo: 0 = como el original; 1 / 2 = 68000 al doble / cuádruple (sin la ralentización
- *         original). Con window, por defecto se usa el de mslugx.ini.
- * --sin-window: corre N frames lo más rápido posible (verificación contra MAME, headless.c):
- *   --screenshots: guarda BMP de los frames pedidos (tools/compare_screenshots.py).
- *   --wav: guarda el audio generado (estéreo, 16 bits, 55 555 Hz).
- *   --inputs: inputs grabadas en MAME (tools/mame/inputs.lua, líneas "C" con tiempo,
- *         o "E cuadro P1 P2 SIS MON TEST"). --fingerprints: fingerprints por cuadro y por VBlank (Fase 4).
- *   --script: inputs por tramos: "desde hasta entrada..." (frames inclusive; inputs: arriba
- *         abajo izquierda derecha a b c d start1 start2 moneda1 moneda2 test).
- *   --traza, --traza-es: trazas de diagnóstico.
- *   --probar-estado M: al final guarda un estado, corre M frames, reinicia la máquina, carga el
- *         estado y repite: RAM, imagen y audio deben coincidir (prueba de los estados guardados).
- *   --catalog-sonido ARCHIVO: tras los N frames (driver de sonido iniciado, sin sonar), envía
- *         cada command de sonido 00-FF por separado y anota duración, bucle, pico y notas por tipo
- *         de canal. Con --output, guarda además snd_XX.wav de cada uno (Fase 6B).
- *   --probar-sonidos: al final abre el menú de sonido, reproduce una música y una voz (deben
- *         sonar), lo cierra y comprueba que el juego sigue idéntico a no haberlo abierto.
+ * --roms: resources\game folder of the GOG installation. Without this option, windowed mode
+ *         looks for it on its own (window.c); headless mode uses "roms" next to the executable.
+ *         The files are validated by SHA-256.
+ * --turbo: 0 = like the original; 1 / 2 = 68000 at double / quadruple speed (without the
+ *         original slowdown). In windowed mode, the value from mslugx.ini is the default.
+ * --sin-window: runs N frames as fast as possible (verification against MAME, headless.c):
+ *   --screenshots: saves BMPs of the requested frames (tools/compare_screenshots.py).
+ *   --wav: saves the generated audio (stereo, 16 bits, 55 555 Hz).
+ *   --inputs: inputs recorded in MAME (tools/mame/inputs.lua, timed "C" lines,
+ *         or "E frame P1 P2 SIS MON TEST"). --fingerprints: per-frame and per-VBlank fingerprints (Phase 4).
+ *   --script: inputs by spans: "from to input..." (frames inclusive; inputs: up down left
+ *         right a b c d start1 start2 select1 coin1 coin2 test).
+ *   --traza, --traza-es: diagnostic traces.
+ *   --probar-estado M: at the end saves a state, runs M frames, resets the machine, loads the
+ *         state and repeats: RAM, image and audio must match (save-state test).
+ *   --catalog-sonido FILE: after the N frames (sound driver started, silent), sends each sound
+ *         command 00-FF separately and records duration, loop, peak and notes per channel
+ *         type. With --output, also saves snd_XX.wav for each one (Phase 6B).
+ *   --probar-sonidos: at the end opens the sound menu, plays a music track and a voice (they
+ *         must be audible), closes it and checks that the game is identical to not having opened it.
  *
- * Controles, menú y teclas fijas del mode con window: ver window.c.
+ * Controls, menu and fixed keys of windowed mode: see window.c.
  */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -41,17 +41,17 @@
 
 void program_register(void);
 
-static void uso(void)
+static void usage(void)
 {
     fprintf(stderr,
-            "Uso: mslugx [--roms CARPETA] [--scale N] [--turbo N] [--sram-vacia] [--sin-audio]\n"
-            "            [--date AAAA-MM-DD-hh-mm-ss-D]\n"
-            "       mslugx --sin-window --frames N [--screenshots a,b,c --output CARPETA] [--script ARCHIVO]\n"
-            "            [--inputs ARCHIVO] [--fingerprints ARCHIVO] [--wav ARCHIVO] [--traza ARCHIVO]\n"
-            "            [--traza-es ARCHIVO DESDE_US HASTA_US]\n");
+            "Usage: mslugx [--roms FOLDER] [--scale N] [--turbo N] [--sram-vacia] [--sin-audio]\n"
+            "              [--date YYYY-MM-DD-hh-mm-ss-D]\n"
+            "       mslugx --sin-window --frames N [--screenshots a,b,c --output FOLDER] [--script FILE]\n"
+            "              [--inputs FILE] [--fingerprints FILE] [--wav FILE] [--traza FILE]\n"
+            "              [--traza-es FILE FROM_US TO_US]\n");
 }
 
-static int opciones(int argc, char **argv, Options *o)
+static int parse_options(int argc, char **argv, Options *o)
 {
     memset(o, 0, sizeof *o);
     o->turbo = -1;
@@ -76,7 +76,7 @@ static int opciones(int argc, char **argv, Options *o)
         else if (!strcmp(a, "--blood")) o->blood = 1;
         else if (!strcmp(a, "--traza") && v) { ng_trace = fopen(v, "w"); i++; }
         else if (!strcmp(a, "--traza-es") && i + 3 < argc) {
-            /* --traza-es ARCHIVO DESDE_US HASTA_US */
+            /* --traza-es FILE FROM_US TO_US */
             ng_trace_io = fopen(argv[i + 1], "w");
             ng_trace_from = (int64_t)(atof(argv[i + 2]) * 12.0);
             ng_trace_to = (int64_t)(atof(argv[i + 3]) * 12.0);
@@ -96,12 +96,12 @@ static int opciones(int argc, char **argv, Options *o)
     return 0;
 }
 
-/* Programa recompilado, intérprete de respaldo y encendido de la máquina (con las ROMs ya
-   cargadas en ng_roms). */
+/* Recompiled program, fallback interpreter and machine power-on (with the ROMs already
+   loaded into ng_roms). */
 void machine_start(const Options *o)
 {
-    static int registrado;
-    if (!registrado) { program_register(); rc_interpreter_init(); registrado = 1; }
+    static int registered;
+    if (!registered) { program_register(); rc_interpreter_init(); registered = 1; }
     if (o->has_date) ng_rtc_set(o->date[0], o->date[1], o->date[2], o->date[6], o->date[3], o->date[4], o->date[5]);
     ng_power_on();
 }
@@ -109,19 +109,19 @@ void machine_start(const Options *o)
 int main(int argc, char **argv)
 {
     Options o;
-    if (opciones(argc, argv, &o) != 0) { uso(); return 2; }
+    if (parse_options(argc, argv, &o) != 0) { usage(); return 2; }
     if (!o.headless) return window_run(&o);
 
-    char carpeta[1024];
-    if (o.roms) snprintf(carpeta, sizeof carpeta, "%s", o.roms);
+    char folder[1024];
+    if (o.roms) snprintf(folder, sizeof folder, "%s", o.roms);
     else {
         const char *base = SDL_GetBasePath();
-        snprintf(carpeta, sizeof carpeta, "%sroms", base ? base : "");
+        snprintf(folder, sizeof folder, "%sroms", base ? base : "");
     }
     char error[1200];
-    if (ng_roms_load(&ng_roms, carpeta, error, sizeof error) != 0) {
+    if (ng_roms_load(&ng_roms, folder, error, sizeof error) != 0) {
         fprintf(stderr, "%s\n", error);
-        fprintf(stderr, "Indica la carpeta resources\\game de tu instalación de GOG con --roms.\n");
+        fprintf(stderr, "Pass the resources\\game folder of your GOG installation with --roms.\n");
         return 1;
     }
     cpu_turbo = o.turbo > 0 ? o.turbo : 0;

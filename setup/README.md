@@ -1,56 +1,57 @@
-# Projecto Decompile: entorno portable
+# Projecto Decompile: portable environment
 
-Todo el entorno vive en una sola carpeta (`C:\Projecto Decompile`). No usa permisos de
-administrador, no modifica el PATH global y no escribe en el registro.
+The whole environment lives in a single folder (`C:\Projecto Decompile`). It needs no
+administrator rights, does not modify the global PATH and does not write to the registry.
 
 ```
 Projecto Decompile\
-  INSTALL.bat        único punto de entrada del instalador
-  env.ps1 / env.bat   activan el entorno SOLO en la sesión actual
-  README.md            este archivo
-  tools\              herramientas portables (+ _descargas, _cache, _verificacion)
-  repo\               código del port (git). El instalador vive en repo\setup\
-  roms\               copia de TUS ROMs (fuera del repo, nunca se versiona)
-  logs\               bitácoras de instalación
+  INSTALL.bat         single entry point of the installer
+  env.ps1 / env.bat   activate the environment ONLY in the current session
+  README.md           this file
+  tools\              portable tools (+ _descargas, _cache, _verificacion)
+  repo\               port source code (git). The installer lives in repo\setup\
+  roms\               copy of YOUR ROMs (outside the repo, never versioned)
+  analysis\           analysis output (outside the repo)
+  logs\               installation logs
 ```
 
-## Instalar o reparar
+## Install or repair
 
-Doble clic en `INSTALL.bat`, o desde una consola:
+Double-click `INSTALL.bat`, or from a console:
 
 ```
 "C:\Projecto Decompile\INSTALL.bat"
 ```
 
-- Descarga solo de las fuentes oficiales listadas en `repo\setup\versions.json` y verifica
-  el hash de cada archivo. Si alguno no coincide, se detiene y lo reporta.
-- Es idempotente: salta lo que ya está instalado, repara lo que falte o esté roto y reinstala
-  solo lo que cambió de versión.
-- Al final ejecuta una verificación (versiones, un "hola mundo" con SDL3 que abre una ventana
-  unos 2 segundos y una importación con Ghidra headless) y muestra una tabla OK/FALLA.
-- Después pregunta si quieres copiar los ROMs desde GOG a `roms\`. La respuesta por defecto
-  es **No**.
+- Downloads only from the official sources listed in `repo\setup\versions.json` and verifies
+  the hash of every file. If any does not match, it stops and reports it.
+- It is idempotent: it skips what is already installed, repairs what is missing or broken and
+  reinstalls only what changed version.
+- At the end it runs a verification (versions, an SDL3 "hello world" that opens a window for
+  about 2 seconds, and an import with headless Ghidra) and shows an OK/FAIL table.
+- Then it asks whether you want to copy the ROMs from GOG to `roms\`. The default answer
+  is **No**.
 
 Options:
 
-| Opción | Efecto |
+| Option | Effect |
 |---|---|
-| `-SoloVerificar` | No instala nada; solo ejecuta la verificación. |
-| `-CopiarRoms` | Solo copia los ROMs (pide confirmación). |
-| `-SinRoms` | No pregunta por los ROMs al final. |
-| `-Gog "ruta"` | Ruta de la instalación de GOG (por defecto `K:\Metal Slug X`). |
+| `-VerifyOnly` | Installs nothing; only runs the verification. |
+| `-CopyRoms` | Only copies the ROMs (asks for confirmation). |
+| `-NoRoms` | Does not ask about the ROMs at the end. |
+| `-Gog "path"` | Path of the GOG installation (default `K:\Metal Slug X`). |
 
-La bitácora de cada ejecución queda en `logs\instalacion_AAAAMMDD_HHMMSS.log`.
+The log of each run is written to `logs\install_YYYYMMDD_HHMMSS.log`.
 
-## Activar el entorno
+## Activate the environment
 
-PowerShell (en una sesión abierta; fíjate en el punto inicial):
+PowerShell (in an open session; note the leading dot):
 
 ```
 . "C:\Projecto Decompile\env.ps1"
 ```
 
-O bien abre una sesión ya activada:
+Or open an already activated session:
 
 ```
 powershell -NoExit -ExecutionPolicy Bypass -File "C:\Projecto Decompile\env.ps1"
@@ -62,30 +63,30 @@ cmd:
 call "C:\Projecto Decompile\env.bat"
 ```
 
-El entorno antepone al PATH de la sesión: python, cmake, ninja, llvm-mingw (clang), SDL3 (bin),
-jdk21, ghidra\support (analyzeHeadless), mame, 7-Zip, imhex y git. También define `JAVA_HOME`,
+The environment prepends to the session PATH: python, cmake, ninja, llvm-mingw (clang), SDL3 (bin),
+jdk21, ghidra\support (analyzeHeadless), mame, 7-Zip, imhex and git. It also sets `JAVA_HOME`,
 `GHIDRA_INSTALL_DIR`, `CMAKE_PREFIX_PATH` (SDL3), `CMAKE_GENERATOR=Ninja`, `CC=clang`,
-`PIP_CACHE_DIR` (dentro de tools\) y `PD_ROOT`, `PD_TOOLS`, `PD_REPO` y `PD_ROMS`.
-El prompt muestra `(PD)`.
+`PIP_CACHE_DIR` (inside tools\) and `PD_ROOT`, `PD_TOOLS`, `PD_REPO` and `PD_ROMS`.
+The prompt shows `(PD)`.
 
-## Actualizar una herramienta
+## Update a tool
 
-1. Edita `repo\setup\versions.json`: cambia `version`, `url` y `hash` de la herramienta.
-   Toma el hash de la fuente oficial que indica `fuente_hash` (digest de la release en GitHub,
-   archivo SHA-256 de CMake, API de Adoptium, catálogo de NuGet).
-2. Vuelve a ejecutar `INSTALL.bat`. Solo se reinstala la herramienta que cambió.
+1. Edit `repo\setup\versions.json`: change the tool's `version`, `url` and `hash`.
+   Take the hash from the official source given in `hash_source` (GitHub release digest,
+   CMake SHA-256 file, Adoptium API, NuGet catalog).
+2. Run `INSTALL.bat` again. Only the tool that changed is reinstalled.
 
-Aviso: al actualizar Python se reinstala `tools\python` completo y se pierden los paquetes
-instalados con pip. Habrá que reinstalarlos desde el `requirements.txt` del repo.
+Warning: updating Python reinstalls the whole `tools\python` folder and the packages installed
+with pip are lost. They must be reinstalled from the repo's `requirements.txt`.
 
-## Desinstalar
+## Uninstall
 
-Borra la carpeta `C:\Projecto Decompile`. No queda nada en el registro ni en el PATH global.
-La configuración de Ghidra, la caché de pip y la configuración de ImHex (modo portable) se
-guardan dentro de `tools\`.
+Delete the `C:\Projecto Decompile` folder. Nothing is left in the registry or in the global PATH.
+The Ghidra configuration, the pip cache and the ImHex configuration (portable mode) are
+stored inside `tools\`.
 
-## Reglas del repositorio
+## Repository rules
 
-- `repo\` nunca contiene ROMs, BIOS, gráficos, audio ni datos extraídos. El `.gitignore`
-  funciona como lista blanca: ignora todo y solo deja pasar código y documentación.
-- Los ROMs se leen en tiempo de ejecución desde `roms\` y se validan por hash.
+- `repo\` never contains ROMs, BIOS, graphics, audio or extracted data. The `.gitignore`
+  works as a whitelist: it ignores everything and only lets code and documentation through.
+- ROMs are read at runtime from `roms\` and validated by hash.

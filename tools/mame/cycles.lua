@@ -1,32 +1,32 @@
--- Ciclos reales del 68000 de MAME por instrucción (requiere -debug -debugger none).
+-- Real per-instruction 68000 cycles from MAME (requires -debug -debugger none).
 --
--- Activa la traza del depurador entre los frames PD_DESDE y PD_HASTA. Cada línea lleva
--- delante el contador total de cycles de la CPU ("C=<totalcycles>"), así la diferencia entre
--- dos líneas consecutivas es el costo real de la instrucción (más la entrada a una interrupción
--- cuando el PC salta al manejador). Salida: PD_TRAZA (archivo de traza del depurador).
+-- Enables the debugger trace between frames PD_DESDE and PD_HASTA. Each line is prefixed
+-- with the CPU's total cycle counter ("C=<totalcycles>"), so the difference between
+-- two consecutive lines is the real cost of the instruction (plus the interrupt entry
+-- when the PC jumps to the handler). Output: PD_TRAZA (debugger trace file).
 
 local dbg = manager.machine.debugger
 local scr = manager.machine.screens[":screen"]
-local desde = tonumber(os.getenv("PD_DESDE") or "100")
-local hasta = tonumber(os.getenv("PD_HASTA") or "102")
-local ruta = os.getenv("PD_TRAZA") or "cycles.txt"
-local cpu_traza = os.getenv("PD_CPU") or "maincpu"   -- "audiocpu" para el Z80
+local first = tonumber(os.getenv("PD_DESDE") or "100")
+local last = tonumber(os.getenv("PD_HASTA") or "102")
+local path = os.getenv("PD_TRAZA") or "cycles.txt"
+local trace_cpu = os.getenv("PD_CPU") or "maincpu"   -- "audiocpu" for the Z80
 local active = false
 
--- PD_DESDE=-1: traza desde el encendido (el script corre antes de la primera instrucción).
-if desde < 0 then
-    dbg:command(string.format('trace %s,%s,noloop,{tracelog "C=%%d ",totalcycles}', ruta, cpu_traza))
+-- PD_DESDE=-1: trace from power-on (the script runs before the first instruction).
+if first < 0 then
+    dbg:command(string.format('trace %s,%s,noloop,{tracelog "C=%%d ",totalcycles}', path, trace_cpu))
     active = true
 end
 
-suscripcion_ciclos = emu.add_machine_frame_notifier(function()
+cycles_sub = emu.add_machine_frame_notifier(function()
     local f = scr:frame_number()
-    if not active and desde >= 0 and f >= desde and f < hasta then
-        dbg:command("focus " .. cpu_traza)           -- tracelog escribe en la CPU con el foco
-        dbg:command(string.format('trace %s,%s,noloop,{tracelog "C=%%d ",totalcycles}', ruta, cpu_traza))
+    if not active and first >= 0 and f >= first and f < last then
+        dbg:command("focus " .. trace_cpu)           -- tracelog writes to the CPU that has the focus
+        dbg:command(string.format('trace %s,%s,noloop,{tracelog "C=%%d ",totalcycles}', path, trace_cpu))
         active = true
-    elseif active and f >= hasta then
-        dbg:command("trace off," .. cpu_traza)
+    elseif active and f >= last then
+        dbg:command("trace off," .. trace_cpu)
         active = false
         manager.machine:exit()
     end

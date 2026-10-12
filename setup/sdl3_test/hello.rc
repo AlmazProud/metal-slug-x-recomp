@@ -1,5 +1,5 @@
-// Recurso de versión: obliga a que llvm-windres (y su preprocesador) se
-// ejecuten bajo la ruta con espacio.
+// Version resource: forces llvm-windres (and its preprocessor) to
+// run under the path containing a space.
 #include <winver.h>
 
 1 VERSIONINFO
@@ -10,15 +10,15 @@ FILETYPE        VFT_APP
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "040A04B0"
+        BLOCK "040904B0"
         BEGIN
-            VALUE "ProductName",     "Projecto Decompile - prueba SDL3"
-            VALUE "FileDescription", "Prueba del entorno"
+            VALUE "ProductName",     "Projecto Decompile - SDL3 test"
+            VALUE "FileDescription", "Environment test"
             VALUE "FileVersion",     "0.0.0.1"
         END
     END
     BLOCK "VarFileInfo"
     BEGIN
-        VALUE "Translation", 0x40A, 1200
+        VALUE "Translation", 0x409, 1200
     END
 END

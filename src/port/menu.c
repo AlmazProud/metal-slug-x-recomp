@@ -1,10 +1,10 @@
-/* Menús del port (Fase 6C).
+/* Port menus (Phase 6C).
  *
- * Páginas apiladas; cada página es una lista de opciones (enum OP_*). Una opción puede abrir otra
- * página, ejecutar una acción o cambiar un value (← / →). El text usa la fuente del propio juego
- * (font.c) sobre el juego oscurecido:
- *   - Inicio: el demo del juego sigue corriendo de fondo, sin recibir las inputs;
- *   - Pausa: el juego queda stopped.
+ * Stacked pages; each page is a list of options (enum OP_*). An option can open another page,
+ * run an action or change a value (left / right). Text uses the game's own font (font.c) over
+ * the darkened game:
+ *   - Start: the game's demo keeps running in the background, without receiving input;
+ *   - Pause: the game is stopped.
  */
 #include "menu.h"
 
@@ -19,338 +19,338 @@
 #include "sounds.h"
 
 enum {
-    OP_JUGAR, OP_CONTINUAR, OP_GUARDAR, OP_CARGAR, OP_CONFIG, OP_SONIDOS, OP_EXTRAS, OP_VOLVER_INICIO,
-    OP_SALIR,
-    /* configuración */
-    OP_VIDEO, OP_AUDIO, OP_JUEGO, OP_CONTROLES,
-    OP_PANTALLA, OP_VSYNC, OP_ASPECTO, OP_FILTRO, OP_SCANLINES,
-    OP_VOLUMEN, OP_VIBRACION,
-    OP_TURBO, OP_SANGRE, OP_AUTO1, OP_AUTO2, OP_AUTO_VEL, OP_PANTALLA_INICIO,
-    OP_CONTROLES1, OP_CONTROLES2,
+    OP_PLAY, OP_CONTINUE, OP_SAVE, OP_LOAD, OP_SETTINGS, OP_SOUNDS, OP_EXTRAS, OP_BACK_TO_START,
+    OP_QUIT,
+    /* settings */
+    OP_VIDEO, OP_AUDIO, OP_GAME, OP_CONTROLS,
+    OP_FULLSCREEN, OP_VSYNC, OP_ASPECT, OP_FILTER, OP_SCANLINES,
+    OP_VOLUME, OP_RUMBLE,
+    OP_TURBO, OP_BLOOD, OP_AUTO1, OP_AUTO2, OP_AUTO_SPEED, OP_START_SCREEN,
+    OP_CONTROLS1, OP_CONTROLS2,
     /* extras */
-    OP_DEBUG, OP_SERVICIO, OP_REINICIAR,
+    OP_DEBUG, OP_SERVICE, OP_RESET,
 };
 
-typedef struct { const char *titulo; const int *op; int n; } Pagina;
+typedef struct { const char *title; const int *op; int n; } Page;
 
-#define PAGINA(name, titulo, ...) \
+#define PAGE(name, title, ...) \
     static const int name##_op[] = {__VA_ARGS__}; \
-    static const Pagina name = {titulo, name##_op, (int)(sizeof name##_op / sizeof(int))}
+    static const Page name = {title, name##_op, (int)(sizeof name##_op / sizeof(int))}
 
-PAGINA(P_INICIO, "METAL SLUG X", OP_JUGAR, OP_CARGAR, OP_CONFIG, OP_SONIDOS, OP_EXTRAS, OP_SALIR);
-PAGINA(P_PAUSA, "PAUSA", OP_CONTINUAR, OP_GUARDAR, OP_CARGAR, OP_CONFIG, OP_SONIDOS, OP_EXTRAS,
-       OP_VOLVER_INICIO, OP_SALIR);
-PAGINA(P_CONFIG, "CONFIGURACION", OP_VIDEO, OP_AUDIO, OP_JUEGO, OP_CONTROLES);
-PAGINA(P_VIDEO, "VIDEO", OP_PANTALLA, OP_VSYNC, OP_ASPECTO, OP_FILTRO, OP_SCANLINES);
-PAGINA(P_AUDIO, "AUDIO", OP_VOLUMEN, OP_VIBRACION);
-PAGINA(P_JUEGO, "JUEGO", OP_TURBO, OP_SANGRE, OP_AUTO1, OP_AUTO2, OP_AUTO_VEL, OP_PANTALLA_INICIO);
-PAGINA(P_CONTROLES, "CONTROLES", OP_CONTROLES1, OP_CONTROLES2);
-PAGINA(P_EXTRAS, "EXTRAS", OP_DEBUG, OP_SERVICIO, OP_REINICIAR);
+PAGE(P_START, "METAL SLUG X", OP_PLAY, OP_LOAD, OP_SETTINGS, OP_SOUNDS, OP_EXTRAS, OP_QUIT);
+PAGE(P_PAUSE, "PAUSE", OP_CONTINUE, OP_SAVE, OP_LOAD, OP_SETTINGS, OP_SOUNDS, OP_EXTRAS,
+     OP_BACK_TO_START, OP_QUIT);
+PAGE(P_SETTINGS, "SETTINGS", OP_VIDEO, OP_AUDIO, OP_GAME, OP_CONTROLS);
+PAGE(P_VIDEO, "VIDEO", OP_FULLSCREEN, OP_VSYNC, OP_ASPECT, OP_FILTER, OP_SCANLINES);
+PAGE(P_AUDIO, "AUDIO", OP_VOLUME, OP_RUMBLE);
+PAGE(P_GAME, "GAME", OP_TURBO, OP_BLOOD, OP_AUTO1, OP_AUTO2, OP_AUTO_SPEED, OP_START_SCREEN);
+PAGE(P_CONTROLS, "CONTROLS", OP_CONTROLS1, OP_CONTROLS2);
+PAGE(P_EXTRAS, "EXTRAS", OP_DEBUG, OP_SERVICE, OP_RESET);
 
 static struct {
-    const Pagina *pila[6];
+    const Page *stack[6];
     int sel[6];
-    int nivel;                           /* -1 = cerrado */
-    int remap_jugador, remap_accion;     /* -1 = sin captura de controles */
+    int level;                           /* -1 = closed */
+    int remap_player, remap_action;      /* -1 = not capturing controls */
 } m = {{0}, {0}, -1, -1, 0};
 
-static int ciclar(int v, int d, int n) { return ((v + d) % n + n) % n; }
+static int cycle(int v, int d, int n) { return ((v + d) % n + n) % n; }
 
-static void abrir(const Pagina *p)
+static void open_page(const Page *p)
 {
-    m.nivel = 0;
-    m.pila[0] = p;
+    m.level = 0;
+    m.stack[0] = p;
     m.sel[0] = 0;
 }
 
-void menu_start(void) { abrir(&P_INICIO); }
-void menu_pause(void) { abrir(&P_PAUSA); }
-int menu_open(void) { return m.nivel >= 0; }
-int menu_game_runs(void) { return m.nivel >= 0 && m.pila[0] == &P_INICIO; }
+void menu_start(void) { open_page(&P_START); }
+void menu_pause(void) { open_page(&P_PAUSE); }
+int menu_open(void) { return m.level >= 0; }
+int menu_game_runs(void) { return m.level >= 0 && m.stack[0] == &P_START; }
 
-static void cerrar(void)
+static void close_menu(void)
 {
-    m.nivel = -1;
+    m.level = -1;
     fe_save_config();
 }
 
-static void entrar(const Pagina *p)
+static void push_page(const Page *p)
 {
-    if (m.nivel + 1 >= (int)(sizeof m.pila / sizeof m.pila[0])) return;
-    m.nivel++;
-    m.pila[m.nivel] = p;
-    m.sel[m.nivel] = 0;
+    if (m.level + 1 >= (int)(sizeof m.stack / sizeof m.stack[0])) return;
+    m.level++;
+    m.stack[m.level] = p;
+    m.sel[m.level] = 0;
 }
 
-static void volver(void)
+static void go_back(void)
 {
-    if (m.nivel > 0) { m.nivel--; fe_save_config(); }
-    else if (m.pila[0] == &P_PAUSA) cerrar();     /* en la screen de inicio, Esc no hace nada */
+    if (m.level > 0) { m.level--; fe_save_config(); }
+    else if (m.stack[0] == &P_PAUSE) close_menu();    /* on the start screen, Esc does nothing */
 }
 
-/* ------------------------------------------------------------------ textos */
-static const char *etiqueta(int op)
+/* ------------------------------------------------------------------ texts */
+static const char *label(int op)
 {
     switch (op) {
-    case OP_JUGAR: return "Jugar";
-    case OP_CONTINUAR: return "Continuar";
-    case OP_GUARDAR: return "Guardar partida";
-    case OP_CARGAR: return "Cargar partida";
-    case OP_CONFIG: return "Configuracion";
-    case OP_SONIDOS: return "Musica y sonidos";
+    case OP_PLAY: return "Play";
+    case OP_CONTINUE: return "Continue";
+    case OP_SAVE: return "Save game";
+    case OP_LOAD: return "Load game";
+    case OP_SETTINGS: return "Settings";
+    case OP_SOUNDS: return "Music and sounds";
     case OP_EXTRAS: return "Extras";
-    case OP_VOLVER_INICIO: return "Volver al inicio";
-    case OP_SALIR: return "Salir";
+    case OP_BACK_TO_START: return "Back to start screen";
+    case OP_QUIT: return "Quit";
     case OP_VIDEO: return "Video";
     case OP_AUDIO: return "Audio";
-    case OP_JUEGO: return "Juego";
-    case OP_CONTROLES: return "Controles";
-    case OP_PANTALLA: return "Pantalla completa";
+    case OP_GAME: return "Game";
+    case OP_CONTROLS: return "Controls";
+    case OP_FULLSCREEN: return "Fullscreen";
     case OP_VSYNC: return "V-sync";
-    case OP_ASPECTO: return "Aspecto";
-    case OP_FILTRO: return "Filtro";
+    case OP_ASPECT: return "Aspect";
+    case OP_FILTER: return "Filter";
     case OP_SCANLINES: return "Scanlines";
-    case OP_VOLUMEN: return "Volumen";
-    case OP_VIBRACION: return "Vibracion";
-    case OP_TURBO: return "Ralentizacion";
-    case OP_SANGRE: return "Sangre";
-    case OP_AUTO1: return "Autodisparo J1";
-    case OP_AUTO2: return "Autodisparo J2";
-    case OP_AUTO_VEL: return "Velocidad autofire";
-    case OP_PANTALLA_INICIO: return "Pantalla de inicio";
-    case OP_CONTROLES1: return "Jugador 1";
-    case OP_CONTROLES2: return "Jugador 2";
-    case OP_DEBUG: return "Modo debug (F3)";
-    case OP_SERVICIO: return "Menu de service";
-    case OP_REINICIAR: return "Reiniciar la maquina";
+    case OP_VOLUME: return "Volume";
+    case OP_RUMBLE: return "Rumble";
+    case OP_TURBO: return "Slowdown";
+    case OP_BLOOD: return "Blood";
+    case OP_AUTO1: return "Autofire P1";
+    case OP_AUTO2: return "Autofire P2";
+    case OP_AUTO_SPEED: return "Autofire speed";
+    case OP_START_SCREEN: return "Start screen";
+    case OP_CONTROLS1: return "Player 1";
+    case OP_CONTROLS2: return "Player 2";
+    case OP_DEBUG: return "Debug mode (F3)";
+    case OP_SERVICE: return "Service menu";
+    case OP_RESET: return "Reset the machine";
     default: return "?";
     }
 }
 
-/* Valor a la derecha (vacío si la opción no tiene value). */
+/* Value on the right (empty if the option has no value). */
 static void value(int op, char *b, size_t n)
 {
-    static const char *const ASPECTO[ASPECT_COUNT] = {"4:3", "Pixeles"};
-    static const char *const FILTRO[FILTER_COUNT] = {"Nitido", "Suave", "Pixeles"};
-    static const char *const AUTO[AUTO_COUNT] = {"No", "Boton propio", "En el disparo"};
-    static const char *const VEL[AUTO_SPEEDS] = {"10/s", "7.5/s", "5/s"};
+    static const char *const ASPECT[ASPECT_COUNT] = {"4:3", "Square"};
+    static const char *const FILTER[FILTER_COUNT] = {"Sharp", "Smooth", "Pixel"};
+    static const char *const AUTO[AUTO_COUNT] = {"Off", "Own button", "On fire"};
+    static const char *const SPEED[AUTO_SPEEDS] = {"10/s", "7.5/s", "5/s"};
     b[0] = 0;
     switch (op) {
-    case OP_GUARDAR: case OP_CARGAR: snprintf(b, n, "< Ranura %d >", cfg.slot); break;
-    case OP_PANTALLA: snprintf(b, n, cfg.fullscreen ? "Si" : "No"); break;
-    case OP_VSYNC: snprintf(b, n, cfg.vsync ? "Si" : "No"); break;
-    case OP_ASPECTO: snprintf(b, n, "%s", ASPECTO[cfg.aspect]); break;
-    case OP_FILTRO: snprintf(b, n, "%s", FILTRO[cfg.filter]); break;
-    case OP_SCANLINES: snprintf(b, n, cfg.scanlines ? "Si" : "No"); break;
-    case OP_VOLUMEN: snprintf(b, n, "%d%%", cfg.volume); break;
-    case OP_VIBRACION: if (cfg.rumble) snprintf(b, n, "%d%%", cfg.rumble); else snprintf(b, n, "No"); break;
+    case OP_SAVE: case OP_LOAD: snprintf(b, n, "< Slot %d >", cfg.slot); break;
+    case OP_FULLSCREEN: snprintf(b, n, cfg.fullscreen ? "Yes" : "No"); break;
+    case OP_VSYNC: snprintf(b, n, cfg.vsync ? "Yes" : "No"); break;
+    case OP_ASPECT: snprintf(b, n, "%s", ASPECT[cfg.aspect]); break;
+    case OP_FILTER: snprintf(b, n, "%s", FILTER[cfg.filter]); break;
+    case OP_SCANLINES: snprintf(b, n, cfg.scanlines ? "Yes" : "No"); break;
+    case OP_VOLUME: snprintf(b, n, "%d%%", cfg.volume); break;
+    case OP_RUMBLE: if (cfg.rumble) snprintf(b, n, "%d%%", cfg.rumble); else snprintf(b, n, "Off"); break;
     case OP_TURBO:
-        if (cfg.turbo) snprintf(b, n, "No (x%d)", 1 << cfg.turbo);
+        if (cfg.turbo) snprintf(b, n, "Off (x%d)", 1 << cfg.turbo);
         else snprintf(b, n, "Original");
         break;
-    case OP_SANGRE: snprintf(b, n, cfg.blood ? "Roja" : "Original"); break;
+    case OP_BLOOD: snprintf(b, n, cfg.blood ? "Red" : "Original"); break;
     case OP_AUTO1: case OP_AUTO2: snprintf(b, n, "%s", AUTO[cfg.autofire[op - OP_AUTO1]]); break;
-    case OP_AUTO_VEL: snprintf(b, n, "%s", VEL[cfg.auto_speed]); break;
-    case OP_PANTALLA_INICIO: snprintf(b, n, cfg.start_screen ? "Si" : "No"); break;
-    case OP_DEBUG: snprintf(b, n, debug_enabled() ? "Si" : "No"); break;
-    case OP_CONFIG: case OP_EXTRAS: case OP_VIDEO: case OP_AUDIO: case OP_JUEGO: case OP_CONTROLES:
+    case OP_AUTO_SPEED: snprintf(b, n, "%s", SPEED[cfg.auto_speed]); break;
+    case OP_START_SCREEN: snprintf(b, n, cfg.start_screen ? "Yes" : "No"); break;
+    case OP_DEBUG: snprintf(b, n, debug_enabled() ? "Yes" : "No"); break;
+    case OP_SETTINGS: case OP_EXTRAS: case OP_VIDEO: case OP_AUDIO: case OP_GAME: case OP_CONTROLS:
         snprintf(b, n, ">");
         break;
     default: break;
     }
 }
 
-static const char *ayuda(int op)
+static const char *help(int op)
 {
     switch (op) {
-    case OP_TURBO: return "Original: el juego se ralentiza con muchos sprites, como la placa";
-    case OP_ASPECTO: return "4:3 como el monitor original, o pixeles cuadrados";
-    case OP_VSYNC: return "Sin cortes en la imagen; a 60 Hz el juego va 1.4% mas rapido";
-    case OP_SANGRE: return "Original: la del menu de service (BLOOD, apagada en EE.UU.)";
-    case OP_FILTRO: return "Nitido: pixeles parejos sin bordes borrosos";
-    case OP_AUTO1: case OP_AUTO2: return "Boton propio: B / G en el teclado, RB en el mando";
-    case OP_SERVICIO: return "Menu del BIOS: dificultad, vidas, tiempo (tambien con F2)";
-    case OP_SONIDOS: return "Escucha la musica, las voces y los efectos del juego";
-    case OP_DEBUG: return "Carga del 68000, ralentizacion, sprites, palette, RAM";
-    case OP_PANTALLA_INICIO: return "Mostrar este menu al abrir el juego";
+    case OP_TURBO: return "Original: the game slows down with many sprites, like the board";
+    case OP_ASPECT: return "4:3 like the original monitor, or square pixels";
+    case OP_VSYNC: return "No tearing; at 60 Hz the game runs 1.4% faster";
+    case OP_BLOOD: return "Original: as set in the service menu (BLOOD, off in the US)";
+    case OP_FILTER: return "Sharp: even pixels without blurry edges";
+    case OP_AUTO1: case OP_AUTO2: return "Own button: B / G on the keyboard, RB on the gamepad";
+    case OP_SERVICE: return "BIOS menu: difficulty, lives, time (also with F2)";
+    case OP_SOUNDS: return "Listen to the music, voices and effects of the game";
+    case OP_DEBUG: return "68000 load, slowdown, sprites, palette, RAM";
+    case OP_START_SCREEN: return "Show this menu when the game opens";
     default: return "";
     }
 }
 
-/* ------------------------------------------------------------------ acciones */
-static void cambiar_porcentaje(int *v, int d)
+/* ------------------------------------------------------------------ actions */
+static void step_percent(int *v, int d)
 {
     *v += (d ? d : 1) * 10;
     if (*v > 100) *v = d ? 100 : 0;
     if (*v < 0) *v = 0;
 }
 
-/* d = 0: elegir; -1 / +1: cambiar el value. */
-static void accion(int op, int d)
+/* d = 0: select; -1 / +1: change the value. */
+static void do_action(int op, int d)
 {
     switch (op) {
-    case OP_JUGAR: if (!d) { cerrar(); fe_play(); } break;
-    case OP_CONTINUAR: if (!d) cerrar(); break;
-    case OP_GUARDAR: case OP_CARGAR:
-        if (d) cfg.slot = ciclar(cfg.slot - 1, d, 9) + 1;
+    case OP_PLAY: if (!d) { close_menu(); fe_play(); } break;
+    case OP_CONTINUE: if (!d) close_menu(); break;
+    case OP_SAVE: case OP_LOAD:
+        if (d) cfg.slot = cycle(cfg.slot - 1, d, 9) + 1;
         else {
-            cerrar();
-            if (op == OP_GUARDAR) fe_state_save();
+            close_menu();
+            if (op == OP_SAVE) fe_state_save();
             else fe_state_load();
         }
         break;
-    case OP_CONFIG: if (!d) entrar(&P_CONFIG); break;
-    case OP_SONIDOS: if (!d) sounds_show(); break;
-    case OP_EXTRAS: if (!d) entrar(&P_EXTRAS); break;
-    case OP_VOLVER_INICIO: if (!d) { fe_reset(); menu_start(); } break;
-    case OP_SALIR: if (!d) fe_quit(); break;
-    case OP_VIDEO: if (!d) entrar(&P_VIDEO); break;
-    case OP_AUDIO: if (!d) entrar(&P_AUDIO); break;
-    case OP_JUEGO: if (!d) entrar(&P_JUEGO); break;
-    case OP_CONTROLES: if (!d) entrar(&P_CONTROLES); break;
-    case OP_PANTALLA: cfg.fullscreen = !cfg.fullscreen; fe_apply_video(); break;
+    case OP_SETTINGS: if (!d) push_page(&P_SETTINGS); break;
+    case OP_SOUNDS: if (!d) sounds_show(); break;
+    case OP_EXTRAS: if (!d) push_page(&P_EXTRAS); break;
+    case OP_BACK_TO_START: if (!d) { fe_reset(); menu_start(); } break;
+    case OP_QUIT: if (!d) fe_quit(); break;
+    case OP_VIDEO: if (!d) push_page(&P_VIDEO); break;
+    case OP_AUDIO: if (!d) push_page(&P_AUDIO); break;
+    case OP_GAME: if (!d) push_page(&P_GAME); break;
+    case OP_CONTROLS: if (!d) push_page(&P_CONTROLS); break;
+    case OP_FULLSCREEN: cfg.fullscreen = !cfg.fullscreen; fe_apply_video(); break;
     case OP_VSYNC: cfg.vsync = !cfg.vsync; fe_apply_video(); break;
-    case OP_ASPECTO: cfg.aspect = ciclar(cfg.aspect, d ? d : 1, ASPECT_COUNT); break;
-    case OP_FILTRO: cfg.filter = ciclar(cfg.filter, d ? d : 1, FILTER_COUNT); break;
+    case OP_ASPECT: cfg.aspect = cycle(cfg.aspect, d ? d : 1, ASPECT_COUNT); break;
+    case OP_FILTER: cfg.filter = cycle(cfg.filter, d ? d : 1, FILTER_COUNT); break;
     case OP_SCANLINES: cfg.scanlines = !cfg.scanlines; break;
-    case OP_VOLUMEN: cambiar_porcentaje(&cfg.volume, d); fe_apply_volume(); break;
-    case OP_VIBRACION: cambiar_porcentaje(&cfg.rumble, d); rumble_strength(cfg.rumble); break;
-    case OP_TURBO: cfg.turbo = ciclar(cfg.turbo, d ? d : 1, 3); cpu_turbo = cfg.turbo; break;
-    case OP_SANGRE: cfg.blood = !cfg.blood; fe_apply_blood(); break;
+    case OP_VOLUME: step_percent(&cfg.volume, d); fe_apply_volume(); break;
+    case OP_RUMBLE: step_percent(&cfg.rumble, d); rumble_strength(cfg.rumble); break;
+    case OP_TURBO: cfg.turbo = cycle(cfg.turbo, d ? d : 1, 3); cpu_turbo = cfg.turbo; break;
+    case OP_BLOOD: cfg.blood = !cfg.blood; fe_apply_blood(); break;
     case OP_AUTO1: case OP_AUTO2:
-        cfg.autofire[op - OP_AUTO1] = ciclar(cfg.autofire[op - OP_AUTO1], d ? d : 1, AUTO_COUNT);
+        cfg.autofire[op - OP_AUTO1] = cycle(cfg.autofire[op - OP_AUTO1], d ? d : 1, AUTO_COUNT);
         break;
-    case OP_AUTO_VEL: cfg.auto_speed = ciclar(cfg.auto_speed, d ? d : 1, AUTO_SPEEDS); break;
-    case OP_PANTALLA_INICIO: cfg.start_screen = !cfg.start_screen; break;
-    case OP_CONTROLES1: case OP_CONTROLES2:
-        if (!d) { m.remap_jugador = op - OP_CONTROLES1; m.remap_accion = 0; }
+    case OP_AUTO_SPEED: cfg.auto_speed = cycle(cfg.auto_speed, d ? d : 1, AUTO_SPEEDS); break;
+    case OP_START_SCREEN: cfg.start_screen = !cfg.start_screen; break;
+    case OP_CONTROLS1: case OP_CONTROLS2:
+        if (!d) { m.remap_player = op - OP_CONTROLS1; m.remap_action = 0; }
         break;
     case OP_DEBUG: debug_enable(!debug_enabled()); cfg.debug = debug_enabled(); break;
-    case OP_SERVICIO: if (!d) { cerrar(); fe_service(); } break;
-    case OP_REINICIAR: if (!d) { cerrar(); fe_reset(); } break;
+    case OP_SERVICE: if (!d) { close_menu(); fe_service(); } break;
+    case OP_RESET: if (!d) { close_menu(); fe_reset(); } break;
     default: break;
     }
 }
 
 void menu_navigate(int t)
 {
-    if (m.nivel < 0) return;
-    const Pagina *p = m.pila[m.nivel];
-    int *s = &m.sel[m.nivel];
+    if (m.level < 0) return;
+    const Page *p = m.stack[m.level];
+    int *s = &m.sel[m.level];
     switch (t) {
-    case 0: *s = ciclar(*s, -1, p->n); break;
-    case 1: *s = ciclar(*s, 1, p->n); break;
-    case 2: accion(p->op[*s], -1); break;
-    case 3: accion(p->op[*s], 1); break;
-    case 4: accion(p->op[*s], 0); break;
-    default: volver(); break;
+    case 0: *s = cycle(*s, -1, p->n); break;
+    case 1: *s = cycle(*s, 1, p->n); break;
+    case 2: do_action(p->op[*s], -1); break;
+    case 3: do_action(p->op[*s], 1); break;
+    case 4: do_action(p->op[*s], 0); break;
+    default: go_back(); break;
     }
 }
 
-/* ------------------------------------------------------------------ controles */
-int menu_capturing(void) { return m.remap_jugador >= 0; }
+/* ------------------------------------------------------------------ controls */
+int menu_capturing(void) { return m.remap_player >= 0; }
 
-static void remap_siguiente(void)
+static void remap_next(void)
 {
-    if (++m.remap_accion >= ACT_COUNT) {
-        m.remap_jugador = -1;
+    if (++m.remap_action >= ACT_COUNT) {
+        m.remap_player = -1;
         fe_save_config();
-        fe_notify("Controles guardados");
+        fe_notify("Controls saved");
     }
 }
 
 void menu_capture_key(SDL_Scancode sc)
 {
-    if (sc == SDL_SCANCODE_ESCAPE) { m.remap_accion = ACT_COUNT - 1; remap_siguiente(); }
-    else if (sc == SDL_SCANCODE_DELETE) remap_siguiente();
-    else { cfg.key[m.remap_jugador][m.remap_accion] = sc; remap_siguiente(); }
+    if (sc == SDL_SCANCODE_ESCAPE) { m.remap_action = ACT_COUNT - 1; remap_next(); }
+    else if (sc == SDL_SCANCODE_DELETE) remap_next();
+    else { cfg.key[m.remap_player][m.remap_action] = sc; remap_next(); }
 }
 
 void menu_capture_button(SDL_GamepadButton b)
 {
-    cfg.button[m.remap_jugador][m.remap_accion] = b;
-    remap_siguiente();
+    cfg.button[m.remap_player][m.remap_action] = b;
+    remap_next();
 }
 
-/* ------------------------------------------------------------------ dibujo */
+/* ------------------------------------------------------------------ drawing */
 void menu_draw(SDL_Renderer *r, int w, int h)
 {
-    if (m.nivel < 0) return;
-    /* Lienzo virtual de 480 x 300 ajustado a la window. */
+    if (m.level < 0) return;
+    /* 480 x 300 virtual canvas fitted to the window. */
     float k = font_factor(w, h);
     SDL_SetRenderScale(r, k, k);
     float vw = (float)w / k, vh = (float)h / k, cx = vw / 2;
-    int inicio = m.pila[0] == &P_INICIO;
+    int at_start = m.stack[0] == &P_START;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(r, 0, 0, 0, inicio && m.nivel == 0 ? 150 : 195);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, at_start && m.level == 0 ? 150 : 195);
     SDL_RenderFillRect(r, NULL);
     char b[128];
 
-    if (m.remap_jugador >= 0) {
+    if (m.remap_player >= 0) {
         float y = vh / 2 - 50;
-        snprintf(b, sizeof b, "CONTROLES DEL JUGADOR %d", m.remap_jugador + 1);
+        snprintf(b, sizeof b, "PLAYER %d CONTROLS", m.remap_player + 1);
         font_centered(r, cx, y, 2, INK_GOLD, b);
-        snprintf(b, sizeof b, "Pulsa la key o el button para:");
+        snprintf(b, sizeof b, "Press the key or button for:");
         font_centered(r, cx, y + 30, 1, INK_SILVER, b);
-        font_centered(r, cx, y + 44, 2, INK_SILVER, ACTION_LABEL[m.remap_accion]);
-        const char *c = SDL_GetScancodeName(cfg.key[m.remap_jugador][m.remap_accion]);
-        const char *bt = SDL_GetGamepadStringForButton(cfg.button[m.remap_jugador][m.remap_accion]);
-        snprintf(b, sizeof b, "Actual: %s / mando %s", *c ? c : "-", bt ? bt : "-");
+        font_centered(r, cx, y + 44, 2, INK_SILVER, ACTION_LABEL[m.remap_action]);
+        const char *c = SDL_GetScancodeName(cfg.key[m.remap_player][m.remap_action]);
+        const char *bt = SDL_GetGamepadStringForButton(cfg.button[m.remap_player][m.remap_action]);
+        snprintf(b, sizeof b, "Current: %s / gamepad %s", *c ? c : "-", bt ? bt : "-");
         font_centered(r, cx, y + 70, 1, INK_GRAY, b);
-        font_centered(r, cx, y + 90, 1, INK_GRAY, "Supr: dejar igual    Esc: terminar");
+        font_centered(r, cx, y + 90, 1, INK_GRAY, "Del: keep current    Esc: finish");
         SDL_SetRenderScale(r, 1, 1);
         return;
     }
 
-    const Pagina *p = m.pila[m.nivel];
+    const Page *p = m.stack[m.level];
     float y;
     SDL_Texture *logo = logo_texture();
-    if (inicio && m.nivel == 0 && logo) {
+    if (at_start && m.level == 0 && logo) {
         float lw, lh;
         SDL_GetTextureSize(logo, &lw, &lh);
-        float e = SDL_min(250 / lw, 116 / lh);                /* el logo del título, a lo ancho */
+        float e = SDL_min(250 / lw, 116 / lh);                /* the title logo, full width */
         SDL_FRect d = {SDL_roundf(cx - lw * e / 2), 6, lw * e, lh * e};
         SDL_RenderTexture(r, logo, NULL, &d);
         y = d.y + d.h + 14;
-    } else if (inicio && m.nivel == 0) {
+    } else if (at_start && m.level == 0) {
         font_centered(r, cx, 34, font_fit_scale("METAL SLUG X", 5, vw - 24), INK_GOLD, "METAL SLUG X");
         font_centered(r, cx, 80, 1, INK_SILVER, "SUPER VEHICLE-001");
         y = 112;
     } else {
-        font_centered(r, cx, 26, 3, INK_GOLD, p->titulo);
+        font_centered(r, cx, 26, 3, INK_GOLD, p->title);
         y = 70;
     }
-    /* panel de opciones */
-    const float alto = 20, ancho = 360;
-    float x0 = cx - ancho / 2;
+    /* options panel */
+    const float row_h = 20, panel_w = 360;
+    float x0 = cx - panel_w / 2;
     SDL_SetRenderDrawColor(r, 0, 0, 0, 140);
-    SDL_FRect panel = {x0 - 10, y - 8, ancho + 20, p->n * alto + 12};
+    SDL_FRect panel = {x0 - 10, y - 8, panel_w + 20, p->n * row_h + 12};
     SDL_RenderFillRect(r, &panel);
     for (int i = 0; i < p->n; i++) {
-        int op = p->op[i], es = i == m.sel[m.nivel];
-        float yi = y + i * alto;
-        if (es) {
+        int op = p->op[i], is_sel = i == m.sel[m.level];
+        float yi = y + i * row_h;
+        if (is_sel) {
             SDL_SetRenderDrawColor(r, 255, 190, 60, 40);
-            SDL_FRect barra = {x0 - 6, yi - 3, ancho + 12, 18};
-            SDL_RenderFillRect(r, &barra);
+            SDL_FRect bar = {x0 - 6, yi - 3, panel_w + 12, 18};
+            SDL_RenderFillRect(r, &bar);
             font_text(r, x0 - 4, yi, 1.5f, INK_GOLD, ">");
         }
         value(op, b, sizeof b);
         if (b[0] && strcmp(b, ">")) {
-            font_text(r, x0 + 12, yi, 1.5f, es ? INK_GOLD : INK_SILVER, etiqueta(op));
-            font_text(r, x0 + ancho - font_width(b, 1.5f), yi, 1.5f, es ? INK_GOLD : INK_SILVER, b);
-        } else if (inicio && m.nivel == 0) {
-            font_centered(r, cx, yi, 1.5f, es ? INK_GOLD : INK_SILVER, etiqueta(op));
+            font_text(r, x0 + 12, yi, 1.5f, is_sel ? INK_GOLD : INK_SILVER, label(op));
+            font_text(r, x0 + panel_w - font_width(b, 1.5f), yi, 1.5f, is_sel ? INK_GOLD : INK_SILVER, b);
+        } else if (at_start && m.level == 0) {
+            font_centered(r, cx, yi, 1.5f, is_sel ? INK_GOLD : INK_SILVER, label(op));
         } else {
-            font_text(r, x0 + 12, yi, 1.5f, es ? INK_GOLD : INK_SILVER, etiqueta(op));
-            if (b[0]) font_text(r, x0 + ancho - 12, yi, 1.5f, INK_GRAY, b);
+            font_text(r, x0 + 12, yi, 1.5f, is_sel ? INK_GOLD : INK_SILVER, label(op));
+            if (b[0]) font_text(r, x0 + panel_w - 12, yi, 1.5f, INK_GRAY, b);
         }
     }
-    /* ayuda de la opción y teclas */
-    const char *a = ayuda(p->op[m.sel[m.nivel]]);
+    /* option help and keys */
+    const char *a = help(p->op[m.sel[m.level]]);
     if (a[0]) font_centered(r, cx, vh - 36, 1, INK_SILVER, a);
     font_centered(r, cx, vh - 18, 1, INK_GRAY,
-                    inicio && m.nivel == 0 ? "Enter/A: elegir   </>: cambiar"
-                                           : "Enter/A: elegir   </>: cambiar   Esc/B: volver");
+                    at_start && m.level == 0 ? "Enter/A: select   </>: change"
+                                             : "Enter/A: select   </>: change   Esc/B: back");
     SDL_SetRenderScale(r, 1, 1);
 }

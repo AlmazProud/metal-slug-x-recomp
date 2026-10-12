@@ -1,11 +1,11 @@
--- Al terminar la máquina: imprime el número de frame y un hash de la RAM de trabajo del 68000
--- (0x100000-0x10FFFF) y guarda una captura. Sirve para verificar que una reproducción de
--- inputs (-playback) es determinista: dos corridas deben dar el mismo hash.
+-- When the machine stops: prints the frame number and a hash of the 68000 work RAM
+-- (0x100000-0x10FFFF) and saves a snapshot. Used to verify that an input playback
+-- (-playback) is deterministic: two runs must give the same hash.
 
 local mem = manager.machine.devices[":maincpu"].spaces["program"]
 
-fin_estado = emu.add_machine_stop_notifier(function()
-    -- FNV-1a de 32 bits sobre la RAM, palabra por palabra
+final_state_sub = emu.add_machine_stop_notifier(function()
+    -- 32-bit FNV-1a over the RAM, word by word
     local h = 0x811C9DC5
     for a = 0x100000, 0x10FFFE, 2 do
         local w = mem:read_u16(a)

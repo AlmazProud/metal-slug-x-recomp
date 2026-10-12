@@ -1,8 +1,8 @@
-/* Carga de la copia del usuario ("trae tu propio ROM").
+/* Loading of the user's copy ("bring your own ROM").
  *
- * Se leen los archivos de la instalación de GOG/DotEmu (resources\game\mslugx_*) y se validan
- * por SHA-256 contra los valores de docs/ROM_MAP.md. El repo solo contiene los hashes, nunca
- * los data. */
+ * The files of the GOG/DotEmu installation (resources\game\mslugx_*) are read and validated
+ * by SHA-256 against the values in docs/ROM_MAP.md. The repo only contains the hashes, never
+ * the data. */
 #include "neogeo.h"
 #include "sha256.h"
 
@@ -12,11 +12,11 @@
 
 typedef struct {
     const char *name;
-    uint32_t tam;
+    uint32_t size;
     const char *sha256;
-} Archivo;
+} RomFile;
 
-static const Archivo ARCHIVOS[] = {
+static const RomFile ROM_FILES[] = {
     {"mslugx_game_m68k", 5242880, "5313f40dd217140b27f033f95b90f8119f4ed4e6401533d699f1df874b14304b"},
     {"mslugx_bios_m68k", 131072, "01ff1db85c5b209d4f5879ea8348e3b39a237532c37232f14c2b48945e9aa7d8"},
     {"mslugx_game_sfix", 131072, "d8acb320a8d40424f67fff7e6181970772294a2f58ce8bc551cefb0427256b06"},
@@ -26,62 +26,62 @@ static const Archivo ARCHIVOS[] = {
     {"mslugx_game_z80", 131072, "6a132323fa9f41ae0712644cc804e113257baf04b270c63f93dbd5193f02ffad"},
     {"mslugx_adpcm", 10485760, "b45ca27aa08aecec6f76bdc60e6066e72d80c6a37df18d3d62b6e06d6d1dc40c"},
 };
-#define N_ARCHIVOS (int)(sizeof ARCHIVOS / sizeof ARCHIVOS[0])
+#define N_ROM_FILES (int)(sizeof ROM_FILES / sizeof ROM_FILES[0])
 
-static uint8_t *leer(const char *carpeta, const Archivo *a, char *error, int error_size)
+static uint8_t *read_file(const char *dir, const RomFile *a, char *error, int error_size)
 {
-    char ruta[1024];
-    snprintf(ruta, sizeof ruta, "%s/%s", carpeta, a->name);
-    FILE *f = fopen(ruta, "rb");
-    if (!f) { snprintf(error, error_size, "No se encontró %s", ruta); return NULL; }
-    uint8_t *d = malloc(a->tam);
-    size_t n = d ? fread(d, 1, a->tam, f) : 0;
+    char path[1024];
+    snprintf(path, sizeof path, "%s/%s", dir, a->name);
+    FILE *f = fopen(path, "rb");
+    if (!f) { snprintf(error, error_size, "%s not found", path); return NULL; }
+    uint8_t *d = malloc(a->size);
+    size_t n = d ? fread(d, 1, a->size, f) : 0;
     int extra = fgetc(f) != EOF;
     fclose(f);
-    if (n != a->tam || extra) {
+    if (n != a->size || extra) {
         free(d);
-        snprintf(error, error_size, "%s no tiene el tamaño esperado (%u bytes)", ruta, a->tam);
+        snprintf(error, error_size, "%s does not have the expected size (%u bytes)", path, a->size);
         return NULL;
     }
     uint8_t h[32];
     char hex[65];
-    sha256(d, a->tam, h);
+    sha256(d, a->size, h);
     for (int i = 0; i < 32; i++) snprintf(hex + 2 * i, 3, "%02x", h[i]);
     if (strcmp(hex, a->sha256) != 0) {
         free(d);
-        snprintf(error, error_size, "%s no coincide con la versión de GOG (SHA-256 %s)", ruta, hex);
+        snprintf(error, error_size, "%s does not match the GOG version (SHA-256 %s)", path, hex);
         return NULL;
     }
     return d;
 }
 
-static void intercambiar_bytes(uint8_t *d, uint32_t n)
+static void swap_bytes(uint8_t *d, uint32_t n)
 {
     for (uint32_t i = 0; i < n; i += 2) { uint8_t t = d[i]; d[i] = d[i + 1]; d[i + 1] = t; }
 }
 
-int ng_roms_load(NgRoms *r, const char *carpeta, char *error, int error_size)
+int ng_roms_load(NgRoms *r, const char *dir, char *error, int error_size)
 {
-    uint8_t *d[N_ARCHIVOS];
+    uint8_t *d[N_ROM_FILES];
     memset(r, 0, sizeof *r);
-    for (int i = 0; i < N_ARCHIVOS; i++) {
-        d[i] = leer(carpeta, &ARCHIVOS[i], error, error_size);
+    for (int i = 0; i < N_ROM_FILES; i++) {
+        d[i] = read_file(dir, &ROM_FILES[i], error, error_size);
         if (!d[i]) {
             while (i--) free(d[i]);
             return -1;
         }
     }
-    /* P y BIOS: mismo orden de bytes que los .p de MAME; la vista del 68000 es la intercambiada. */
-    intercambiar_bytes(d[0], ARCHIVOS[0].tam);
-    intercambiar_bytes(d[1], ARCHIVOS[1].tam);
-    r->p = d[0]; r->p_size = ARCHIVOS[0].tam;
+    /* P and BIOS: same byte order as MAME's .p files; the 68000 view is the swapped one. */
+    swap_bytes(d[0], ROM_FILES[0].size);
+    swap_bytes(d[1], ROM_FILES[1].size);
+    r->p = d[0]; r->p_size = ROM_FILES[0].size;
     r->bios = d[1];
     r->fix_game = d[2];
     r->fix_bios = d[3];
-    r->tiles = d[4]; r->n_tiles = ARCHIVOS[4].tam / 128;
+    r->tiles = d[4]; r->n_tiles = ROM_FILES[4].size / 128;
     r->zoom = d[5];
     r->z80 = d[6];
-    r->adpcm = d[7]; r->adpcm_size = ARCHIVOS[7].tam;
+    r->adpcm = d[7]; r->adpcm_size = ROM_FILES[7].size;
     return 0;
 }
 

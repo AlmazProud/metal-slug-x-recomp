@@ -1,5 +1,5 @@
 #!/bin/sh
-# Refuerzo de la regla 1: ver tools/check_commit.py
+# Enforces rule 1: see tools/check_commit.py
 top="$(git rev-parse --show-toplevel)"
 py="$top/../tools/python/python.exe"
 [ -x "$py" ] || py=python

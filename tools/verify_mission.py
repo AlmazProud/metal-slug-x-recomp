@@ -1,19 +1,19 @@
-"""Test de la Fase 4: reproduce en el port una partida grabada en MAME y exige cero divergencias.
+"""Phase 4 test: replays in the port a game recorded in MAME and requires zero divergences.
 
-Ejecuta el port sin window con las inputs grabadas (tools/mame/inputs.lua) y la date
-del reloj de la grabación, escribe sus fingerprints y las compara con las de MAME
-(tools/mame/fingerprints.lua) mediante compare_fingerprints.py.
+Runs the port without a window using the recorded inputs (tools/mame/inputs.lua) and the clock
+date of the recording, writes its fingerprints and compares them with MAME's
+(tools/mame/fingerprints.lua) through compare_fingerprints.py.
 
-Uso:
-  python verify_mission.py --exe mslugx.exe --roms CARPETA --inputs ENTRADAS.txt
-                             --referencia HUELLAS_MAME.txt --frames N --date AAAA-MM-DD-hh-mm-ss-D
-                             --output HUELLAS_PORT.txt
+Usage:
+  python verify_mission.py --exe mslugx.exe --roms FOLDER --inputs INPUTS.txt
+                             --referencia MAME_FINGERPRINTS.txt --frames N --date YYYY-MM-DD-hh-mm-ss-D
+                             --output PORT_FINGERPRINTS.txt
 
-Cómo se generan las referencias (MAME 0.289, nvram vacía en una carpeta nueva):
+How the references are produced (MAME 0.289, empty nvram in a new folder):
   set PD_PIXELES=1 & set PD_HUELLAS=<ref> & set PD_ENTRADAS=<inputs>
   set PD_SCRIPT_ENTRADAS=<repo>/tools/mame/inputs.lua
   mame mslugx -bios us -rompath <roms>/mame -playback mision1.inp -input_directory <inp>
-       -exit_after_playback -nvram_directory <vacía> -video none -sound none -nothrottle
+       -exit_after_playback -nvram_directory <empty> -video none -sound none -nothrottle
        -autoboot_script <repo>/tools/mame/fingerprints.lua
 """
 from __future__ import annotations
@@ -42,8 +42,8 @@ def main() -> int:
     if r.returncode != 0:
         print(r.stderr)
         return 1
-    comparador = Path(__file__).resolve().parent / "compare_fingerprints.py"
-    return subprocess.run([sys.executable, str(comparador), str(a.referencia), str(a.output)]).returncode
+    comparator = Path(__file__).resolve().parent / "compare_fingerprints.py"
+    return subprocess.run([sys.executable, str(comparator), str(a.referencia), str(a.output)]).returncode
 
 
 if __name__ == "__main__":

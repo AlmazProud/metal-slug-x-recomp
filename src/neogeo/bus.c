@@ -1,48 +1,48 @@
-/* Mapa de memoria del 68000 en la Neo Geo MVS (con el cartucho de mslugx).
+/* 68000 memory map on the Neo Geo MVS (with the mslugx cartridge).
  *
- *   000000-00007F  vectors: BIOS o cartucho según el latch del system
+ *   000000-00007F  vectors: BIOS or cartridge depending on the system latch
  *   000080-0FFFFF  P1
- *   100000-1FFFFF  RAM de trabajo (64 KB, espejada)
- *   200000-2FFFFF  window de P2 (bank elegido escribiendo en 2FFFF0-2FFFFF);
- *                  2FFFE0-2FFFEF: protección ALTERA de mslugx (docs/ROM_MAP.md)
- *   300000         P1 (byte alto) / DIP (byte bajo); 300001 (escritura) = watchdog
- *   300080         TEST (byte bajo)
- *   320000         respuesta del Z80 (byte alto) / monedas y RTC (byte bajo); escritura = command
+ *   100000-1FFFFF  work RAM (64 KB, mirrored)
+ *   200000-2FFFFF  P2 window (bank selected by writing to 2FFFF0-2FFFFF);
+ *                  2FFFE0-2FFFEF: mslugx ALTERA protection (docs/ROM_MAP.md)
+ *   300000         P1 (high byte) / DIP (low byte); 300001 (write) = watchdog
+ *   300080         TEST (low byte)
+ *   320000         Z80 reply (high byte) / coins and RTC (low byte); write = command
  *   340000         P2
- *   380000         START/SELECT; escrituras = control de E/S (RTC en 380050/51)
- *   3A0000-3A001F  latch del system (bytes impares)
- *   3C0000-3C000F  registros del LSPC
- *   400000-7FFFFF  palette (8 KB, espejada; dos bancos)
- *   C00000-CFFFFF  BIOS (128 KB, espejada)
- *   D00000-DFFFFF  SRAM de respaldo (64 KB, espejada, con bloqueo de escritura)
+ *   380000         START/SELECT; writes = I/O control (RTC at 380050/51)
+ *   3A0000-3A001F  system latch (odd bytes)
+ *   3C0000-3C000F  LSPC registers
+ *   400000-7FFFFF  palette (8 KB, mirrored; two banks)
+ *   C00000-CFFFFF  BIOS (128 KB, mirrored)
+ *   D00000-DFFFFF  backup SRAM (64 KB, mirrored, write-protected)
  *
- * Las lecturas sin mapear devuelven 0xFFFF (en el hardware real es el último dato del bus, casi
- * siempre el prefetch); se cuentan en ng.unmapped_reads.
+ * Unmapped reads return 0xFFFF (on real hardware it is the last value on the bus, almost
+ * always the prefetch); they are counted in ng.unmapped_reads.
  */
 #include "neogeo.h"
 
 #include "m68k.h"
 
-#define WATCHDOG_CICLOS 1622015          /* 3 244 030 cycles del reloj maestro de 24 MHz */
+#define WATCHDOG_CYCLES 1622015          /* 3 244 030 cycles of the 24 MHz master clock */
 
-/* ------------------------------------------------------------------ protección (ROM_MAP.md) */
-static uint16_t bit_tabla(uint32_t indice)
+/* ------------------------------------------------------------------ protection (ROM_MAP.md) */
+static uint16_t table_bit(uint32_t index)
 {
-    uint8_t byte = ng_roms.p[0xDEDD2 + ((indice >> 3) & 0xFFF)];
-    return (byte >> (~indice & 7)) & 1;
+    uint8_t byte = ng_roms.p[0xDEDD2 + ((index >> 3) & 0xFFF)];
+    return (byte >> (~index & 7)) & 1;
 }
 
-static uint16_t prot_leer(void)
+static uint16_t prot_read(void)
 {
-    if (ng.prot_cmd == 0x0001) return bit_tabla(ng.prot_cnt++);
+    if (ng.prot_cmd == 0x0001) return table_bit(ng.prot_cnt++);
     if (ng.prot_cmd == 0x0FFF) {
         uint32_t sel = ((uint32_t)ng.ram[0xF00A] << 8 | ng.ram[0xF00B]) - 1;
-        return bit_tabla(sel);
+        return table_bit(sel);
     }
     return 0;
 }
 
-static void prot_escribir(uint32_t off, uint16_t v)
+static void prot_write(uint32_t off, uint16_t v)
 {
     switch (off) {
     case 0x0: ng.prot_cmd = 0; break;
@@ -59,7 +59,7 @@ static void p2_bank(uint16_t v)
     ng.p2_bank = b;
 }
 
-/* ------------------------------------------------------------------ latch del system */
+/* ------------------------------------------------------------------ system latch */
 static void latch(uint32_t a)
 {
     uint32_t off = (a & 0x1F) >> 1;
@@ -67,28 +67,28 @@ static void latch(uint32_t a)
     switch (off & 7) {
     case 0: ng.shadow = v; break;
     case 1: ng.cart_vectors = v; break;
-    case 5: ng.cart_fix = v; break;             /* también el ROM del Z80 (BIOS/cartucho) */
+    case 5: ng.cart_fix = v; break;             /* also the Z80 ROM (BIOS/cartridge) */
     case 6: ng.sram_unlocked = v; break;
     case 7: ng.palette_bank = v; break;
-    default: break;                                  /* 2-4: tarjeta de memoria */
+    default: break;                                  /* 2-4: memory card */
     }
 }
 
-/* ------------------------------------------------------------------ E/S */
-static uint16_t leer_es_real(uint32_t a);
+/* ------------------------------------------------------------------ I/O */
+static uint16_t io_read_raw(uint32_t a);
 
-static uint16_t leer_es(uint32_t a)
+static uint16_t io_read(uint32_t a)
 {
     if (ng_trace_reads && ng_cpu.cycles >= ng_trace_from && ng_cpu.cycles <= ng_trace_to &&
         (a & 0x0E0000) != 0x020000 && (a & 0x0E0000) <= 0x080000) {
-        uint16_t v = leer_es_real(a);
+        uint16_t v = io_read_raw(a);
         fprintf(ng_trace_reads, "%.3f pc=%06X %06X %04X\n", ng_cpu.cycles / 12.0, ng_cpu.pc, a, v);
         return v;
     }
-    return leer_es_real(a);
+    return io_read_raw(a);
 }
 
-static uint16_t leer_es_real(uint32_t a)
+static uint16_t io_read_raw(uint32_t a)
 {
     if (ng_before_input_read) ng_before_input_read();
     switch (a & 0x0E0000) {
@@ -98,11 +98,11 @@ static uint16_t leer_es_real(uint32_t a)
     case 0x020000: {                                 /* 320000-33FFFF */
         if (ng.raw)
             return (uint16_t)(ng_sound_reply() << 8 | (ng.raw_coins & 0x3F) | ng_rtc_tp() << 6 | ng_rtc_data() << 7);
-        uint8_t monedas = 0x1F;
-        if (ng.system[0] & NG_COIN) monedas &= ~0x01;
-        if (ng.system[1] & NG_COIN) monedas &= ~0x02;
-        if (ng.service) monedas &= ~0x04;
-        return (uint16_t)(ng_sound_reply() << 8 | monedas | ng_rtc_tp() << 6 | ng_rtc_data() << 7);
+        uint8_t coins = 0x1F;
+        if (ng.system[0] & NG_COIN) coins &= ~0x01;
+        if (ng.system[1] & NG_COIN) coins &= ~0x02;
+        if (ng.service) coins &= ~0x04;
+        return (uint16_t)(ng_sound_reply() << 8 | coins | ng_rtc_tp() << 6 | ng_rtc_data() << 7);
     }
     case 0x040000:                                   /* 340000-35FFFF */
         return (uint16_t)((ng.raw ? ng.raw_p2 : (uint8_t)~ng.joy[1]) << 8 | 0xFF);
@@ -123,38 +123,38 @@ static uint16_t leer_es_real(uint32_t a)
     }
 }
 
-/* Escritura en E/S. `mask`: 0xFF00 byte par, 0x00FF byte impar, 0xFFFF palabra. */
-/* Traza de escrituras en E/S y palette (mismo formato que tools/mame/trace_io.lua). */
-static void trazar(uint32_t a, uint16_t v, uint16_t mask)
+/* I/O write. `mask`: 0xFF00 even byte, 0x00FF odd byte, 0xFFFF word. */
+/* Trace of I/O and palette writes (same format as tools/mame/trace_io.lua). */
+static void trace_write(uint32_t a, uint16_t v, uint16_t mask)
 {
     if (ng_trace_io && ng_cpu.cycles >= ng_trace_from && ng_cpu.cycles <= ng_trace_to)
         fprintf(ng_trace_io, "%.3f pc=%06X %06X %04X/%04X\n", ng_cpu.cycles / 12.0, ng_cpu.pc, a, v & mask, mask);
 }
 
-static void escribir_es(uint32_t a, uint16_t v, uint16_t mask)
+static void io_write(uint32_t a, uint16_t v, uint16_t mask)
 {
-    trazar(a, v, mask);
+    trace_write(a, v, mask);
     switch (a & 0x0E0000) {
     case 0x000000:
-        if (mask & 0x00FF) ng.watchdog = ng_cpu.cycles + WATCHDOG_CICLOS;
+        if (mask & 0x00FF) ng.watchdog = ng_cpu.cycles + WATCHDOG_CYCLES;
         return;
     case 0x020000:
         if (mask & 0xFF00) ng_sound_command((uint8_t)(v >> 8));
         return;
-    case 0x080000:                                   /* control de E/S (bytes impares) */
+    case 0x080000:                                   /* I/O control (odd bytes) */
         if (mask & 0x00FF) {
             uint32_t off = (a & 0xFF) >> 1;
             if ((off & 0x78) == 0x28) ng_rtc_write((uint8_t)v);
-            /* 0x00 selección de mando, 0x08 bank de tarjeta, 0x10 slot, 0x18/0x20 LEDs,
-               0x30/0x70 contadores de monedas: sin efecto en el port */
+            /* 0x00 controller select, 0x08 card bank, 0x10 slot, 0x18/0x20 LEDs,
+               0x30/0x70 coin counters: no effect in the port */
         }
         return;
-    case 0x0A0000:                                   /* latch del system (bytes impares) */
+    case 0x0A0000:                                   /* system latch (odd bytes) */
         if (mask & 0x00FF) latch(a);
         return;
     case 0x0C0000:
-        /* El LSPC ignora los accesos solo al byte bajo; solo al byte alto copia el byte en
-           ambas mitades. */
+        /* The LSPC ignores low-byte-only accesses; on high-byte-only accesses it copies the
+           byte into both halves. */
         if (mask == 0x00FF) return;
         if (mask == 0xFF00) v = (uint16_t)((v & 0xFF00) | v >> 8);
         ng_video_write((a >> 1) & 7, v);
@@ -165,7 +165,7 @@ static void escribir_es(uint32_t a, uint16_t v, uint16_t mask)
     }
 }
 
-/* ------------------------------------------------------------------ acceso */
+/* ------------------------------------------------------------------ access */
 uint32_t bus_r16(uint32_t a)
 {
     a &= 0xFFFFFE;
@@ -183,12 +183,12 @@ uint32_t bus_r16(uint32_t a)
         return v;
     }
     case 0x2: {
-        if (a >= 0x2FFFE0 && a <= 0x2FFFEF) return prot_leer();
+        if (a >= 0x2FFFE0 && a <= 0x2FFFEF) return prot_read();
         uint32_t o = (uint32_t)(ng.p2_bank + 1) * 0x100000 + (a & 0xFFFFF);
         return (uint32_t)ng_roms.p[o] << 8 | ng_roms.p[o + 1];
     }
     case 0x3:
-        return leer_es(a);
+        return io_read(a);
     case 0x4: case 0x5: case 0x6: case 0x7:
         return ng.palette[(uint32_t)ng.palette_bank << 12 | (a & 0x1FFF) >> 1];
     case 0xC:
@@ -197,7 +197,7 @@ uint32_t bus_r16(uint32_t a)
     case 0xD:
         a &= 0xFFFF;
         return (uint32_t)ng.sram[a] << 8 | ng.sram[a + 1];
-    default:                                         /* 800000-BFFFFF tarjeta (ausente), E-F */
+    default:                                         /* 800000-BFFFFF card (absent), E-F */
         ng.unmapped_reads++;
         return 0xFFFF;
     }
@@ -209,12 +209,12 @@ uint32_t bus_r8(uint32_t a)
     return (a & 1) ? (w & 0xFF) : (w >> 8);
 }
 
-/* Fin del acceso al bus de una escritura dentro de la instrucción en curso (ng_cpu.op, que
- * empezó en ng_cpu.start_cycle y termina en ng_cpu.cycles). Según el microcódigo del 68000: en MOVE la
- * escritura va antes de la última búsqueda anticipada (termina 4 cycles antes del final); en el
- * resto (lectura-modificación-escritura, CLR...) es el último acceso. Las de 32 bits son dos
- * escrituras seguidas. */
-static int64_t fin_escritura(void)
+/* End of the bus access of a write within the current instruction (ng_cpu.op, which started
+ * at ng_cpu.start_cycle and ends at ng_cpu.cycles). Per the 68000 microcode: in MOVE the write
+ * comes before the last prefetch (it ends 4 cycles before the end); in the rest
+ * (read-modify-write, CLR...) it is the last access. 32-bit writes are two consecutive
+ * writes. */
+static int64_t write_end(void)
 {
     static int64_t start_cycle = -1;
     static int n;
@@ -222,24 +222,24 @@ static int64_t fin_escritura(void)
     n++;
     uint32_t op = ng_cpu.op;
     int move = (op & 0xC000) == 0 && (op & 0x3000) != 0;
-    int largo = move ? (op & 0x3000) == 0x2000 : ((op >> 6) & 3) == 2;
-    int64_t fin = ng_cpu.cycles - (move ? 4 : 0);
-    return (largo && n == 1) ? fin - 4 : fin;
+    int is_long = move ? (op & 0x3000) == 0x2000 : ((op >> 6) & 3) == 2;
+    int64_t end = ng_cpu.cycles - (move ? 4 : 0);
+    return (is_long && n == 1) ? end - 4 : end;
 }
 
-/* MAME procesa un evento en T cuando la CPU se detiene en el primer fin de acceso >= T: si un
- * acceso anterior a esta escritura ya terminó en T o después, el evento (p. ej. dibujar una
- * línea) ocurre antes que la escritura. */
-static void ordenar_escritura_video(void)
+/* MAME processes an event at T when the CPU stops at the first access end >= T: if an access
+ * before this write already ended at T or later, the event (e.g. drawing a line) happens
+ * before the write. */
+static void order_video_write(void)
 {
-    int64_t te = fin_escritura();
+    int64_t te = write_end();
     if (ng_next_limit() <= te - 4) ng_catch_up(te - 4);
 }
 
-static void escribir(uint32_t a, uint16_t v, uint16_t mask)
+static void write_bus(uint32_t a, uint16_t v, uint16_t mask)
 {
     a &= 0xFFFFFE;
-    if ((a >= 0x3A0000 && a < 0x3E0000) || (a >= 0x400000 && a < 0x800000)) ordenar_escritura_video();
+    if ((a >= 0x3A0000 && a < 0x3E0000) || (a >= 0x400000 && a < 0x800000)) order_video_write();
     switch (a >> 20) {
     case 0x1:
         a &= 0xFFFF;
@@ -247,18 +247,18 @@ static void escribir(uint32_t a, uint16_t v, uint16_t mask)
         if (mask & 0x00FF) ng.ram[a + 1] = (uint8_t)v;
         return;
     case 0x2:
-        if (a >= 0x2FFFE0 && a <= 0x2FFFEF) { prot_escribir(a - 0x2FFFE0, v); return; }
+        if (a >= 0x2FFFE0 && a <= 0x2FFFEF) { prot_write(a - 0x2FFFE0, v); return; }
         if (a >= 0x2FFFF0) { p2_bank(v); return; }
         ng.unmapped_writes++;
         return;
     case 0x3:
-        escribir_es(a, v, mask);
+        io_write(a, v, mask);
         return;
     case 0x4: case 0x5: case 0x6: case 0x7: {
-        trazar(a, v, mask);
+        trace_write(a, v, mask);
         uint32_t i = (uint32_t)ng.palette_bank << 12 | (a & 0x1FFF) >> 1;
-        uint16_t nuevo = (uint16_t)((ng.palette[i] & ~mask) | (v & mask));
-        ng_palette_write(i, nuevo);
+        uint16_t new_value = (uint16_t)((ng.palette[i] & ~mask) | (v & mask));
+        ng_palette_write(i, new_value);
         return;
     }
     case 0xD:
@@ -273,16 +273,16 @@ static void escribir(uint32_t a, uint16_t v, uint16_t mask)
     }
 }
 
-void bus_w16(uint32_t a, uint32_t v) { escribir(a, (uint16_t)v, 0xFFFF); }
+void bus_w16(uint32_t a, uint32_t v) { write_bus(a, (uint16_t)v, 0xFFFF); }
 
 void bus_w8(uint32_t a, uint32_t v)
 {
-    /* El 68000 pone el byte en ambas mitades del bus de data; UDS/LDS eligen la mitad. */
+    /* The 68000 puts the byte on both halves of the data bus; UDS/LDS select the half. */
     v &= 0xFF;
-    escribir(a, (uint16_t)(v << 8 | v), (a & 1) ? 0x00FF : 0xFF00);
+    write_bus(a, (uint16_t)(v << 8 | v), (a & 1) ? 0x00FF : 0xFF00);
 }
 
-/* ------------------------------------------------------------------ Musashi (respaldo) */
+/* ------------------------------------------------------------------ Musashi (fallback) */
 unsigned int m68k_read_memory_8(unsigned int a)  { return bus_r8(a); }
 unsigned int m68k_read_memory_16(unsigned int a) { return bus_r16(a); }
 unsigned int m68k_read_memory_32(unsigned int a) { return bus_r16(a) << 16 | bus_r16(a + 2); }
@@ -298,6 +298,6 @@ void ng_bus_init(void)
     ng.prot_cmd = ng.prot_cnt = 0;
     ng.shadow = ng.cart_vectors = ng.cart_fix = ng.sram_unlocked = ng.palette_bank = 0;
     ng.dsw = 0xFF;
-    ng.test = 0x80;                  /* bit 7: botón de test sin pulsar; bit 6: MVS */
-    ng.watchdog = ng_cpu.cycles + WATCHDOG_CICLOS;
+    ng.test = 0x80;                  /* bit 7: test button not pressed; bit 6: MVS */
+    ng.watchdog = ng_cpu.cycles + WATCHDOG_CYCLES;
 }

@@ -1,8 +1,8 @@
-# Lockstep del programa recompilado (P1 + BIOS del usuario) contra Musashi desde el reset.
-# Usa el programa recompilado de src/ (generado en build/ desde la copia del usuario).
+# Lockstep of the recompiled program (the user's P1 + BIOS) against Musashi from reset.
+# Uses the recompiled program from src/ (generated in build/ from the user's copy).
 
 if(NOT TARGET recompiled_program)
-    message(STATUS "Lockstep desactivado: falta el programa recompilado")
+    message(STATUS "Lockstep disabled: the recompiled program is missing")
     return()
 endif()
 
@@ -13,7 +13,7 @@ target_link_libraries(lockstep PRIVATE recompiled_program)
 add_test(NAME lockstep_reset
          COMMAND lockstep ${PD_ROMS}/mslugx_game_m68k ${PD_ROMS}/mslugx_bios_m68k 20000000)
 
-# Desde un estado real del juego (volcado de MAME en el frame 4000 de la grabación del usuario).
+# From a real game state (MAME dump at frame 4000 of the user's recording).
 if(EXISTS "${PD_ANALYSIS}/state_f4000.bin")
     add_test(NAME lockstep_juego
              COMMAND lockstep ${PD_ROMS}/mslugx_game_m68k ${PD_ROMS}/mslugx_bios_m68k 120000000

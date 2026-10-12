@@ -1,15 +1,15 @@
--- Capturas de screen de MAME en frames concretos, para compararlas con el port.
--- Variables de entorno: PD_CUADROS = lista separada por comas; PD_PREFIJO = prefijo del name
--- (las imágenes quedan en el -snapshot_directory como <prefijo>_NNNNNN.png).
+-- MAME screenshots at specific frames, to compare them with the port.
+-- Environment variables: PD_CUADROS = comma-separated list; PD_PREFIJO = file name prefix
+-- (the images end up in the -snapshot_directory as <prefix>_NNNNNN.png).
 
 local scr = manager.machine.screens[":screen"]
-local pedidos = {}
-for n in string.gmatch(os.getenv("PD_CUADROS") or "", "%d+") do pedidos[tonumber(n)] = true end
-local prefijo = os.getenv("PD_PREFIJO") or "mame"
+local requested = {}
+for n in string.gmatch(os.getenv("PD_CUADROS") or "", "%d+") do requested[tonumber(n)] = true end
+local prefix = os.getenv("PD_PREFIJO") or "mame"
 
-suscripcion_capturas = emu.add_machine_frame_notifier(function()
+screenshots_sub = emu.add_machine_frame_notifier(function()
     local f = scr:frame_number()
-    if pedidos[f] then
-        scr:snapshot(string.format("%s_%06d.png", prefijo, f))
+    if requested[f] then
+        scr:snapshot(string.format("%s_%06d.png", prefix, f))
     end
 end)

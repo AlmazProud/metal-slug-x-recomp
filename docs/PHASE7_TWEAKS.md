@@ -1,59 +1,60 @@
-# Fase 7A: V-sync y sangre roja
+# Phase 7A: V-sync and red blood
 
-Las dos son opciones del menú y no cambian la emulación: `ctest` (con la Misión 1 contra MAME)
-sigue pasando.
+**State:** closed.
 
-## Sangre roja
+Both are menu options and neither changes the emulation: `ctest` (with Mission 1 against MAME)
+still passes.
 
-**Hallazgo:** la sangre blanca no depende de la región, sino de una opción del propio juego. La
-cabecera del P ROM declara las opciones que el BIOS muestra en el menú de servicio ("soft dips").
-En la tabla de EE. UU. y Europa están:
+## Red blood
 
-- HERO (vidas) y CONTINUE;
-- DIFFICULTY (LEVEL 1-8) y PLAY TIME (60-90);
-- DEMO SOUND, PLAY MANUAL y **BLOOD (OFF/ON)**;
+**Finding:** white blood does not depend on the region but on an option of the game itself. The
+P ROM header declares the options the BIOS shows in the service menu ("soft dips"). The US and
+Europe table contains:
+
+- HERO (lives) and CONTINUE;
+- DIFFICULTY (LEVEL 1-8) and PLAY TIME (60-90);
+- DEMO SOUND, PLAY MANUAL and **BLOOD (OFF/ON)**;
 - CREDIT/LEVEL.
 
-En EE. UU., BLOOD viene en OFF.
+In the US, BLOOD defaults to OFF.
 
-Notas:
+Notes:
 
-- El archivo de GOG guarda las palabras con los bytes invertidos ("EN-OEG"). `roms.c` ya los
-  devuelve a la vista del 68000.
-- El BIOS copia las opciones a `0x10FD84`: dos tiempos, dos cuentas y diez opciones desde
-  `0x10FD8A`, así que BLOOD queda en `0x10FD8F`.
-- El juego la consulta en `0x1B2BE` (`tst.b $10FD8F`).
-- También se descartaron otras pistas:
-  - `0x100003` (decidido en `0x2382`) separa los créditos por jugador, como en EE. UU.;
-  - `0x100000` y `0x100001` son el idioma y el país.
+- The GOG file stores words with their bytes swapped ("EN-OEG"). `roms.c` already restores them
+  to the 68000's view.
+- The BIOS copies the options to `0x10FD84`: two times, two counts and ten options from
+  `0x10FD8A`, so BLOOD ends up at `0x10FD8F`.
+- The game checks it at `0x1B2BE` (`tst.b $10FD8F`).
+- Other leads were also ruled out:
+  - `0x100003` (decided at `0x2382`) keeps separate credits per player, as in the US;
+  - `0x100000` and `0x100001` are the language and the country.
 
-**Opción "Sangre: Original / Roja"** (Configuración → Juego, o `sangre=1` en el ini):
+**"Blood: Original / Red" option** (Settings → Game, or `sangre=1` in the ini):
 
-- Escribir ese byte desde el encendido rompía el test de RAM del BIOS ("WORK RAM ERROR
-  10FD8E").
-- Por eso se fuerza **solo la lectura del código del juego** (`ng_forced_read` en el bus:
+- Writing that byte from power-on broke the BIOS RAM test ("WORK RAM ERROR 10FD8E").
+- That is why **only reads by the game's code** are forced (`ng_forced_read` on the bus:
   PC < `0xC00000`).
-- El BIOS ve la RAM real y su menú de servicio sigue mostrando el ajuste del usuario.
-- Tampoco toca la SRAM. Activar BLOOD en el menú de servicio sigue funcionando igual.
+- The BIOS sees the real RAM and its service menu still shows the user's setting.
+- It does not touch the SRAM either. Enabling BLOOD in the service menu still works the same.
 
-**Comprobación:** con la grabación de la Misión 1, la primera diferencia de imagen está en el
-cuadro 1459, el primer enemigo que muere. Las capturas muestran la salpicadura blanca del original
-y la roja con la opción. `--sangre` en el modo sin ventana permite repetirlo.
+**Verification:** with the Mission 1 recording, the first image difference is at frame 1459, the
+first enemy that dies. The screenshots show the original's white splatter and the red one with the
+option. `--sangre` in headless mode lets you repeat it.
 
 ## V-sync
 
-Opción en Configuración → Video (`vsync=1` por defecto). Hay tres ritmos posibles:
+Option in Settings → Video (`vsync=1` by default). There are three possible pacings:
 
-| Situación | Ritmo | Audio |
+| Situation | Pacing | Audio |
 |---|---|---|
-| Sin V-sync | Un cuadro cada 16,896 ms (59,1856 Hz, la placa) | Como antes |
-| V-sync con monitor de 58 a 62 Hz | Un cuadro por refresco: el juego va a la frecuencia del monitor (1,4 % más rápido a 60 Hz), como el `-syncrefresh` de MAME | Se reproduce en la misma proporción (`SDL_SetAudioStreamFrequencyRatio`), con una corrección de hasta ±0,5 % según la cola, para mantenerla en ~50 ms |
-| V-sync con otras frecuencias (75, 120, 144 Hz...) | Se presenta en cada refresco y un acumulador decide cuántos cuadros emular al ritmo exacto de la placa | Ídem |
+| No V-sync | One frame every 16.896 ms (59.1856 Hz, the board) | As before |
+| V-sync with a 58 to 62 Hz monitor | One frame per refresh: the game runs at the monitor's rate (1.4 % faster at 60 Hz), like MAME's `-syncrefresh` | Played back at the same ratio (`SDL_SetAudioStreamFrequencyRatio`), with a correction of up to ±0.5 % based on the queue, to keep it at ~50 ms |
+| V-sync at other rates (75, 120, 144 Hz...) | Presents on every refresh and an accumulator decides how many frames to emulate at the board's exact rate | Same |
 
-**Medición** (20 s reales, `PD_SALIR_TRAS` + `--traza`, monitor de 60 Hz):
+**Measurement** (20 real seconds, `PD_SALIR_TRAS` + `--traza`, 60 Hz monitor):
 
-| Modo | Cuadros emulados/s | Cola de audio media | Cola vacía | Descartes |
+| Mode | Emulated frames/s | Mean audio queue | Queue empty | Drops |
 |---|---|---|---|---|
-| V-sync (60 Hz) | 59,966 | 40,6 ms | 0 | 0 |
-| Sin V-sync | 59,184 | 39,3 ms | 0 | 0 |
-| V-sync, 144 Hz simulados (`PD_HZ=144`) | 59,098 | 41,5 ms | 0 | 0 |
+| V-sync (60 Hz) | 59.966 | 40.6 ms | 0 | 0 |
+| No V-sync | 59.184 | 39.3 ms | 0 | 0 |
+| V-sync, simulated 144 Hz (`PD_HZ=144`) | 59.098 | 41.5 ms | 0 | 0 |

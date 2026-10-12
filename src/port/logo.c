@@ -1,10 +1,10 @@
-/* Logo de la screen de título, tomado del propio juego (de la copia del usuario).
+/* Title screen logo, taken from the game itself (from the user's copy).
  *
- * En la screen de título del attract (cuadro ~1150 desde el encendido con la SRAM vacía), el logo
- * son los sprites 41-124 (shadow, "METAL SLUG", la X y "SUPER VEHICLE-001") más el 380 ("TM");
- * el fondo rojo son los sprites 21-40 (src/port/profile.h). Se redibujan solo esos sprites con
- * ng_video_capture_sprites, se recorta el rectángulo con contenido y se guarda como PNG en la
- * carpeta del usuario: solo se genera la primera vez. El logo no entra al repositorio.
+ * On the attract-mode title screen (frame ~1150 after power-on with empty SRAM), the logo is
+ * sprites 41-124 (shadow, "METAL SLUG", the X and "SUPER VEHICLE-001") plus 380 ("TM"); the red
+ * background is sprites 21-40 (src/port/profile.h). Only those sprites are redrawn with
+ * ng_video_capture_sprites, the rectangle with content is cropped and saved as PNG in the
+ * user's folder: it is generated only the first time. The logo never goes into the repository.
  */
 #include "logo.h"
 
@@ -24,23 +24,23 @@ void logo_destroy(void)
     tex = NULL;
 }
 
-static uint32_t tile_de(int s)
+static uint32_t sprite_tile(int s)
 {
     return ((uint32_t)(ng.vram[(s << 6) + 1] << 12) & 0xF0000) | ng.vram[s << 6];
 }
 
-/* Corre la máquina recién encendida hasta el título y captura el logo; NULL si no aparece. */
-static SDL_Surface *generar(void)
+/* Runs the freshly powered-on machine up to the title and captures the logo; NULL if it does not appear. */
+static SDL_Surface *generate(void)
 {
     static uint32_t a[NG_HEIGHT][NG_WIDTH], b[NG_HEIGHT][NG_WIDTH];
-    int esperar = -1;
+    int wait = -1;
     ng_power_on();
     for (int f = 0; f < PROFILE_LOGO_MAX_FRAMES; f++) {
         ng_run_frame();
-        if (esperar < 0 && tile_de(PROFILE_LOGO_TM) == PROFILE_LOGO_TM_TILE) esperar = 30;   /* que termine de entrar */
-        if (esperar >= 0 && esperar-- == 0) break;
+        if (wait < 0 && sprite_tile(PROFILE_LOGO_TM) == PROFILE_LOGO_TM_TILE) wait = 30;   /* let it finish sliding in */
+        if (wait >= 0 && wait-- == 0) break;
     }
-    if (esperar != -1) return NULL;
+    if (wait != -1) return NULL;
     ng_video_capture_sprites(&a[0][0], PROFILE_LOGO_FIRST, PROFILE_LOGO_LAST);
     ng_video_capture_sprites(&b[0][0], PROFILE_LOGO_TM, PROFILE_LOGO_TM);
     int x0 = NG_WIDTH, y0 = NG_HEIGHT, x1 = -1, y1 = -1;
@@ -66,17 +66,17 @@ int logo_prepare(SDL_Renderer *r, const char *cache)
 {
     SDL_Surface *s = SDL_LoadPNG(cache);
     if (!s) {
-        /* La máquina vuelve exactamente a como estaba (estado completo, SRAM incluida). */
-        size_t tam;
-        uint8_t *estado = ng_state_save(&tam);
+        /* The machine goes back exactly to how it was (full state, SRAM included). */
+        size_t size;
+        uint8_t *state = ng_state_save(&size);
         int audio = ng_audio_enabled;
-        void (*gancho)(uint8_t) = ng_on_sound_command;
+        void (*hook)(uint8_t) = ng_on_sound_command;
         ng_audio_enabled = 0;
         ng_on_sound_command = NULL;
-        s = generar();
+        s = generate();
         ng_audio_enabled = audio;
-        ng_on_sound_command = gancho;
-        if (estado) { ng_state_load(estado, tam); free(estado); }
+        ng_on_sound_command = hook;
+        if (state) { ng_state_load(state, size); free(state); }
         if (s) SDL_SavePNG(s, cache);
     }
     if (!s) return -1;

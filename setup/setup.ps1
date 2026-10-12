@@ -1,27 +1,27 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
-  Instalador portable de Projecto Decompile (Fase Entorno).
+  Portable installer for Projecto Decompile (Environment phase).
 
-  - Instala todas las herramientas en <raíz>\tools sin permisos de administrador,
-    sin tocar el PATH global ni el registro.
-  - Descarga solo de fuentes oficiales (versions.json) y verifica cada hash.
-    Si un hash no coincide, se detiene.
-  - Idempotente: salta lo instalado, repara lo que falte o esté roto y
-    reinstala lo que cambió de versión en versions.json.
-  - Al final verifica cada herramienta, compila un "hola mundo" con SDL3 y
-    muestra una tabla OK/FALLA.
+  - Installs every tool into <root>\tools without administrator rights,
+    without touching the global PATH or the registry.
+  - Downloads only from official sources (versions.json) and verifies every hash.
+    If a hash does not match, it stops.
+  - Idempotent: skips what is installed, repairs what is missing or broken and
+    reinstalls whatever changed version in versions.json.
+  - At the end it verifies every tool, builds an SDL3 "hello world" and
+    shows an OK/FAIL table.
 
-  Parámetros:
-    -CopiarRoms     Solo copia los ROMs desde GOG a roms\ (siempre pide confirmación).
-    -SinRoms        No pregunta por los ROMs al final.
-    -SoloVerificar  No instala nada; solo ejecuta la verificación.
-    -Gog <ruta>     Ruta de la instalación GOG (por defecto, la de versions.json).
+  Parameters:
+    -CopyRoms       Only copies the ROMs from GOG to roms\ (always asks for confirmation).
+    -NoRoms         Does not ask about the ROMs at the end.
+    -VerifyOnly     Installs nothing; only runs the verification.
+    -Gog <path>     Path of the GOG installation (default: the one in versions.json).
 #>
 [CmdletBinding()]
 param(
-    [switch]$CopiarRoms,
-    [switch]$SinRoms,
-    [switch]$SoloVerificar,
+    [switch]$CopyRoms,
+    [switch]$NoRoms,
+    [switch]$VerifyOnly,
     [string]$Gog
 )
 
@@ -30,35 +30,36 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# ---------------------------------------------------------------- rutas
-$Entorno   = $PSScriptRoot
-$Repo      = Split-Path $Entorno -Parent
+# ---------------------------------------------------------------- paths
+$SetupDir  = $PSScriptRoot
+$Repo      = Split-Path $SetupDir -Parent
 $Root      = Split-Path $Repo -Parent
 $Tools     = Join-Path $Root 'tools'
-$Descargas = Join-Path $Tools '_descargas'
+# On-disk names kept as-is so existing download caches stay valid.
+$Downloads = Join-Path $Tools '_descargas'
 $Verif     = Join-Path $Tools '_verificacion'
 $Logs      = Join-Path $Root 'logs'
 $Roms      = Join-Path $Root 'roms'
-$Cfg       = Get-Content -LiteralPath (Join-Path $Entorno 'versions.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$Cfg       = Get-Content -LiteralPath (Join-Path $SetupDir 'versions.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 
-foreach ($d in @($Tools, $Descargas, $Logs)) {
+foreach ($d in @($Tools, $Downloads, $Logs)) {
     if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d | Out-Null }
 }
-$LogFile = Join-Path $Logs ('instalacion_{0}.log' -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
+$LogFile = Join-Path $Logs ('install_{0}.log' -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
 
 function Log([string]$msg, [string]$color = 'Gray') {
     $line = '{0}  {1}' -f (Get-Date -Format 'HH:mm:ss'), $msg
     Add-Content -LiteralPath $LogFile -Value $line -Encoding UTF8
     Write-Host $msg -ForegroundColor $color
 }
-function Fallo([string]$msg) {
+function Fail([string]$msg) {
     Log "ERROR: $msg" 'Red'
     throw $msg
 }
 
-# ---------------------------------------------------------------- procesos
-# Construye una línea de comandos con las reglas de CommandLineToArgvW, para que
-# las rutas con espacios lleguen intactas.
+# ---------------------------------------------------------------- processes
+# Builds a command line following the CommandLineToArgvW rules, so that
+# paths with spaces arrive intact.
 function Format-Arg([string]$a) {
     if ($a -eq '') { return '""' }
     if ($a -notmatch '[\s"]') { return $a }
@@ -67,17 +68,17 @@ function Format-Arg([string]$a) {
     return '"' + $a + '"'
 }
 
-# Ejecuta un programa y captura stdout+stderr. Los .bat/.cmd se lanzan con
-# cmd /d /s /c "..." para que cmd no rompa las comillas cuando tanto el .bat
-# como sus argumentos llevan espacios.
-function Invoke-Proceso {
+# Runs a program and captures stdout+stderr. .bat/.cmd files are launched with
+# cmd /d /s /c "..." so that cmd does not break the quotes when both the .bat
+# and its arguments contain spaces.
+function Invoke-Process {
     param(
         [Parameter(Mandatory)][string]$Exe,
-        [string[]]$Argumentos = @(),
+        [string[]]$Arguments = @(),
         [string]$Dir = $null,
-        [int]$TimeoutSeg = 900
+        [int]$TimeoutSec = 900
     )
-    $argStr = ($Argumentos | ForEach-Object { Format-Arg $_ }) -join ' '
+    $argStr = ($Arguments | ForEach-Object { Format-Arg $_ }) -join ' '
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     if ($Exe -match '\.(bat|cmd)$') {
         $psi.FileName  = $env:ComSpec
@@ -94,389 +95,390 @@ function Invoke-Proceso {
     $p = [System.Diagnostics.Process]::Start($psi)
     $o = $p.StandardOutput.ReadToEndAsync()
     $e = $p.StandardError.ReadToEndAsync()
-    if (-not $p.WaitForExit($TimeoutSeg * 1000)) {
+    if (-not $p.WaitForExit($TimeoutSec * 1000)) {
         try { $p.Kill() } catch { }
-        return [pscustomobject]@{ Codigo = -1; Salida = "Tiempo agotado ($TimeoutSeg s)" }
+        return [pscustomobject]@{ Code = -1; Output = "Timed out ($TimeoutSec s)" }
     }
     $p.WaitForExit()
-    [pscustomobject]@{ Codigo = $p.ExitCode; Salida = ($o.Result + "`n" + $e.Result).Trim() }
+    [pscustomobject]@{ Code = $p.ExitCode; Output = ($o.Result + "`n" + $e.Result).Trim() }
 }
 
-# ---------------------------------------------------------------- hashes y descargas
-function Get-HashArchivo([string]$ruta, [string]$algo) {
-    (Get-FileHash -LiteralPath $ruta -Algorithm $algo).Hash.ToLowerInvariant()
+# ---------------------------------------------------------------- hashes and downloads
+function Get-FileHashLower([string]$path, [string]$algo) {
+    (Get-FileHash -LiteralPath $path -Algorithm $algo).Hash.ToLowerInvariant()
 }
 
-function Get-Descarga($d) {
-    $dest = Join-Path $Descargas $d.archivo
+function Get-Download($d) {
+    $dest = Join-Path $Downloads $d.file
     $part = "$dest.part"
-    $esperado = $d.hash.ToLowerInvariant()
+    $expected = $d.hash.ToLowerInvariant()
     if (Test-Path -LiteralPath $dest) {
-        if ((Get-HashArchivo $dest $d.algoritmo) -eq $esperado) {
-            Log "    caché OK: $($d.archivo)"
+        if ((Get-FileHashLower $dest $d.algorithm) -eq $expected) {
+            Log "    cache OK: $($d.file)"
             return $dest
         }
-        Log "    caché con hash distinto, se vuelve a descargar: $($d.archivo)" 'Yellow'
+        Log "    cached file has a different hash, downloading again: $($d.file)" 'Yellow'
         Remove-Item -LiteralPath $dest -Force
     }
     $curl = Join-Path $env:SystemRoot 'System32\curl.exe'
-    for ($intento = 1; $intento -le 2; $intento++) {
-        if ($intento -eq 2 -and (Test-Path -LiteralPath $part)) { Remove-Item -LiteralPath $part -Force }
-        Log "    descargando ($intento/2): $($d.url)"
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        if ($attempt -eq 2 -and (Test-Path -LiteralPath $part)) { Remove-Item -LiteralPath $part -Force }
+        Log "    downloading ($attempt/2): $($d.url)"
         $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
         & $curl -L --fail --retry 3 --retry-delay 3 -C - --progress-bar -o $part $d.url
         $ErrorActionPreference = $old
         if (Test-Path -LiteralPath $part) {
-            $obtenido = Get-HashArchivo $part $d.algoritmo
-            if ($obtenido -eq $esperado) {
+            $actual = Get-FileHashLower $part $d.algorithm
+            if ($actual -eq $expected) {
                 Move-Item -LiteralPath $part -Destination $dest -Force
-                Log "    $($d.algoritmo) verificado: $($d.archivo)" 'Green'
+                Log "    $($d.algorithm) verified: $($d.file)" 'Green'
                 return $dest
             }
-            Log "    $($d.algoritmo) no coincide (esperado $esperado, obtenido $obtenido)" 'Yellow'
+            Log "    $($d.algorithm) mismatch (expected $expected, got $actual)" 'Yellow'
         }
     }
     if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force }
-    Fallo ("HASH NO COINCIDE o descarga fallida: $($d.archivo)`n  URL: $($d.url)`n" +
-           "  Esperado ($($d.algoritmo)): $esperado`n  Fuente del hash: $($d.fuente_hash)`n" +
-           "  El instalador se detiene. No se instaló nada de esta herramienta.")
+    Fail ("HASH MISMATCH or download failed: $($d.file)`n  URL: $($d.url)`n" +
+          "  Expected ($($d.algorithm)): $expected`n  Hash source: $($d.hash_source)`n" +
+          "  The installer stops. Nothing of this tool was installed.")
 }
 
 # ---------------------------------------------------------------- 7-Zip
-function Get-SieteZip {
+function Get-SevenZip {
     foreach ($c in @('7zip\x64\7za.exe', '7zip\7za.exe')) {
         $p = Join-Path $Tools $c
         if (Test-Path -LiteralPath $p) { return $p }
     }
-    Fallo '7za.exe no está disponible (la instalación de 7-Zip falló).'
+    Fail '7za.exe is not available (the 7-Zip installation failed).'
 }
 
-function Expand-Archivo([string]$sieteZip, [string]$archivo, [string]$destino, [string]$tipo) {
-    $a = @('x', '-y', '-bso0', '-bsp0', ('-o' + $destino))
-    if ($tipo) { $a += ('-t' + $tipo) }
-    $a += $archivo
-    $r = Invoke-Proceso -Exe $sieteZip -Argumentos $a
-    if ($r.Codigo -ne 0) { Fallo "7-Zip no pudo extraer $archivo (código $($r.Codigo)):`n$($r.Salida)" }
+function Expand-ArchiveFile([string]$sevenZip, [string]$archive, [string]$destination, [string]$type) {
+    $a = @('x', '-y', '-bso0', '-bsp0', ('-o' + $destination))
+    if ($type) { $a += ('-t' + $type) }
+    $a += $archive
+    $r = Invoke-Process -Exe $sevenZip -Arguments $a
+    if ($r.Code -ne 0) { Fail "7-Zip could not extract $archive (code $($r.Code)):`n$($r.Output)" }
 }
 
-# ---------------------------------------------------------------- ajustes posteriores
-function Set-PostInstalacion($h, [string]$dest) {
+# ---------------------------------------------------------------- post-install tweaks
+function Set-PostInstall($h, [string]$dest) {
     switch ($h.name) {
         'python' {
             $py = Join-Path $dest 'python.exe'
-            $r = Invoke-Proceso -Exe $py -Argumentos @('-m', 'pip', '--version')
-            if ($r.Codigo -ne 0) {
-                Log '    pip no viene incluido; ejecutando ensurepip'
-                $r = Invoke-Proceso -Exe $py -Argumentos @('-m', 'ensurepip', '--default-pip')
-                if ($r.Codigo -ne 0) { Fallo "ensurepip falló:`n$($r.Salida)" }
+            $r = Invoke-Process -Exe $py -Arguments @('-m', 'pip', '--version')
+            if ($r.Code -ne 0) {
+                Log '    pip is not bundled; running ensurepip'
+                $r = Invoke-Process -Exe $py -Arguments @('-m', 'ensurepip', '--default-pip')
+                if ($r.Code -ne 0) { Fail "ensurepip failed:`n$($r.Output)" }
             }
         }
         'ghidra' {
-            # Settings, cache y temp de Ghidra van a tools\_cache\ghidra y no a %APPDATA%,
-            # %LOCALAPPDATA% ni %TEMP%. Un VMARGS con espacios rompe launch.bat (línea 185, sin
-            # comillas), y LaunchSupport toma las comillas literalmente. Por eso se usa la ruta
-            # corta 8.3, que se recalcula en cada ejecución porque puede cambiar si se recrea la carpeta.
+            # Ghidra settings, cache and temp go to tools\_cache\ghidra instead of %APPDATA%,
+            # %LOCALAPPDATA% or %TEMP%. A VMARGS with spaces breaks launch.bat (line 185, unquoted),
+            # and LaunchSupport takes quotes literally. That is why the 8.3 short path is used; it is
+            # recomputed on every run because it can change if the folder is recreated.
             $props = Join-Path $dest 'support\launch.properties'
-            $lineas = @(Get-Content -LiteralPath $props)
-            $limpias = @($lineas | Where-Object {
+            $lines = @(Get-Content -LiteralPath $props)
+            $clean = @($lines | Where-Object {
                 $_ -notmatch '^# --- Projecto Decompile' -and
                 $_ -notmatch '^VMARGS=-D(application\.(settingsdir|cachedir|tempdir)|java\.io\.tmpdir)='
             })
-            while ($limpias.Count -gt 0 -and $limpias[-1] -eq '') { $limpias = @($limpias[0..($limpias.Count - 2)]) }
+            while ($clean.Count -gt 0 -and $clean[-1] -eq '') { $clean = @($clean[0..($clean.Count - 2)]) }
 
             $base = Join-Path $Tools '_cache\ghidra'
-            $cortas = [ordered]@{}
+            $short = [ordered]@{}
             $fso = New-Object -ComObject Scripting.FileSystemObject
             foreach ($d in @('settings', 'cache', 'temp')) {
-                $larga = Join-Path $base $d
-                if (-not (Test-Path -LiteralPath $larga)) { New-Item -ItemType Directory -Path $larga | Out-Null }
-                $cortas[$d] = $fso.GetFolder($larga).ShortPath.Replace('\', '/')
+                $long = Join-Path $base $d
+                if (-not (Test-Path -LiteralPath $long)) { New-Item -ItemType Directory -Path $long | Out-Null }
+                $short[$d] = $fso.GetFolder($long).ShortPath.Replace('\', '/')
             }
-            if (@($cortas.Values | Where-Object { $_ -match '\s' }).Count -gt 0) {
-                Log '    ghidra: AVISO: esta unidad no tiene nombres cortos 8.3; Ghidra usará %APPDATA%, %LOCALAPPDATA% y %TEMP%.' 'Yellow'
-                $nuevas = $limpias
+            if (@($short.Values | Where-Object { $_ -match '\s' }).Count -gt 0) {
+                Log '    ghidra: WARNING: this drive has no 8.3 short names; Ghidra will use %APPDATA%, %LOCALAPPDATA% and %TEMP%.' 'Yellow'
+                $newLines = $clean
             } else {
-                $nuevas = $limpias + @(
+                $newLines = $clean + @(
                     '',
-                    '# --- Projecto Decompile: settings/cache/temp dentro de tools\_cache\ghidra (ruta corta 8.3, sin espacios) ---',
-                    ('VMARGS=-Dapplication.settingsdir=' + $cortas['settings']),
-                    ('VMARGS=-Dapplication.cachedir=' + $cortas['cache']),
-                    ('VMARGS=-Dapplication.tempdir=' + $cortas['temp']),
-                    ('VMARGS=-Djava.io.tmpdir=' + $cortas['temp'])
+                    '# --- Projecto Decompile: settings/cache/temp inside tools\_cache\ghidra (8.3 short path, no spaces) ---',
+                    ('VMARGS=-Dapplication.settingsdir=' + $short['settings']),
+                    ('VMARGS=-Dapplication.cachedir=' + $short['cache']),
+                    ('VMARGS=-Dapplication.tempdir=' + $short['temp']),
+                    ('VMARGS=-Djava.io.tmpdir=' + $short['temp'])
                 )
             }
-            if (($nuevas -join "`n") -ne ($lineas -join "`n")) {
-                Set-Content -LiteralPath $props -Value $nuevas -Encoding ASCII
-                Log ('    ghidra: launch.properties apunta a ' + $cortas['settings'] + ' (y cache/temp)')
+            if (($newLines -join "`n") -ne ($lines -join "`n")) {
+                Set-Content -LiteralPath $props -Value $newLines -Encoding ASCII
+                Log ('    ghidra: launch.properties points to ' + $short['settings'] + ' (and cache/temp)')
             }
         }
         'imhex' {
-            # ImHex guarda su configuración junto al ejecutable cuando existe el archivo 'portable'.
-            $marca = Join-Path $dest 'portable'
-            if (-not (Test-Path -LiteralPath $marca)) { New-Item -ItemType File -Path $marca | Out-Null }
+            # ImHex stores its configuration next to the executable when the 'portable' file exists.
+            $flag = Join-Path $dest 'portable'
+            if (-not (Test-Path -LiteralPath $flag)) { New-Item -ItemType File -Path $flag | Out-Null }
         }
     }
 }
 
-# ---------------------------------------------------------------- instalar una herramienta
-function Install-Herramienta($h) {
-    $dest  = Join-Path $Tools $h.name
-    $marca = Join-Path $dest '.instalado.json'
-    $firma = $h.version + '|' + ((@($h.descargas) | ForEach-Object { $_.hash }) -join ',')
+# ---------------------------------------------------------------- install one tool
+function Install-Tool($h) {
+    $dest   = Join-Path $Tools $h.name
+    # Marker file name and its 'firma' key are kept as-is so existing installs are recognised.
+    $marker = Join-Path $dest '.instalado.json'
+    $signature = $h.version + '|' + ((@($h.downloads) | ForEach-Object { $_.hash }) -join ',')
 
-    if ((Test-Path -LiteralPath $marca) -and (Test-Path -LiteralPath (Join-Path $dest $h.comprobar))) {
-        $m = Get-Content -LiteralPath $marca -Raw | ConvertFrom-Json
-        if ($m.firma -eq $firma) {
-            Log "[saltar]     $($h.name) $($h.version) ya instalado" 'DarkGray'
-            Set-PostInstalacion $h $dest   # idempotente: reaplica la configuración vigente
-            return 'ya instalado'
+    if ((Test-Path -LiteralPath $marker) -and (Test-Path -LiteralPath (Join-Path $dest $h.check))) {
+        $m = Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json
+        if ($m.firma -eq $signature) {
+            Log "[skip]       $($h.name) $($h.version) already installed" 'DarkGray'
+            Set-PostInstall $h $dest   # idempotent: reapplies the current configuration
+            return 'already installed'
         }
-        Log "[actualizar] $($h.name) $($m.version) -> $($h.version)" 'Cyan'
-        $accion = 'actualizado'
+        Log "[update]     $($h.name) $($m.version) -> $($h.version)" 'Cyan'
+        $action = 'updated'
     } elseif (Test-Path -LiteralPath $dest) {
-        Log "[reparar]    $($h.name) $($h.version) (instalación incompleta o dañada)" 'Cyan'
-        $accion = 'reparado'
+        Log "[repair]     $($h.name) $($h.version) (incomplete or damaged installation)" 'Cyan'
+        $action = 'repaired'
     } else {
-        Log "[instalar]   $($h.name) $($h.version)" 'Cyan'
-        $accion = 'instalado'
+        Log "[install]    $($h.name) $($h.version)" 'Cyan'
+        $action = 'installed'
     }
 
-    $archivos = @(foreach ($d in @($h.descargas)) { Get-Descarga $d })
+    $files = @(foreach ($d in @($h.downloads)) { Get-Download $d })
 
     $tmp = Join-Path $Tools ('_tmp_' + $h.name)
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
     New-Item -ItemType Directory -Path $tmp | Out-Null
 
-    if ($h.instalar -eq '7zip') {
-        # Arranque: 7zr.exe (solo formato 7z) extrae el paquete 'extra', que trae 7za.exe.
-        $sieteZr = Join-Path $tmp '7zr.exe'
-        Copy-Item -LiteralPath $archivos[0] -Destination $sieteZr
-        Expand-Archivo $sieteZr $archivos[1] $tmp $null
+    if ($h.install -eq '7zip') {
+        # Bootstrap: 7zr.exe (7z format only) extracts the 'extra' package, which ships 7za.exe.
+        $sevenZr = Join-Path $tmp '7zr.exe'
+        Copy-Item -LiteralPath $files[0] -Destination $sevenZr
+        Expand-ArchiveFile $sevenZr $files[1] $tmp $null
         $src = $tmp
     } else {
-        $tipo = $null
-        if ($h.PSObject.Properties.Name -contains 'tipo') { $tipo = $h.tipo }
-        Expand-Archivo (Get-SieteZip) $archivos[0] $tmp $tipo
+        $type = $null
+        if ($h.PSObject.Properties.Name -contains 'type') { $type = $h.type }
+        Expand-ArchiveFile (Get-SevenZip) $files[0] $tmp $type
         $src = $tmp
-        if ($h.PSObject.Properties.Name -contains 'subcarpeta') {
-            $src = Join-Path $tmp $h.subcarpeta
+        if ($h.PSObject.Properties.Name -contains 'subfolder') {
+            $src = Join-Path $tmp $h.subfolder
         } else {
             $items = @(Get-ChildItem -LiteralPath $tmp -Force)
             if ($items.Count -eq 1 -and $items[0].PSIsContainer) { $src = $items[0].FullName }
         }
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $src $h.comprobar))) {
-        Fallo "Tras extraer $($h.name) no aparece '$($h.comprobar)'. ¿Cambió la estructura del paquete?"
+    if (-not (Test-Path -LiteralPath (Join-Path $src $h.check))) {
+        Fail "After extracting $($h.name), '$($h.check)' is missing. Did the package layout change?"
     }
 
     if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
     Move-Item -LiteralPath $src -Destination $dest
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
 
-    Set-PostInstalacion $h $dest
+    Set-PostInstall $h $dest
 
     [pscustomobject]@{
-        name    = $h.name
+        name      = $h.name
         version   = $h.version
-        firma     = $firma
+        firma     = $signature
         instalado = (Get-Date -Format 's')
-    } | ConvertTo-Json | Set-Content -LiteralPath $marca -Encoding UTF8
-    Log "    OK: $($h.name) en $dest" 'Green'
-    return $accion
+    } | ConvertTo-Json | Set-Content -LiteralPath $marker -Encoding UTF8
+    Log "    OK: $($h.name) in $dest" 'Green'
+    return $action
 }
 
-# ---------------------------------------------------------------- archivos de la raíz
-function Sync-Raiz {
-    # env.*, README.md: la copia canónica vive en repo\setup y se refleja en la raíz.
+# ---------------------------------------------------------------- root files
+function Sync-Root {
+    # env.*, README.md: the canonical copy lives in repo\setup and is mirrored to the root.
     foreach ($f in @('env.ps1', 'env.bat', 'README.md')) {
-        $src = Join-Path $Entorno $f
+        $src = Join-Path $SetupDir $f
         $dst = Join-Path $Root $f
         if (-not (Test-Path -LiteralPath $src)) { continue }
-        $igual = (Test-Path -LiteralPath $dst) -and
-                 ((Get-FileHash -LiteralPath $src).Hash -eq (Get-FileHash -LiteralPath $dst).Hash)
-        if (-not $igual) { Copy-Item -LiteralPath $src -Destination $dst -Force; Log "    raíz: $f actualizado" }
+        $same = (Test-Path -LiteralPath $dst) -and
+                ((Get-FileHash -LiteralPath $src).Hash -eq (Get-FileHash -LiteralPath $dst).Hash)
+        if (-not $same) { Copy-Item -LiteralPath $src -Destination $dst -Force; Log "    root: $f updated" }
     }
-    # INSTALL.bat solo se crea si falta: sobrescribir un .bat en ejecución lo corrompe.
+    # INSTALL.bat is only created if missing: overwriting a running .bat corrupts it.
     $bat = Join-Path $Root 'INSTALL.bat'
-    if (-not (Test-Path -LiteralPath $bat)) { Copy-Item -LiteralPath (Join-Path $Entorno 'INSTALL.bat') -Destination $bat }
+    if (-not (Test-Path -LiteralPath $bat)) { Copy-Item -LiteralPath (Join-Path $SetupDir 'INSTALL.bat') -Destination $bat }
 }
 
 # ---------------------------------------------------------------- ROMs
 function Copy-Roms {
-    $origen = $Gog
-    if (-not $origen) { $origen = $Cfg.rutas.gog }
-    $carpeta = Join-Path $origen 'resources\game'
-    if (-not (Test-Path -LiteralPath $carpeta)) {
-        Log "No se encontró '$carpeta'. Indica la ruta con -Gog ""ruta""." 'Yellow'
+    $source = $Gog
+    if (-not $source) { $source = $Cfg.paths.gog }
+    $folder = Join-Path $source 'resources\game'
+    if (-not (Test-Path -LiteralPath $folder)) {
+        Log "'$folder' was not found. Give the path with -Gog ""path""." 'Yellow'
         return
     }
-    $archivos = @(Get-ChildItem -LiteralPath $carpeta -File -Filter 'mslugx_*' | Sort-Object Name)
-    if ($archivos.Count -eq 0) { Log "No hay archivos mslugx_* en '$carpeta'." 'Yellow'; return }
+    $files = @(Get-ChildItem -LiteralPath $folder -File -Filter 'mslugx_*' | Sort-Object Name)
+    if ($files.Count -eq 0) { Log "No mslugx_* files in '$folder'." 'Yellow'; return }
 
     Write-Host ''
-    Write-Host "Archivos a copiar desde: $carpeta" -ForegroundColor Cyan
-    $archivos | Format-Table @{ n = 'Archivo'; e = { $_.Name } }, @{ n = 'Bytes'; e = { $_.Length }; a = 'Right' } -AutoSize | Out-String | Write-Host
-    Write-Host "Destino: $Roms  (fuera del repositorio; nunca se versiona)"
-    $resp = Read-Host '¿Copiar estos archivos? [s/N]'
-    if ($resp -notmatch '^[sS]') { Log 'ROMs: no se copió nada (respuesta: no).' 'Yellow'; return }
+    Write-Host "Files to copy from: $folder" -ForegroundColor Cyan
+    $files | Format-Table @{ n = 'File'; e = { $_.Name } }, @{ n = 'Bytes'; e = { $_.Length }; a = 'Right' } -AutoSize | Out-String | Write-Host
+    Write-Host "Destination: $Roms  (outside the repository; never versioned)"
+    $resp = Read-Host 'Copy these files? [y/N]'
+    if ($resp -notmatch '^[yY]') { Log 'ROMs: nothing copied (answer: no).' 'Yellow'; return }
 
     if (-not (Test-Path -LiteralPath $Roms)) { New-Item -ItemType Directory -Path $Roms | Out-Null }
-    $manifiesto = New-Object System.Collections.Generic.List[string]
-    foreach ($a in $archivos) {
+    $manifest = New-Object System.Collections.Generic.List[string]
+    foreach ($a in $files) {
         Copy-Item -LiteralPath $a.FullName -Destination (Join-Path $Roms $a.Name) -Force
-        $manifiesto.Add(('{0} *{1}' -f (Get-HashArchivo (Join-Path $Roms $a.Name) 'SHA256'), $a.Name))
+        $manifest.Add(('{0} *{1}' -f (Get-FileHashLower (Join-Path $Roms $a.Name) 'SHA256'), $a.Name))
     }
-    Set-Content -LiteralPath (Join-Path $Roms 'MANIFEST.sha256') -Value $manifiesto -Encoding ASCII
-    Log "ROMs: $($archivos.Count) archivos copiados a $Roms y MANIFEST.sha256 generado." 'Green'
+    Set-Content -LiteralPath (Join-Path $Roms 'MANIFEST.sha256') -Value $manifest -Encoding ASCII
+    Log "ROMs: $($files.Count) files copied to $Roms and MANIFEST.sha256 generated." 'Green'
 }
 
-# ---------------------------------------------------------------- repositorio
+# ---------------------------------------------------------------- repository
 function Initialize-Repo {
     $git = Join-Path $Tools 'git\cmd\git.exe'
     if (-not (Test-Path -LiteralPath (Join-Path $Repo '.git'))) {
-        $r = Invoke-Proceso -Exe $git -Argumentos @('init', '-b', 'main') -Dir $Repo
-        if ($r.Codigo -ne 0) { Fallo "git init falló:`n$($r.Salida)" }
-        Log "    repo: git init en $Repo" 'Green'
+        $r = Invoke-Process -Exe $git -Arguments @('init', '-b', 'main') -Dir $Repo
+        if ($r.Code -ne 0) { Fail "git init failed:`n$($r.Output)" }
+        Log "    repo: git init in $Repo" 'Green'
     }
-    # Hook pre-commit versionado (regla 1: nunca ROMs ni binarios en el repo).
-    $r = Invoke-Proceso -Exe $git -Argumentos @('config', '--local', 'core.hooksPath', 'tools/hooks') -Dir $Repo
-    if ($r.Codigo -ne 0) { Fallo "no se pudo configurar core.hooksPath:`n$($r.Salida)" }
+    # Versioned pre-commit hook (rule 1: never ROMs or binaries in the repo).
+    $r = Invoke-Process -Exe $git -Arguments @('config', '--local', 'core.hooksPath', 'tools/hooks') -Dir $Repo
+    if ($r.Code -ne 0) { Fail "could not set core.hooksPath:`n$($r.Output)" }
 }
 
-# ---------------------------------------------------------------- verificación
-function Test-Entorno {
-    . (Join-Path $Entorno 'env.ps1') | Out-Null
+# ---------------------------------------------------------------- verification
+function Test-Environment {
+    . (Join-Path $SetupDir 'env.ps1') | Out-Null
     $res = New-Object System.Collections.Generic.List[object]
-    function Agregar($name, $ok, $detalle) {
-        $line = (($detalle -split "`r?`n") | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1)
+    function Add-Result($name, $ok, $detail) {
+        $line = (($detail -split "`r?`n") | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1)
         if (-not $line) { $line = '' }
-        $res.Add([pscustomobject]@{ Test = $name; State = $(if ($ok) { 'OK' } else { 'FALLA' }); Detalle = $line.Trim() })
-        Log ("  [{0}] {1}: {2}" -f $(if ($ok) { 'OK' } else { 'FALLA' }), $name, $detalle) $(if ($ok) { 'Green' } else { 'Red' })
+        $res.Add([pscustomobject]@{ Test = $name; State = $(if ($ok) { 'OK' } else { 'FAIL' }); Detail = $line.Trim() })
+        Log ("  [{0}] {1}: {2}" -f $(if ($ok) { 'OK' } else { 'FAIL' }), $name, $detail) $(if ($ok) { 'Green' } else { 'Red' })
     }
-    function Probar($name, $exe, $argumentos, $patron) {
-        if (-not (Test-Path -LiteralPath $exe)) { Agregar $name $false "no existe $exe"; return }
-        $r = Invoke-Proceso -Exe $exe -Argumentos $argumentos -TimeoutSeg 120
-        $output = $r.Salida -replace "\x1b\[[0-9;]*m", ''   # quita colores ANSI (ImHex)
-        $ok = ($output -match $patron)
-        $detalle = $output
+    function Test-Tool($name, $exe, $arguments, $pattern) {
+        if (-not (Test-Path -LiteralPath $exe)) { Add-Result $name $false "$exe does not exist"; return }
+        $r = Invoke-Process -Exe $exe -Arguments $arguments -TimeoutSec 120
+        $output = $r.Output -replace "\x1b\[[0-9;]*m", ''   # strip ANSI colours (ImHex)
+        $ok = ($output -match $pattern)
+        $detail = $output
         if ($ok) {
-            $line = (($output -split "`r?`n") | Where-Object { $_ -match $patron } | Select-Object -First 1)
-            $detalle = $line.Substring([regex]::Match($line, $patron).Index)
+            $line = (($output -split "`r?`n") | Where-Object { $_ -match $pattern } | Select-Object -First 1)
+            $detail = $line.Substring([regex]::Match($line, $pattern).Index)
         }
-        Agregar $name $ok $detalle
+        Add-Result $name $ok $detail
     }
 
     Log ''
-    Log '== Verificación ==' 'Cyan'
+    Log '== Verification ==' 'Cyan'
     $t = $Tools
-    Probar '7-Zip'    (Get-SieteZip) @('i') '7-Zip.*\d+\.\d+'
-    Probar 'Python'   "$t\python\python.exe" @('--version') 'Python 3\.\d+'
-    Probar 'pip'      "$t\python\python.exe" @('-m', 'pip', '--version') 'pip \d+'
-    Probar 'CMake'    "$t\cmake\bin\cmake.exe" @('--version') 'cmake version'
-    Probar 'Ninja'    "$t\ninja\ninja.exe" @('--version') '^\d+\.\d+'
-    Probar 'clang'    "$t\llvm-mingw\bin\clang.exe" @('--version') 'clang version'
-    Probar 'Java'     "$t\jdk21\bin\java.exe" @('-version') 'version "21'
-    Probar 'MAME'     "$t\mame\mame.exe" @('-version') '^\d+\.\d+'
-    Probar 'Git'      "$t\git\cmd\git.exe" @('--version') 'git version'
+    Test-Tool '7-Zip'    (Get-SevenZip) @('i') '7-Zip.*\d+\.\d+'
+    Test-Tool 'Python'   "$t\python\python.exe" @('--version') 'Python 3\.\d+'
+    Test-Tool 'pip'      "$t\python\python.exe" @('-m', 'pip', '--version') 'pip \d+'
+    Test-Tool 'CMake'    "$t\cmake\bin\cmake.exe" @('--version') 'cmake version'
+    Test-Tool 'Ninja'    "$t\ninja\ninja.exe" @('--version') '^\d+\.\d+'
+    Test-Tool 'clang'    "$t\llvm-mingw\bin\clang.exe" @('--version') 'clang version'
+    Test-Tool 'Java'     "$t\jdk21\bin\java.exe" @('-version') 'version "21'
+    Test-Tool 'MAME'     "$t\mame\mame.exe" @('-version') '^\d+\.\d+'
+    Test-Tool 'Git'      "$t\git\cmd\git.exe" @('--version') 'git version'
 
-    # imhex.exe es la CLI (imhex-gui.exe es la interfaz); --version no abre ventanas.
-    Probar 'ImHex'    "$t\imhex\imhex.exe" @('--version') 'Version:\s+\d+\.\d+'
-    Probar 'ImHex portable' "$t\imhex\imhex.exe" @('--version') 'Type:\s+Portable'
+    # imhex.exe is the CLI (imhex-gui.exe is the GUI); --version opens no windows.
+    Test-Tool 'ImHex'    "$t\imhex\imhex.exe" @('--version') 'Version:\s+\d+\.\d+'
+    Test-Tool 'ImHex portable' "$t\imhex\imhex.exe" @('--version') 'Type:\s+Portable'
 
-    # --- SDL3 "hola mundo": CMake + Ninja + clang + recursos (.rc), todo bajo la ruta con espacio.
-    $srcSdl  = Join-Path $Entorno 'sdl3_test'
+    # --- SDL3 "hello world": CMake + Ninja + clang + resources (.rc), all under the path with a space.
+    $srcSdl  = Join-Path $SetupDir 'sdl3_test'
     $buildSdl = Join-Path $Verif 'build sdl3'
     if (Test-Path -LiteralPath $buildSdl) { Remove-Item -LiteralPath $buildSdl -Recurse -Force }
     $cmake = "$t\cmake\bin\cmake.exe"
-    $r = Invoke-Proceso -Exe $cmake -Argumentos @('-S', $srcSdl, '-B', $buildSdl, '-G', 'Ninja',
+    $r = Invoke-Process -Exe $cmake -Arguments @('-S', $srcSdl, '-B', $buildSdl, '-G', 'Ninja',
         '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=clang', '-DCMAKE_RC_COMPILER=llvm-windres')
-    Agregar 'SDL3: configurar (CMake)' ($r.Codigo -eq 0) $(if ($r.Codigo -eq 0) { 'cmake configuró en "' + $buildSdl + '"' } else { $r.Salida })
-    if ($r.Codigo -eq 0) {
-        $r = Invoke-Proceso -Exe $cmake -Argumentos @('--build', $buildSdl)
-        Agregar 'SDL3: compilar (Ninja+clang+windres)' ($r.Codigo -eq 0) $(if ($r.Codigo -eq 0) { 'hola_sdl3.exe compilado' } else { $r.Salida })
-        $exe = Join-Path $buildSdl 'hola_sdl3.exe'
-        if ($r.Codigo -eq 0 -and (Test-Path -LiteralPath $exe)) {
-            $r = Invoke-Proceso -Exe $exe -Argumentos @('2000') -Dir $buildSdl -TimeoutSeg 30
-            Agregar 'SDL3: window' ($r.Codigo -eq 0 -and $r.Salida -match 'OK') $r.Salida.Replace("`r", '').Replace("`n", ' | ')
+    Add-Result 'SDL3: configure (CMake)' ($r.Code -eq 0) $(if ($r.Code -eq 0) { 'cmake configured in "' + $buildSdl + '"' } else { $r.Output })
+    if ($r.Code -eq 0) {
+        $r = Invoke-Process -Exe $cmake -Arguments @('--build', $buildSdl)
+        Add-Result 'SDL3: build (Ninja+clang+windres)' ($r.Code -eq 0) $(if ($r.Code -eq 0) { 'hello_sdl3.exe built' } else { $r.Output })
+        $exe = Join-Path $buildSdl 'hello_sdl3.exe'
+        if ($r.Code -eq 0 -and (Test-Path -LiteralPath $exe)) {
+            $r = Invoke-Process -Exe $exe -Arguments @('2000') -Dir $buildSdl -TimeoutSec 30
+            Add-Result 'SDL3: window' ($r.Code -eq 0 -and $r.Output -match 'OK') $r.Output.Replace("`r", '').Replace("`n", ' | ')
         }
     }
 
-    # --- Ghidra headless: crea un proyecto e importa un PE dentro de la ruta con espacio.
-    $proj = Join-Path $Verif 'proyecto ghidra'
+    # --- Ghidra headless: creates a project and imports a PE inside the path with a space.
+    $proj = Join-Path $Verif 'ghidra project'
     if (Test-Path -LiteralPath $proj) { Remove-Item -LiteralPath $proj -Recurse -Force }
     New-Item -ItemType Directory -Path $proj | Out-Null
-    $muestra = Join-Path $buildSdl 'hola_sdl3.exe'
-    if (-not (Test-Path -LiteralPath $muestra)) { $muestra = "$t\ninja\ninja.exe" }
-    $r = Invoke-Proceso -Exe "$t\ghidra\support\analyzeHeadless.bat" -Argumentos @($proj, 'PruebaPD', '-import', $muestra, '-noanalysis', '-deleteProject') -TimeoutSeg 600
-    $okG = ($r.Codigo -eq 0 -and $r.Salida -match 'Import succeeded')
-    $detG = $r.Salida
-    if ($okG) { $detG = 'analyzeHeadless importó ' + (Split-Path $muestra -Leaf) + ' (Import succeeded)' }
-    Agregar 'Ghidra headless' $okG $detG
+    $sample = Join-Path $buildSdl 'hello_sdl3.exe'
+    if (-not (Test-Path -LiteralPath $sample)) { $sample = "$t\ninja\ninja.exe" }
+    $r = Invoke-Process -Exe "$t\ghidra\support\analyzeHeadless.bat" -Arguments @($proj, 'TestPD', '-import', $sample, '-noanalysis', '-deleteProject') -TimeoutSec 600
+    $okG = ($r.Code -eq 0 -and $r.Output -match 'Import succeeded')
+    $detG = $r.Output
+    if ($okG) { $detG = 'analyzeHeadless imported ' + (Split-Path $sample -Leaf) + ' (Import succeeded)' }
+    Add-Result 'Ghidra headless' $okG $detG
 
-    # Ghidra no debe dejar nada fuera de la carpeta portable.
-    $fuera = @(@("$env:APPDATA\ghidra", "$env:LOCALAPPDATA\ghidra", "$env:TEMP\ghidra") | Where-Object { Test-Path -LiteralPath $_ })
-    $detR = 'todo en tools\_cache\ghidra'
-    if ($fuera.Count -gt 0) { $detR = 'existen: ' + ($fuera -join ', ') + ' (si las creó una versión anterior, bórralas y vuelve a verificar)' }
-    Agregar 'Ghidra sin residuos fuera de la carpeta' ($fuera.Count -eq 0) $detR
-    Add-Content -LiteralPath $LogFile -Value ("--- output completa de Ghidra ---`n" + $r.Salida) -Encoding UTF8
+    # Ghidra must not leave anything outside the portable folder.
+    $outside = @(@("$env:APPDATA\ghidra", "$env:LOCALAPPDATA\ghidra", "$env:TEMP\ghidra") | Where-Object { Test-Path -LiteralPath $_ })
+    $detR = 'everything in tools\_cache\ghidra'
+    if ($outside.Count -gt 0) { $detR = 'found: ' + ($outside -join ', ') + ' (if an older version created them, delete them and verify again)' }
+    Add-Result 'Ghidra leaves nothing outside its folder' ($outside.Count -eq 0) $detR
+    Add-Content -LiteralPath $LogFile -Value ("--- full Ghidra output ---`n" + $r.Output) -Encoding UTF8
 
     return $res
 }
 
-# ================================================================ principal
+# ================================================================ main
 try {
-    Log "Projecto Decompile - instalador ($((Get-Date).ToString('s')))" 'Cyan'
-    Log "Raíz:  $Root"
+    Log "Projecto Decompile - installer ($((Get-Date).ToString('s')))" 'Cyan'
+    Log "Root:  $Root"
     Log "Log:   $LogFile"
 
-    if ($CopiarRoms) { Copy-Roms; exit 0 }
+    if ($CopyRoms) { Copy-Roms; exit 0 }
 
-    if (-not $SoloVerificar) {
-        # 1. No se ejecuta como administrador.
+    if (-not $VerifyOnly) {
+        # 1. Do not run as administrator.
         $id = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
         if ($id.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-            Fallo 'Se está ejecutando como administrador. Cierra esta window y ejecuta INSTALL.bat como usuario normal.'
+            Fail 'Running as administrator. Close this window and run INSTALL.bat as a normal user.'
         }
-        # 2. Espacio libre.
-        $unidad = (Get-Item -LiteralPath $Root).PSDrive
-        $libreGB = [math]::Round($unidad.Free / 1GB, 1)
-        Log "Espacio libre en $($unidad.Name): $libreGB GB (mínimo $($Cfg.espacio_minimo_gb) GB)"
-        if ($libreGB -lt $Cfg.espacio_minimo_gb) { Fallo "Espacio insuficiente: $libreGB GB libres." }
+        # 2. Free space.
+        $drive = (Get-Item -LiteralPath $Root).PSDrive
+        $freeGB = [math]::Round($drive.Free / 1GB, 1)
+        Log "Free space on $($drive.Name): $freeGB GB (minimum $($Cfg.min_free_space_gb) GB)"
+        if ($freeGB -lt $Cfg.min_free_space_gb) { Fail "Not enough space: $freeGB GB free." }
 
-        # 3. Herramientas (7-Zip primero: extrae todo lo demás).
-        $resumen = New-Object System.Collections.Generic.List[object]
-        foreach ($h in $Cfg.herramientas) {
-            $acc = Install-Herramienta $h
-            $resumen.Add([pscustomobject]@{ Herramienta = $h.name; Version = $h.version; Accion = $acc })
+        # 3. Tools (7-Zip first: it extracts everything else).
+        $summary = New-Object System.Collections.Generic.List[object]
+        foreach ($h in $Cfg.tools) {
+            $acc = Install-Tool $h
+            $summary.Add([pscustomobject]@{ Tool = $h.name; Version = $h.version; Action = $acc })
         }
         Log ''
-        $resumen | Format-Table -AutoSize | Out-String | ForEach-Object { Log $_ }
+        $summary | Format-Table -AutoSize | Out-String | ForEach-Object { Log $_ }
 
-        # 4. Raíz y repositorio.
-        Sync-Raiz
+        # 4. Root and repository.
+        Sync-Root
         Initialize-Repo
     }
 
-    # 5. Verificación.
-    $res = Test-Entorno
+    # 5. Verification.
+    $res = Test-Environment
     Write-Host ''
-    $tabla = $res | Format-Table Test, State, Detalle -AutoSize -Wrap | Out-String -Width 160
-    Write-Host $tabla
-    Add-Content -LiteralPath $LogFile -Value $tabla -Encoding UTF8
-    $fallas = @($res | Where-Object { $_.State -ne 'OK' }).Count
-    if ($fallas -gt 0) { Log "$fallas prueba(s) con FALLA. Revisa $LogFile" 'Red' }
-    else { Log 'Todas las tests OK.' 'Green' }
+    $table = $res | Format-Table Test, State, Detail -AutoSize -Wrap | Out-String -Width 160
+    Write-Host $table
+    Add-Content -LiteralPath $LogFile -Value $table -Encoding UTF8
+    $failures = @($res | Where-Object { $_.State -ne 'OK' }).Count
+    if ($failures -gt 0) { Log "$failures test(s) FAILED. See $LogFile" 'Red' }
+    else { Log 'All tests OK.' 'Green' }
 
-    # 6. ROMs (solo con confirmación).
-    if (-not $SoloVerificar -and -not $SinRoms) { Copy-Roms }
+    # 6. ROMs (only with confirmation).
+    if (-not $VerifyOnly -and -not $NoRoms) { Copy-Roms }
 
     Log ''
-    Log 'Para activar el entorno en una sesión:' 'Cyan'
+    Log 'To activate the environment in a session:' 'Cyan'
     Log "  PowerShell:  . `"$Root\env.ps1`""
     Log "  cmd:         call `"$Root\env.bat`""
-    if ($fallas -gt 0) { exit 2 } else { exit 0 }
+    if ($failures -gt 0) { exit 2 } else { exit 0 }
 }
 catch {
-    Log ("Instalación detenida: " + $_.Exception.Message) 'Red'
+    Log ("Installation stopped: " + $_.Exception.Message) 'Red'
     exit 1
 }

@@ -1,10 +1,10 @@
-﻿# Activa el entorno de Projecto Decompile SOLO en la sesión actual de PowerShell.
-# No toca el PATH global ni el registro.
+# Activates the Projecto Decompile environment ONLY in the current PowerShell session.
+# Does not touch the global PATH or the registry.
 #
-#   . "C:\Projecto Decompile\env.ps1"          (en una sesión abierta; fíjate en el punto inicial)
+#   . "C:\Projecto Decompile\env.ps1"          (in an open session; note the leading dot)
 #   powershell -NoExit -ExecutionPolicy Bypass -File "C:\Projecto Decompile\env.ps1"
 #
-# Funciona tanto desde la raíz como desde repo\setup (copia canónica).
+# Works both from the root and from repo\setup (canonical copy).
 
 $__pd = $PSScriptRoot
 if (-not (Test-Path -LiteralPath (Join-Path $__pd 'tools'))) {
@@ -34,9 +34,9 @@ $__dirs = @(
     (Join-Path $__t 'imhex'),
     (Join-Path $__t 'git\cmd')
 )
-$__actual = @($env:PATH -split ';' | Where-Object { $_ -ne '' })
-$__nuevo = @($__dirs | Where-Object { $__actual -notcontains $_ })
-if ($__nuevo.Count -gt 0) { $env:PATH = (($__nuevo + $__actual) -join ';') }
+$__current = @($env:PATH -split ';' | Where-Object { $_ -ne '' })
+$__new = @($__dirs | Where-Object { $__current -notcontains $_ })
+if ($__new.Count -gt 0) { $env:PATH = (($__new + $__current) -join ';') }
 
 $env:JAVA_HOME          = Join-Path $__t 'jdk21'
 $env:GHIDRA_INSTALL_DIR = Join-Path $__t 'ghidra'
@@ -53,5 +53,5 @@ if (-not (Test-Path Function:\__pd_prompt_original)) {
     function global:prompt { '(PD) ' + (& __pd_prompt_original) }
 }
 
-Remove-Variable __pd, __t, __7z, __dirs, __actual, __nuevo -ErrorAction SilentlyContinue
-Write-Host "Entorno Projecto Decompile active en esta sesión ($env:PD_ROOT)"
+Remove-Variable __pd, __t, __7z, __dirs, __current, __new -ErrorAction SilentlyContinue
+Write-Host "Projecto Decompile environment active in this session ($env:PD_ROOT)"

@@ -1,18 +1,18 @@
-"""Compara las fingerprints por cuadro del port con las de MAME (Fase 4).
+"""Compares the port's per-frame fingerprints with MAME's (Phase 4).
 
-Formatos (tools/mame/fingerprints.lua y la opción --fingerprints del port):
-  V <n> <hash RAM> <hash palette>   en cada reconocimiento de la VBlank (n = orden desde el encendido)
-  F <n> <hash imagen>              imagen del cuadro n
+Formats (tools/mame/fingerprints.lua and the port's --fingerprints option):
+  V <n> <RAM hash> <palette hash>   on every VBlank acknowledge (n = order since power-on)
+  F <n> <image hash>                image of frame n
 
-Notas:
-  - Las fingerprints V se toman al entrar al manejador de la VBlank, donde ambos lados están en el
-    límite de una instrucción.
-  - screen:pixels() en el notificador de cuadro de MAME entrega la imagen del cuadro anterior:
-    la F <n> del port se compara con la F <n + 1> de MAME.
+Notes:
+  - V fingerprints are taken on entry to the VBlank handler, where both sides are on an
+    instruction boundary.
+  - screen:pixels() in MAME's frame notifier returns the previous frame's image:
+    the port's F <n> is compared with MAME's F <n + 1>.
 
-Uso:
+Usage:
   python compare_fingerprints.py MAME.txt PORT.txt
-Devuelve 0 si todo coincide; 1 si hay diferencias (las lista).
+Returns 0 if everything matches; 1 if there are differences (and lists them).
 """
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ import sys
 from pathlib import Path
 
 
-def leer(ruta: Path) -> tuple[dict[int, str], dict[int, str]]:
+def read_fingerprints(path: Path) -> tuple[dict[int, str], dict[int, str]]:
     v, f = {}, {}
-    for line in ruta.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         p = line.split()
         if len(p) >= 4 and p[0] == "V":
             v[int(p[1])] = p[2] + " " + p[3]
@@ -35,21 +35,21 @@ def main() -> int:
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
-    mv, mf = leer(Path(sys.argv[1]))
-    pv, pf = leer(Path(sys.argv[2]))
-    comunes_v = sorted(set(mv) & set(pv))
-    dif_v = [n for n in comunes_v if mv[n] != pv[n]]
-    comunes_f = sorted(n for n in pf if n + 1 in mf)
-    dif_f = [n for n in comunes_f if pf[n] != mf[n + 1]]
-    print(f"VBlank (RAM + palette): {len(comunes_v)} comparadas, {len(dif_v)} distintas"
+    mv, mf = read_fingerprints(Path(sys.argv[1]))
+    pv, pf = read_fingerprints(Path(sys.argv[2]))
+    common_v = sorted(set(mv) & set(pv))
+    diff_v = [n for n in common_v if mv[n] != pv[n]]
+    common_f = sorted(n for n in pf if n + 1 in mf)
+    diff_f = [n for n in common_f if pf[n] != mf[n + 1]]
+    print(f"VBlank (RAM + palette): {len(common_v)} compared, {len(diff_v)} differ"
           f" (MAME {len(mv)}, port {len(pv)})")
-    print(f"Imagen por cuadro:     {len(comunes_f)} comparadas, {len(dif_f)} distintas")
-    if dif_v:
-        print("  primeras VBlank distintas:", dif_v[:10])
-    if dif_f:
-        print("  primeros frames distintos:", dif_f[:10])
-    ok = not dif_v and not dif_f and len(comunes_v) == len(mv) and len(comunes_f) >= len(mf) - 2
-    print("SIN DIVERGENCIAS" if ok else "HAY DIVERGENCIAS")
+    print(f"Image per frame:        {len(common_f)} compared, {len(diff_f)} differ")
+    if diff_v:
+        print("  first differing VBlanks:", diff_v[:10])
+    if diff_f:
+        print("  first differing frames:", diff_f[:10])
+    ok = not diff_v and not diff_f and len(common_v) == len(mv) and len(common_f) >= len(mf) - 2
+    print("NO DIVERGENCES" if ok else "DIVERGENCES FOUND")
     return 0 if ok else 1
 
 

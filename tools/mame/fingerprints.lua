@@ -1,39 +1,39 @@
--- Huellas por cuadro para la verificación diferencial (Fase 4).
+-- Per-frame fingerprints for differential verification (Phase 4).
 --
--- Por cada cuadro N (screen:frame_number() en el notificador de cuadro) escribe:
---   N <hash RAM> <hash palette>
--- con FNV-1a de 32 bits sobre los bytes de 0x100000-0x10FFFF y 0x400000-0x401FFF (bank visible),
--- en orden de dirección. El port (--fingerprints) calcula lo mismo.
+-- For each frame N (screen:frame_number() in the frame notifier) writes:
+--   N <RAM hash> <palette hash>
+-- with 32-bit FNV-1a over the bytes of 0x100000-0x10FFFF and 0x400000-0x401FFF (visible bank),
+-- in address order. The port (--fingerprints) computes the same thing.
 --
--- Además registra las inputs que el 68000 leyó en cada cuadro (en MAME no cambian dentro de un
--- cuadro): E <cuadro del port> <P1> <P2> <SISTEMA> <MONEDAS> <TEST>, en hexadecimal, los bytes
--- tal como los ve el bus (activos en bajo). El cuadro del port es frame_number() + 1: MAME
--- etiqueta N a la imagen que se completa al ejecutar el cuadro N del port, y durante esa ejecución
--- frame_number() vale N - 1 (verificado con screenshots y trazas, docs/PHASE4_VERIFICATION.md).
+-- It also records the inputs the 68000 read in each frame (in MAME they do not change within a
+-- frame): E <port frame> <P1> <P2> <SYSTEM> <COINS> <TEST>, in hexadecimal, the bytes
+-- as the bus sees them (active low). The port frame is frame_number() + 1: MAME
+-- labels N the image that is completed when the port runs frame N, and during that run
+-- frame_number() is N - 1 (verified with screenshots and traces, docs/PHASE4_VERIFICATION.md).
 --
--- Además, en cada reconocimiento de la VBlank (escritura en 0x3C000C con el bit 2, al entrar al
--- manejador) escribe "V <n> <hash RAM> <hash palette>", con n = orden de aparición desde el
--- encendido. Ahí ambos lados están en el límite de una instrucción: no hay escrituras a medio
--- hacer, a diferencia del límite del cuadro, donde MAME puede quedar a mitad de una instrucción.
+-- Also, on every VBlank acknowledge (write to 0x3C000C with bit 2, on entry to the
+-- handler) writes "V <n> <RAM hash> <palette hash>", with n = order of appearance since
+-- power-on. There both sides are on an instruction boundary: there are no half-done
+-- writes, unlike the frame boundary, where MAME can be in the middle of an instruction.
 --
--- Con PD_PIXELES=1, además, por cada cuadro N: "F <N> <hash de la imagen>" (320x224 píxeles de
--- 32 bits de screen:pixels(); hash h = h*31 + palabra de 64 bits, con desborde natural).
+-- With PD_PIXELES=1, also, for each frame N: "F <N> <image hash>" (320x224 32-bit pixels
+-- from screen:pixels(); hash h = h*31 + 64-bit word, with natural overflow).
 --
--- Variables: PD_HUELLAS (output), PD_DESDE / PD_HASTA (frames con huella; por defecto todos),
--- PD_VOLCAR (lista de frames cuya RAM se guarda entera en PD_DIR_VOLCADOS/ram_mame_NNNNNN.bin).
+-- Variables: PD_HUELLAS (output), PD_DESDE / PD_HASTA (frames with a fingerprint; all by default),
+-- PD_VOLCAR (list of frames whose whole RAM is saved to PD_DIR_VOLCADOS/ram_mame_NNNNNN.bin).
 
--- PD_SCRIPT_ENTRADAS: ruta de inputs.lua para registrar también los cambios de inputs.
+-- PD_SCRIPT_ENTRADAS: path of inputs.lua, to also record the input changes.
 if os.getenv("PD_SCRIPT_ENTRADAS") then dofile(os.getenv("PD_SCRIPT_ENTRADAS")) end
 
 local cpu = manager.machine.devices[":maincpu"]
 local mem = cpu.spaces["program"]
 local scr = manager.machine.screens[":screen"]
 local output = io.open(os.getenv("PD_HUELLAS") or "huellas_mame.txt", "w")
-local desde = tonumber(os.getenv("PD_DESDE") or "0")
-local hasta = tonumber(os.getenv("PD_HASTA") or "1e12")
+local first = tonumber(os.getenv("PD_DESDE") or "0")
+local last = tonumber(os.getenv("PD_HASTA") or "1e12")
 local dump = {}
 for n in string.gmatch(os.getenv("PD_VOLCAR") or "", "%d+") do dump[tonumber(n)] = true end
-local dir_volcados = os.getenv("PD_DIR_VOLCADOS") or "."
+local dump_dir = os.getenv("PD_DIR_VOLCADOS") or "."
 
 local function fnv(s)
     local h = 0x811C9DC5
@@ -47,66 +47,66 @@ local function fnv(s)
     return h
 end
 
--- Entradas leídas en el cuadro en curso.
-local actual = { -1, -1, -1, -1, -1 }
-local previo = { 0xFF, 0xFF, 0xFF, 0x1F, 0x80 }
-local cuadro_entradas = -1
+-- Inputs read in the current frame.
+local current = { -1, -1, -1, -1, -1 }
+local previous = { 0xFF, 0xFF, 0xFF, 0x1F, 0x80 }
+local inputs_frame = -1
 
-local function cerrar_entradas()
-    if cuadro_entradas < 0 then return end
+local function close_inputs()
+    if inputs_frame < 0 then return end
     for i = 1, 5 do
-        if actual[i] >= 0 then previo[i] = actual[i] end
-        actual[i] = -1
+        if current[i] >= 0 then previous[i] = current[i] end
+        current[i] = -1
     end
-    output:write(string.format("E %d %02X %02X %02X %02X %02X\n", cuadro_entradas + 1,
-        previo[1], previo[2], previo[3], previo[4], previo[5]))
+    output:write(string.format("E %d %02X %02X %02X %02X %02X\n", inputs_frame + 1,
+        previous[1], previous[2], previous[3], previous[4], previous[5]))
 end
 
-local function anotar(i, v)
+local function record(i, v)
     local f = scr:frame_number()
-    if f ~= cuadro_entradas then
-        cerrar_entradas()
-        cuadro_entradas = f
+    if f ~= inputs_frame then
+        close_inputs()
+        inputs_frame = f
     end
-    if actual[i] < 0 then actual[i] = v end
+    if current[i] < 0 then current[i] = v end
 end
 
 rtap_e1 = mem:install_read_tap(0x300000, 0x31FFFF, "pd_e1", function(offset, data, mask)
     if offset & 0x80 ~= 0 then
-        if mask & 0x00FF ~= 0 then anotar(5, data & 0xFF) end
+        if mask & 0x00FF ~= 0 then record(5, data & 0xFF) end
     elseif mask & 0xFF00 ~= 0 then
-        anotar(1, (data >> 8) & 0xFF)
+        record(1, (data >> 8) & 0xFF)
     end
 end)
 rtap_e2 = mem:install_read_tap(0x340000, 0x35FFFF, "pd_e2", function(offset, data, mask)
-    if mask & 0xFF00 ~= 0 then anotar(2, (data >> 8) & 0xFF) end
+    if mask & 0xFF00 ~= 0 then record(2, (data >> 8) & 0xFF) end
 end)
 rtap_e3 = mem:install_read_tap(0x380000, 0x39FFFF, "pd_e3", function(offset, data, mask)
-    if mask & 0xFF00 ~= 0 then anotar(3, (data >> 8) & 0xFF) end
+    if mask & 0xFF00 ~= 0 then record(3, (data >> 8) & 0xFF) end
 end)
 rtap_e4 = mem:install_read_tap(0x320000, 0x33FFFF, "pd_e4", function(offset, data, mask)
-    if mask & 0x00FF ~= 0 then anotar(4, data & 0x3F) end      -- sin TP ni DATA OUT del reloj
+    if mask & 0x00FF ~= 0 then record(4, data & 0x3F) end      -- without the clock's TP and DATA OUT
 end)
 
 local vblanks = 0
-local volcar_v = {}
-for n in string.gmatch(os.getenv("PD_VOLCAR_V") or "", "%d+") do volcar_v[tonumber(n)] = true end
+local dump_v = {}
+for n in string.gmatch(os.getenv("PD_VOLCAR_V") or "", "%d+") do dump_v[tonumber(n)] = true end
 wtap_ack = mem:install_write_tap(0x3C000C, 0x3C000D, "pd_ack", function(offset, data, mask)
     if (data & mask & 0x0004) == 0 then return end
     vblanks = vblanks + 1
     local ram = mem:read_range(0x100000, 0x10FFFF, 8)
     local pal = mem:read_range(0x400000, 0x401FFF, 8)
     output:write(string.format("V %d %08X %08X f=%d pc=%06X\n", vblanks, fnv(ram), fnv(pal), scr:frame_number(), cpu.state["PC"].value))
-    if volcar_v[vblanks] then
-        local v = io.open(string.format("%s/ram_mame_v%06d.bin", dir_volcados, vblanks), "wb")
+    if dump_v[vblanks] then
+        local v = io.open(string.format("%s/ram_mame_v%06d.bin", dump_dir, vblanks), "wb")
         v:write(ram)
         v:close()
     end
 end)
 
-suscripcion_huellas = emu.add_machine_frame_notifier(function()
+fingerprints_sub = emu.add_machine_frame_notifier(function()
     local f = scr:frame_number()
-    if f < desde or f > hasta then return end
+    if f < first or f > last then return end
     local ram = mem:read_range(0x100000, 0x10FFFF, 8)
     local pal = mem:read_range(0x400000, 0x401FFF, 8)
     output:write(string.format("%d %08X %08X\n", f, fnv(ram), fnv(pal)))
@@ -125,13 +125,13 @@ suscripcion_huellas = emu.add_machine_frame_notifier(function()
         output:write(string.format("R %d %06X %04X %s\n", f, s["PC"].value, s["SR"].value, table.concat(r, " ")))
     end
     if dump[f] then
-        local v = io.open(string.format("%s/ram_mame_%06d.bin", dir_volcados, f), "wb")
+        local v = io.open(string.format("%s/ram_mame_%06d.bin", dump_dir, f), "wb")
         v:write(ram)
         v:close()
     end
 end)
 
-notificador_fin_huellas = emu.add_machine_stop_notifier(function()
-    cerrar_entradas()
+fingerprints_stop_sub = emu.add_machine_stop_notifier(function()
+    close_inputs()
     output:close()
 end)

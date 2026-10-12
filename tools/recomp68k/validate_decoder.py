@@ -1,10 +1,9 @@
-"""Compara el decodificador propio con Capstone sobre todas las instrucciones del listado de P1.
+"""Compares our own decoder with Capstone over every instruction in the P1 listing.
 
-Compara longitud en bytes y mnemónico base. Las diferencias se agrupan por tipo para revisarlas
-a mano: puede equivocarse cualquiera de los dos (Capstone decodifica algunos formatos del 68020
-incluso en mode 68000).
+Compares length in bytes and base mnemonic. Differences are grouped by kind for manual review:
+either side may be wrong (Capstone decodes some 68020 formats even in 68000 mode).
 
-Uso: python tools/recomp68k/validate_decoder.py
+Usage: python tools/recomp68k/validate_decoder.py
 """
 from __future__ import annotations
 
@@ -15,13 +14,13 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from decoder import decodificar  # noqa: E402
+from decoder import decode  # noqa: E402
 
-RAIZ = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[3]))
+ROOT = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[3]))
 
 
-def nombre_capstone(i) -> str:
-    """Nuestro name canónico expresado como lo escribe Capstone."""
+def capstone_name(i) -> str:
+    """Our canonical name, expressed the way Capstone writes it."""
     if i.op == "bcc":
         return "b" + i.cc
     if i.op == "dbcc":
@@ -38,40 +37,40 @@ def nombre_capstone(i) -> str:
 
 
 def main() -> int:
-    raw = (RAIZ / "roms" / "mslugx_game_m68k").read_bytes()[:1 << 20]
+    raw = (ROOT / "roms" / "mslugx_game_m68k").read_bytes()[:1 << 20]
     cpu = bytearray(len(raw))
     cpu[0::2], cpu[1::2] = raw[1::2], raw[0::2]
-    leer16 = lambda a: int.from_bytes(cpu[a:a + 2], "big") if a + 2 <= len(cpu) else 0  # noqa: E731
+    read16 = lambda a: int.from_bytes(cpu[a:a + 2], "big") if a + 2 <= len(cpu) else 0  # noqa: E731
 
     import capstone
     cs = capstone.Cs(capstone.CS_ARCH_M68K, capstone.CS_MODE_BIG_ENDIAN | capstone.CS_MODE_M68K_000)
     total = 0
-    distintos = Counter()
-    ejemplos = {}
-    for line in (RAIZ / "analisis" / "listing_p1.txt").read_text(encoding="utf-8").splitlines():
+    mismatches = Counter()
+    examples = {}
+    for line in (ROOT / "analysis" / "listing_p1.txt").read_text(encoding="utf-8").splitlines():
         m = re.match(r"^([0-9A-F]{6})[* ] (\S+)", line)
         if not m:
             continue
-        dir_ = int(m.group(1), 16)
+        addr = int(m.group(1), 16)
         cap = m.group(2).split(".")[0]
         total += 1
-        i = decodificar(leer16, dir_)
-        largo_cap = next(cs.disasm(bytes(cpu[dir_:dir_ + 10]), dir_, count=1)).size
+        i = decode(read16, addr)
+        cap_length = next(cs.disasm(bytes(cpu[addr:addr + 10]), addr, count=1)).size
         if i is None:
-            clave = f"nuestro: invalido / capstone: {cap}"
-        elif nombre_capstone(i) != cap:
-            clave = f"name: nuestro {nombre_capstone(i)} / capstone {cap}"
-        elif i.largo != largo_cap:
-            clave = f"largo: nuestro {i.largo} / capstone {largo_cap} ({cap})"
+            key = f"ours: invalid / capstone: {cap}"
+        elif capstone_name(i) != cap:
+            key = f"name: ours {capstone_name(i)} / capstone {cap}"
+        elif i.length != cap_length:
+            key = f"length: ours {i.length} / capstone {cap_length} ({cap})"
         else:
             continue
-        distintos[clave] += 1
-        ejemplos.setdefault(clave, f"{dir_:06X} {line[8:]}")
-    # longitudes: se comparan con la siguiente dirección del listado cuando es contigua
-    print(f"instrucciones comparadas: {total}")
-    print(f"coinciden en mnemónico: {total - sum(distintos.values())}")
-    for k, n in distintos.most_common(40):
-        print(f"  {n:6d}  {k:<55} ej. {ejemplos[k]}")
+        mismatches[key] += 1
+        examples.setdefault(key, f"{addr:06X} {line[8:]}")
+    # lengths: compared with the next address in the listing when it is contiguous
+    print(f"instructions compared: {total}")
+    print(f"matching mnemonic: {total - sum(mismatches.values())}")
+    for k, n in mismatches.most_common(40):
+        print(f"  {n:6d}  {k:<55} e.g. {examples[k]}")
     return 0
 
 

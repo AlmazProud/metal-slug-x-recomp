@@ -1,4 +1,4 @@
-/* Referencia del lockstep: Musashi puro, instrucción por instrucción, desde el reset. */
+/* Lockstep reference: pure Musashi, instruction by instruction, from reset. */
 #include "m68k.h"
 #include "m68kcpu.h"
 #include "cycles68k.h"
@@ -9,8 +9,8 @@ void ref_reset(void)
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     m68k_pulse_reset();
     m68k_execute(1);
-    /* El reset del 68000 no define D0-D7/A0-A6/USP; Musashi conserva lo anterior. Ambos lados
-     * de la prueba parten de cero. */
+    /* The 68000 reset does not define D0-D7/A0-A6/USP; Musashi keeps the previous values. Both
+     * sides of the test start from zero. */
     for (int i = 0; i < 8; i++) {
         m68k_set_reg(M68K_REG_D0 + i, 0);
         if (i < 7) m68k_set_reg(M68K_REG_A0 + i, 0);
@@ -19,26 +19,26 @@ void ref_reset(void)
 }
 
 
-static int ajuste_actual(void)
+static int current_adjustment(void)
 {
-    Cpu68k previo = {0};
+    Cpu68k prev = {0};
     for (int i = 0; i < 8; i++) {
-        previo.d[i] = m68k_get_reg(NULL, (m68k_register_t)(M68K_REG_D0 + i));
-        previo.a[i] = m68k_get_reg(NULL, (m68k_register_t)(M68K_REG_A0 + i));
+        prev.d[i] = m68k_get_reg(NULL, (m68k_register_t)(M68K_REG_D0 + i));
+        prev.a[i] = m68k_get_reg(NULL, (m68k_register_t)(M68K_REG_A0 + i));
     }
-    previo.pc = m68k_get_reg(NULL, M68K_REG_PC);
-    return cycles_adjust_previous(&previo);
+    prev.pc = m68k_get_reg(NULL, M68K_REG_PC);
+    return cycles_adjust_previous(&prev);
 }
 
-/* Ciclos que el código generado suma ANTES de ejecutar la instrucción: base + ajuste. */
-int ref_ciclos_base(unsigned pc) { return CYC_INSTRUCTION[m68k_read_memory_16(pc) & 0xFFFF] + ajuste_actual(); }
+/* Cycles the generated code adds BEFORE executing the instruction: base + adjustment. */
+int ref_base_cycles(unsigned pc) { return CYC_INSTRUCTION[m68k_read_memory_16(pc) & 0xFFFF] + current_adjustment(); }
 
-/* Una instrucción, con el mismo ajuste de cycles que el código generado (cycles68k.h). */
-int ref_ejecutar_una(void)
+/* One instruction, with the same cycle adjustment as the generated code (cycles68k.h). */
+int ref_execute_one(void)
 {
-    int ajuste = ajuste_actual();
-    return m68k_execute(1) + ajuste;
+    int adjustment = current_adjustment();
+    return m68k_execute(1) + adjustment;
 }
-int ref_detenido(void) { return CPU_STOPPED != 0; }
-void ref_despertar(void) { CPU_STOPPED = 0; }
+int ref_stopped(void) { return CPU_STOPPED != 0; }
+void ref_wake(void) { CPU_STOPPED = 0; }
 unsigned ref_reg(int r) { return m68k_get_reg(NULL, (m68k_register_t)r); }

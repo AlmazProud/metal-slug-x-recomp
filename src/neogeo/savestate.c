@@ -1,15 +1,15 @@
-/* Estados guardados: la máquina completa en un búfer, entre frames.
+/* Save states: the whole machine in a buffer, between frames.
  *
- * Formato: "PDNGEST" + versión (uint32) + el contenido de cada módulo en orden fijo (estructuras
- * tal cual, más el estado de ymfm). Solo sirve para el mismo ejecutable: si cambia la versión o
- * el tamaño, el estado se rechaza sin tocar la máquina.
+ * Format: "PDNGEST" + version (uint32) + the contents of each module in a fixed order (structs
+ * as-is, plus the ymfm state). Only valid for the same executable: if the version or the size
+ * changes, the state is rejected without touching the machine.
  */
 #include "neogeo.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-#define MAGIA "PDNGEST"
+#define MAGIC "PDNGEST"
 #define VERSION 1u
 
 void ng_state_block(NgState *e, void *p, size_t n)
@@ -21,39 +21,39 @@ void ng_state_block(NgState *e, void *p, size_t n)
     e->pos += n;
 }
 
-static void recorrer(NgState *e)
+static void walk(NgState *e)
 {
-    char magia[8] = MAGIA;
+    char magic[8] = MAGIC;
     uint32_t version = VERSION;
-    ng_state_block(e, magia, sizeof magia);
+    ng_state_block(e, magic, sizeof magic);
     ng_state_block(e, &version, sizeof version);
     ng_machine_state(e);
     ng_rtc_state(e);
     ng_sound_state(e);
 }
 
-uint8_t *ng_state_save(size_t *tam)
+uint8_t *ng_state_save(size_t *size)
 {
     NgState e = {NULL, 0, 0, 1};
-    recorrer(&e);                           /* primera pasada: solo mide */
+    walk(&e);                               /* first pass: only measures */
     e.tam = e.pos;
     e.pos = 0;
     e.data = malloc(e.tam);
     if (!e.data) return NULL;
-    recorrer(&e);
-    *tam = e.tam;
+    walk(&e);
+    *size = e.tam;
     return e.data;
 }
 
-int ng_state_load(const uint8_t *data, size_t tam)
+int ng_state_load(const uint8_t *data, size_t size)
 {
-    NgState medida = {NULL, 0, 0, 1};
-    recorrer(&medida);
+    NgState measure = {NULL, 0, 0, 1};
+    walk(&measure);
     uint32_t version;
-    if (tam != medida.pos || tam < 12 || memcmp(data, MAGIA, 8) != 0) return -1;
+    if (size != measure.pos || size < 12 || memcmp(data, MAGIC, 8) != 0) return -1;
     memcpy(&version, data + 8, sizeof version);
     if (version != VERSION) return -1;
-    NgState e = {(uint8_t *)data, tam, 0, 0};
-    recorrer(&e);
+    NgState e = {(uint8_t *)data, size, 0, 0};
+    walk(&e);
     return 0;
 }

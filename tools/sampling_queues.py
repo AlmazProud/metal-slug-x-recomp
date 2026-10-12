@@ -1,23 +1,23 @@
-"""Colas de muestreo de interrupciones (y colas efectivas) del 68000, a partir de la descripción del microcódigo que
-MAME usa como documentación (src/devices/cpu/m68000/m68000-sdf.cpp, no se copia código).
+"""68000 interrupt sampling tails (and effective tails), derived from the microcode description that
+MAME uses as documentation (src/devices/cpu/m68000/m68000-sdf.cpp; no code is copied).
 
-Para cada manejador de instrucción recorre todos los caminos y mide cuántos cycles quedan desde
-el último paso en que el 68000 decide si atiende una interrupción
-("m_next_state = m_int_next_state") hasta el final de la instrucción. Ignora los bloques de
-suspensión ("if(m_icount <= 0) {...}") y de error de dirección, que no son el camino normal.
+For each instruction handler it walks every path and measures how many cycles remain from
+the last step at which the 68000 decides whether to take an interrupt
+("m_next_state = m_int_next_state") to the end of the instruction. It ignores the
+suspension blocks ("if(m_icount <= 0) {...}") and the address-error blocks, which are not the normal path.
 
-Cola efectiva: cycles desde el último fin de acceso al bus anterior (o igual) al muestreo hasta
-el final; None si no hay acceso antes del muestreo dentro de la instrucción (el último acceso
-es el final de la instrucción anterior). MAME solo procesa una IRQ activada en T cuando la CPU
-termina un acceso con T <= fin; los muestreos anteriores a ese punto no la ven.
+Effective tail: cycles from the last bus-access end before (or at) the sampling point to
+the end; None if there is no access before the sampling point within the instruction (the last access
+is the end of the previous instruction). MAME only processes an IRQ raised at T when the CPU
+finishes an access with T <= end; sampling points before that do not see it.
 
-Salida por camino: (duración, L, U), medidos desde el inicio de la instrucción: L = último fin de
-acceso anterior o igual al muestreo (None: ninguno, vale el de la instrucción anterior) y U = último fin de
-acceso de la instrucción.
+Output per path: (duration, L, U), measured from the start of the instruction: L = last
+access end before or at the sampling point (None: none, the previous instruction's applies) and U = last
+access end of the instruction.
 
-Uso: python sampling_queues.py RUTA/m68000-sdf.cpp
-Imprime un patrón (value/máscara) por manejador con su conjunto de colas, para escribir las
-reglas por familia de src/cpu/cycles68k.h.
+Usage: python sampling_queues.py PATH/m68000-sdf.cpp
+Prints one pattern (value/mask) per handler with its set of tails, used to write the
+per-family rules of src/cpu/cycles68k.h.
 """
 from __future__ import annotations
 
@@ -26,16 +26,16 @@ import sys
 from collections import defaultdict
 
 
-def bloques(lineas: list[str]) -> list[str]:
-    """Quita los bloques condicionales de suspensión y de error de dirección."""
+def strip_blocks(lines: list[str]) -> list[str]:
+    """Removes the conditional suspension and address-error blocks."""
     out, i = [], 0
-    while i < len(lineas):
-        l = lineas[i].strip()
+    while i < len(lines):
+        l = lines[i].strip()
         if l.startswith("if(m_icount <= 0) {") or l.startswith("if(m_aob & 1) {"):
-            prof = l.count("{") - l.count("}")
+            depth = l.count("{") - l.count("}")
             i += 1
-            while i < len(lineas) and prof > 0:
-                prof += lineas[i].count("{") - lineas[i].count("}")
+            while i < len(lines) and depth > 0:
+                depth += lines[i].count("{") - lines[i].count("}")
                 i += 1
             continue
         out.append(l)
@@ -43,46 +43,46 @@ def bloques(lineas: list[str]) -> list[str]:
     return out
 
 
-def caminos(lineas: list[str], inicio: int, etiquetas: dict[str, int], muestreo: int | None,
-            cycles: int, visitas: int, res: set, total: int = 0, acceso: int | None = None,
-            efectiva: int | None = None):
-    if visitas > 12:                 # bucles de microcódigo (MOVEM, desplazamientos): basta con unos caminos
+def walk_paths(lines: list[str], start: int, labels: dict[str, int], sample: int | None,
+               cycles: int, visits: int, res: set, total: int = 0, access: int | None = None,
+               effective: int | None = None):
+    if visits > 12:                  # microcode loops (MOVEM, shifts): a few paths are enough
         return
-    i = inicio
-    while i < len(lineas):
-        l = lineas[i]
+    i = start
+    while i < len(lines):
+        l = lines[i]
         if "m_next_state = m_int_next_state" in l:
-            muestreo, cycles = 0, 0
-            efectiva = total - acceso if acceso is not None else None
+            sample, cycles = 0, 0
+            effective = total - access if access is not None else None
         m = re.search(r"m_icount -= (\d+);", l)
         if m:
             cycles += int(m.group(1))
             total += int(m.group(1))
-            if any("_interruptible(" in x or ".read" in x or ".write" in x for x in lineas[max(0, i - 3):i]):
-                acceso = total
-        if l.startswith("m_inst_state = m_next_state ?") or (l == "return;" and i == len(lineas) - 1):
-            if muestreo is not None:
-                res.add((total, None if efectiva is None else total - (efectiva + cycles), acceso))
+            if any("_interruptible(" in x or ".read" in x or ".write" in x for x in lines[max(0, i - 3):i]):
+                access = total
+        if l.startswith("m_inst_state = m_next_state ?") or (l == "return;" and i == len(lines) - 1):
+            if sample is not None:
+                res.add((total, None if effective is None else total - (effective + cycles), access))
             return
         m = re.match(r"goto (\w+);", l)
         if m:
-            if visitas > 20:
+            if visits > 20:
                 return
-            caminos(lineas, etiquetas[m.group(1)] + 1, etiquetas, muestreo, cycles, visitas + 1, res, total, acceso, efectiva)
+            walk_paths(lines, labels[m.group(1)] + 1, labels, sample, cycles, visits + 1, res, total, access, effective)
             return
         if l.startswith("if(m_t)") or l.startswith("if(!m_t)") or re.match(r"if\(.*\)$", l):
-            # bifurcación "if(cond) goto A; else goto B;"
-            sig = lineas[i + 1] if i + 1 < len(lineas) else ""
-            mm = re.match(r"goto (\w+);", sig)
-            if mm and i + 3 < len(lineas) and lineas[i + 2] == "else":
-                mm2 = re.match(r"goto (\w+);", lineas[i + 3])
-                caminos(lineas, etiquetas[mm.group(1)] + 1, etiquetas, muestreo, cycles, visitas + 1, res, total, acceso, efectiva)
+            # branch "if(cond) goto A; else goto B;"
+            nxt = lines[i + 1] if i + 1 < len(lines) else ""
+            mm = re.match(r"goto (\w+);", nxt)
+            if mm and i + 3 < len(lines) and lines[i + 2] == "else":
+                mm2 = re.match(r"goto (\w+);", lines[i + 3])
+                walk_paths(lines, labels[mm.group(1)] + 1, labels, sample, cycles, visits + 1, res, total, access, effective)
                 if mm2:
-                    caminos(lineas, etiquetas[mm2.group(1)] + 1, etiquetas, muestreo, cycles, visitas + 1, res, total, acceso, efectiva)
+                    walk_paths(lines, labels[mm2.group(1)] + 1, labels, sample, cycles, visits + 1, res, total, access, effective)
                 return
         i += 1
-    if muestreo is not None:
-        res.add((total, None if efectiva is None else total - (efectiva + cycles), acceso))
+    if sample is not None:
+        res.add((total, None if effective is None else total - (effective + cycles), access))
 
 
 def main() -> int:
@@ -91,12 +91,12 @@ def main() -> int:
         m = re.match(r"(\w+)_df\(\)\s*//\s*([0-9a-f]{4})\s+([0-9a-f]{4})", f)
         if not m:
             continue
-        cuerpo = f.split("\n", 1)[1]
-        cuerpo = cuerpo[:cuerpo.rfind("}")]
-        lineas = [l for l in bloques(cuerpo.splitlines()) if l and not l.startswith("//")]
-        etiquetas = {l[:-1]: k for k, l in enumerate(lineas) if re.fullmatch(r"\w+:", l)}
+        body = f.split("\n", 1)[1]
+        body = body[:body.rfind("}")]
+        lines = [l for l in strip_blocks(body.splitlines()) if l and not l.startswith("//")]
+        labels = {l[:-1]: k for k, l in enumerate(lines) if re.fullmatch(r"\w+:", l)}
         res: set = set()
-        caminos(lineas, 0, etiquetas, None, 0, 0, res)
+        walk_paths(lines, 0, labels, None, 0, 0, res)
         print(f"{m.group(1):<28} {m.group(2).upper()}/{m.group(3).upper()} {sorted(res, key=str)}")
     return 0
 

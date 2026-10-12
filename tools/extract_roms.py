@@ -1,15 +1,15 @@
-"""Reconstruye el set de MAME (mslugx + neogeo) a partir de los archivos de DotEmu/GOG.
+"""Rebuilds the MAME set (mslugx + neogeo) from the DotEmu/GOG files.
 
-Uso:
+Usage:
     python tools/extract_roms.py [--roms DIR] [--output DIR] [--mame EXE]
 
-- Lee los archivos mslugx_* de --roms (por defecto %PD_ROMS%).
-- Escribe <output>/mslugx/*.{p1,ep1,s1,m1,v*,c*} y <output>/neogeo/* (por defecto <roms>/mame).
-- Obtiene los nombres y hashes esperados de `mame -listxml` (MAME es el oráculo),
-  verifica CRC32 y SHA1 de cada archivo reconstruido y muestra un reporte.
+- Reads the mslugx_* files from --roms (%PD_ROMS% by default).
+- Writes <output>/mslugx/*.{p1,ep1,s1,m1,v*,c*} and <output>/neogeo/* (<roms>/mame by default).
+- Gets the expected names and hashes from `mame -listxml` (MAME is the oracle),
+  checks the CRC32 and SHA1 of each rebuilt file and prints a report.
 
-Los formatos y transformaciones están documentados en docs/ROM_MAP.md.
-Este script no contiene data de los ROMs: solo transformaciones.
+The formats and transformations are documented in docs/ROM_MAP.md.
+This script contains no ROM data: only transformations.
 """
 from __future__ import annotations
 
@@ -27,94 +27,94 @@ import numpy as np
 MB = 1 << 20
 
 
-# ---------------------------------------------------------------- transformaciones
+# ---------------------------------------------------------------- transformations
 
-def fix_dotemu_a_neogeo(d: bytes) -> bytes:
-    """Fix 8x8 de DotEmu (4bpp, fila mayor, 4 bytes por fila, nibble bajo = píxel izquierdo)
-    al formato S de la Neo Geo (por tile de 32 bytes: 4 grupos de columnas de 8 bytes,
-    un byte por fila; grupos en el orden de píxeles 4-5, 6-7, 0-1, 2-3)."""
-    t = np.frombuffer(d, np.uint8).reshape(-1, 8, 4)        # tile, fila, par de píxeles
-    grupo_de_par = (2, 3, 0, 1)                             # par k -> grupo de 8 bytes en el tile S
-    out = np.empty((t.shape[0], 4, 8), np.uint8)            # tile, grupo, fila
-    for k, g in enumerate(grupo_de_par):
+def fix_dotemu_to_neogeo(d: bytes) -> bytes:
+    """DotEmu 8x8 fix (4bpp, row-major, 4 bytes per row, low nibble = left pixel)
+    to the Neo Geo S format (per 32-byte tile: 4 column groups of 8 bytes,
+    one byte per row; groups in pixel order 4-5, 6-7, 0-1, 2-3)."""
+    t = np.frombuffer(d, np.uint8).reshape(-1, 8, 4)        # tile, row, pixel pair
+    group_of_pair = (2, 3, 0, 1)                            # pair k -> 8-byte group in the S tile
+    out = np.empty((t.shape[0], 4, 8), np.uint8)            # tile, group, row
+    for k, g in enumerate(group_of_pair):
         out[:, g, :] = t[:, :, k]
     return out.tobytes()
 
 
-def sprites_dotemu_a_neogeo(d: bytes) -> tuple[bytes, bytes]:
-    """Bloque de sprites de DotEmu (tiles 16x16, 4bpp, fila mayor, 8 bytes por fila,
-    nibble bajo = píxel izquierdo) a un par de ROMs C (impar: planos 0-1, par: planos 2-3).
+def sprites_dotemu_to_neogeo(d: bytes) -> tuple[bytes, bytes]:
+    """DotEmu sprite block (16x16 tiles, 4bpp, row-major, 8 bytes per row,
+    low nibble = left pixel) to a pair of C ROMs (odd: planes 0-1, even: planes 2-3).
 
-    Formato Neo Geo por tile (128 bytes de la región entrelazada C impar/C par):
-      mitad izquierda (x 0-7) en 0x40-0x7F, mitad derecha (x 8-15) en 0x00-0x3F,
-      4 bytes por fila: +0 plano 0, +1 plano 2, +2 plano 1, +3 plano 3;
-      dentro de cada byte, el píxel x de la mitad ocupa el bit (7 - x)
-      (verificado contra el CRC de MAME: ver docs/ROM_MAP.md)."""
+    Neo Geo format per tile (128 bytes of the interleaved odd C/even C region):
+      left half (x 0-7) at 0x40-0x7F, right half (x 8-15) at 0x00-0x3F,
+      4 bytes per row: +0 plane 0, +1 plane 2, +2 plane 1, +3 plane 3;
+      within each byte, pixel x of the half occupies bit (7 - x)
+      (verified against MAME's CRC: see docs/ROM_MAP.md)."""
     t = np.frombuffer(d, np.uint8).reshape(-1, 16, 8)
     px = np.empty((t.shape[0], 16, 16), np.uint8)
     px[:, :, 0::2] = t & 15
     px[:, :, 1::2] = t >> 4
-    pesos = (1 << np.arange(7, -1, -1)).astype(np.uint16)   # píxel 0 -> bit 7
+    weights = (1 << np.arange(7, -1, -1)).astype(np.uint16)   # pixel 0 -> bit 7
     region = np.empty((t.shape[0], 128), np.uint8)
-    for mitad, base in ((0, 0x40), (1, 0x00)):
-        m = px[:, :, mitad * 8:(mitad + 1) * 8]
-        for desplaz, plano in ((0, 0), (1, 2), (2, 1), (3, 3)):
-            bits = ((m >> plano) & 1).astype(np.uint16) * pesos
-            region[:, base + desplaz: base + 64: 4] = bits.sum(axis=2).astype(np.uint8)
+    for half, base in ((0, 0x40), (1, 0x00)):
+        m = px[:, :, half * 8:(half + 1) * 8]
+        for offset, plane in ((0, 0), (1, 2), (2, 1), (3, 3)):
+            bits = ((m >> plane) & 1).astype(np.uint16) * weights
+            region[:, base + offset: base + 64: 4] = bits.sum(axis=2).astype(np.uint8)
     r = region.reshape(-1)
     return r[0::2].tobytes(), r[1::2].tobytes()
 
 
-# ---------------------------------------------------------------- oráculo (MAME)
+# ---------------------------------------------------------------- oracle (MAME)
 
-def esperados_de_mame(mame: Path) -> dict[str, dict]:
+def expected_from_mame(mame: Path) -> dict[str, dict]:
     xml = subprocess.run([str(mame), "-listxml", "mslugx"], capture_output=True, check=True,
                          cwd=mame.parent).stdout
-    esperado = {}
+    expected = {}
     for m in ET.fromstring(xml).iter("machine"):
         for r in m.iter("rom"):
             if r.get("crc"):
-                esperado.setdefault(r.get("name"), {
+                expected.setdefault(r.get("name"), {
                     "crc": r.get("crc"), "sha1": r.get("sha1"),
-                    "size": int(r.get("size")), "region": r.get("region"), "maquina": m.get("name")})
-    return esperado
+                    "size": int(r.get("size")), "region": r.get("region"), "machine": m.get("name")})
+    return expected
 
 
-# ---------------------------------------------------------------- reconstrucción
+# ---------------------------------------------------------------- rebuild
 
-def reconstruir(roms: Path) -> dict[str, tuple[str, bytes]]:
-    """Devuelve {nombre_mame: (carpeta, data)}."""
-    leer = lambda n: (roms / n).read_bytes()
+def rebuild(roms: Path) -> dict[str, tuple[str, bytes]]:
+    """Returns {mame_name: (folder, data)}."""
+    read = lambda n: (roms / n).read_bytes()
     out: dict[str, tuple[str, bytes]] = {}
 
-    p = leer("mslugx_game_m68k")                      # mismo orden de bytes que los .p de MAME
+    p = read("mslugx_game_m68k")                      # same byte order as MAME's .p files
     out["250-p1.p1"] = ("mslugx", p[:1 * MB])
     out["250-p2.ep1"] = ("mslugx", p[1 * MB:5 * MB])
 
-    out["250-s1.s1"] = ("mslugx", fix_dotemu_a_neogeo(leer("mslugx_game_sfix")))
-    out["250-m1.m1"] = ("mslugx", leer("mslugx_game_z80"))
+    out["250-s1.s1"] = ("mslugx", fix_dotemu_to_neogeo(read("mslugx_game_sfix")))
+    out["250-m1.m1"] = ("mslugx", read("mslugx_game_z80"))
 
-    v = leer("mslugx_adpcm")
+    v = read("mslugx_adpcm")
     out["250-v1.v1"] = ("mslugx", v[0:4 * MB])
     out["250-v2.v2"] = ("mslugx", v[4 * MB:8 * MB])
     out["250-v3.v3"] = ("mslugx", v[8 * MB:10 * MB])
 
-    c = leer("mslugx_tiles")
+    c = read("mslugx_tiles")
     for k in range(3):
-        impar, par = sprites_dotemu_a_neogeo(c[k * 16 * MB:(k + 1) * 16 * MB])
-        out[f"250-c{2 * k + 1}.c{2 * k + 1}"] = ("mslugx", impar)
-        out[f"250-c{2 * k + 2}.c{2 * k + 2}"] = ("mslugx", par)
+        odd, even = sprites_dotemu_to_neogeo(c[k * 16 * MB:(k + 1) * 16 * MB])
+        out[f"250-c{2 * k + 1}.c{2 * k + 1}"] = ("mslugx", odd)
+        out[f"250-c{2 * k + 2}.c{2 * k + 2}"] = ("mslugx", even)
 
-    out["sp-u2.sp1"] = ("neogeo", leer("mslugx_bios_m68k"))
-    out["sfix.sfix"] = ("neogeo", fix_dotemu_a_neogeo(leer("mslugx_bios_sfix")))
-    out["000-lo.lo"] = ("neogeo", leer("mslugx_zoom_table"))
+    out["sp-u2.sp1"] = ("neogeo", read("mslugx_bios_m68k"))
+    out["sfix.sfix"] = ("neogeo", fix_dotemu_to_neogeo(read("mslugx_bios_sfix")))
+    out["000-lo.lo"] = ("neogeo", read("mslugx_zoom_table"))
     return out
 
 
-SUSTITUTOS = {
-    # GOG no incluye el BIOS Z80 de la placa MVS. Como en la Neo Geo AES (que no tiene SM1),
-    # el Z80 arranca desde el M1 del cartucho. MAME lo acepta con advertencia de checksum.
-    # Decisión documentada en docs/ROM_MAP.md ("sm1.sm1: sustituto").
+SUBSTITUTES = {
+    # GOG does not include the Z80 BIOS of the MVS board. As on the Neo Geo AES (which has no SM1),
+    # the Z80 boots from the cartridge's M1. MAME accepts it with a checksum warning.
+    # Decision documented in docs/ROM_MAP.md (the sm1.sm1 substitute).
     "sm1.sm1": ("neogeo", "250-m1.m1"),
 }
 
@@ -128,47 +128,47 @@ def main() -> int:
     ap.add_argument("--mame", type=Path, default=Path(pd_tools, "mame", "mame.exe") if pd_tools else None)
     a = ap.parse_args()
     if not a.roms or not a.mame:
-        ap.error("active el entorno (env.ps1) o indica --roms y --mame")
+        ap.error("activate the environment (env.ps1) or pass --roms and --mame")
     output = a.output or (a.roms / "mame")
 
-    esperado = esperados_de_mame(a.mame)
-    data = reconstruir(a.roms)
-    sustituidos = set()
-    for name, (carpeta, origen) in SUSTITUTOS.items():
-        real = output / carpeta / name
-        if real.is_file() and f"{zlib.crc32(real.read_bytes()):08x}" == esperado[name]["crc"]:
-            continue                                  # el usuario aportó el archivo auténtico
-        data[name] = (carpeta, data[origen][1])
-        sustituidos.add(name)
+    expected = expected_from_mame(a.mame)
+    data = rebuild(a.roms)
+    substituted = set()
+    for name, (folder, source) in SUBSTITUTES.items():
+        real = output / folder / name
+        if real.is_file() and f"{zlib.crc32(real.read_bytes()):08x}" == expected[name]["crc"]:
+            continue                                  # the user supplied the genuine file
+        data[name] = (folder, data[source][1])
+        substituted.add(name)
 
-    print(f"{'archivo':<14} {'carpeta':<7} {'bytes':>9}  {'crc32':<8}  estado")
-    fallas = 0
-    for name, (carpeta, b) in data.items():
-        destino = output / carpeta
-        destino.mkdir(parents=True, exist_ok=True)
-        (destino / name).write_bytes(b)
+    print(f"{'file':<14} {'folder':<7} {'bytes':>9}  {'crc32':<8}  status")
+    failures = 0
+    for name, (folder, b) in data.items():
+        target = output / folder
+        target.mkdir(parents=True, exist_ok=True)
+        (target / name).write_bytes(b)
         crc = f"{zlib.crc32(b):08x}"
         sha1 = hashlib.sha1(b).hexdigest()
-        e = esperado.get(name)
-        if name in sustituidos:
-            estado = f"SUSTITUTO ({SUSTITUTOS[name][1]}; MAME avisará checksum)"
+        e = expected.get(name)
+        if name in substituted:
+            status = f"SUBSTITUTE ({SUBSTITUTES[name][1]}; MAME will warn about the checksum)"
         elif e is None:
-            estado = "SIN REFERENCIA EN MAME"
+            status = "NO REFERENCE IN MAME"
         elif crc == e["crc"] and sha1 == e["sha1"] and len(b) == e["size"]:
-            estado = "OK (CRC32+SHA1)"
+            status = "OK (CRC32+SHA1)"
         else:
-            estado = f"DISTINTO (MAME espera crc {e['crc']})"
-        fallas += not (estado.startswith("OK") or estado.startswith("SUSTITUTO")
-                       or name == "250-p1.p1")       # P1 de GOG: diferencia conocida (ROM_MAP.md)
-        print(f"{name:<14} {carpeta:<7} {len(b):>9}  {crc}  {estado}")
+            status = f"DIFFERENT (MAME expects crc {e['crc']})"
+        failures += not (status.startswith("OK") or status.startswith("SUBSTITUTE")
+                         or name == "250-p1.p1")       # GOG's P1: known difference (ROM_MAP.md)
+        print(f"{name:<14} {folder:<7} {len(b):>9}  {crc}  {status}")
 
-    faltan = sorted(n for n, e in esperado.items()
-                    if n not in data and (e["maquina"] == "mslugx" and "bios" not in e["region"]
-                                           or e["region"] in ("audiobios", "fixedbios", "spritegen:zoomy")))
-    if faltan:
-        print("\nMAME también requiere (GOG no los incluye): " + ", ".join(faltan))
-    print(f"\nSalida: {output}")
-    return 1 if fallas else 0
+    missing = sorted(n for n, e in expected.items()
+                     if n not in data and (e["machine"] == "mslugx" and "bios" not in e["region"]
+                                            or e["region"] in ("audiobios", "fixedbios", "spritegen:zoomy")))
+    if missing:
+        print("\nMAME also requires (GOG does not include them): " + ", ".join(missing))
+    print(f"\nOutput: {output}")
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-/* SHA-256 (FIPS 180-4) para validar los archivos de la copia del usuario. */
+/* SHA-256 (FIPS 180-4) to validate the files of the user's copy. */
 #include "sha256.h"
 
 #include <string.h>
@@ -16,7 +16,7 @@ static const uint32_t K[64] = {
 
 #define ROR(x, n) ((x) >> (n) | (x) << (32 - (n)))
 
-static void bloque(uint32_t h[8], const uint8_t *p)
+static void block(uint32_t h[8], const uint8_t *p)
 {
     uint32_t w[64];
     for (int i = 0; i < 16; i++)
@@ -39,16 +39,16 @@ void sha256(const uint8_t *data, size_t n, uint8_t output[32])
 {
     uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
     size_t i = 0;
-    for (; i + 64 <= n; i += 64) bloque(h, data + i);
-    uint8_t resto[128] = {0};
+    for (; i + 64 <= n; i += 64) block(h, data + i);
+    uint8_t tail[128] = {0};
     size_t r = n - i;
-    memcpy(resto, data + i, r);
-    resto[r] = 0x80;
+    memcpy(tail, data + i, r);
+    tail[r] = 0x80;
     size_t total = r + 1 + 8 <= 64 ? 64 : 128;
     uint64_t bits = (uint64_t)n * 8;
-    for (int j = 0; j < 8; j++) resto[total - 1 - j] = (uint8_t)(bits >> (8 * j));
-    bloque(h, resto);
-    if (total == 128) bloque(h, resto + 64);
+    for (int j = 0; j < 8; j++) tail[total - 1 - j] = (uint8_t)(bits >> (8 * j));
+    block(h, tail);
+    if (total == 128) block(h, tail + 64);
     for (int j = 0; j < 8; j++) {
         output[4 * j] = (uint8_t)(h[j] >> 24); output[4 * j + 1] = (uint8_t)(h[j] >> 16);
         output[4 * j + 2] = (uint8_t)(h[j] >> 8); output[4 * j + 3] = (uint8_t)h[j];
