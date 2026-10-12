@@ -59,7 +59,27 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | 3A. Runtime: imagen y controles | **Cerrada** (2026-10-11). Ver `docs/FASE3_RUNTIME.md`. |
 | 3B. Runtime: sonido (Z80 + YM2610) | **Cerrada** (2026-10-11). Ver `docs/FASE3_RUNTIME.md`. |
 | 4. Arranque y verificación diferencial | **Cerrada** (2026-10-11). Ver `docs/FASE4_VERIFICACION.md`. |
-| 5. Mejoras nativas | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE5_NATIVO.md`. `ctest`: 5/5. |
+| 5. Mejoras nativas | **Cerrada** (2026-10-11). Ver `docs/FASE5_NATIVO.md`. |
+| 6A. Remaster: autodisparo y modo debug | **Cerrada** (2026-10-12), pendiente del visto bueno. Ver `docs/FASE6_REMASTER.md`. `ctest`: 5/5. |
+| 6B. Remaster: catálogo de sonidos, menú de sonido, vibración | No iniciada |
+| 6C. Remaster: menú de inicio moderno | No iniciada |
+| 6D. Remaster: pantalla ancha (investigar primero) | No iniciada |
+
+### Fase 6A: resultado
+
+Detalle en `docs/FASE6_REMASTER.md`.
+
+- **Autodisparo** por jugador: botón propio (B / G / RB) o en el disparo; 10, 7,5 o 5 por segundo.
+  La pistola no pasa de 10 disparos por segundo; se midió con el comando de sonido `F7`.
+- **Modo debug** (F3, `src/port/debug.c`):
+  - FPS;
+  - Hz de la lógica, del byte `0x10008A` (cuadros por ciclo: 2 normal, 3 o 4 ralentización);
+  - carga del 68000 (líneas fuera del bucle de espera `0x39B0`-`0x3A41`) y cuadros perdidos;
+  - gráfico;
+  - F6 cuadro a cuadro;
+  - ocultar sprites o fix;
+  - cajas de sprites, paleta y RAM.
+- `src/port/perfil.h`: direcciones propias de Metal Slug X.
 
 ### Fase 5: resultado
 
@@ -283,9 +303,11 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Próximo paso tras el visto bueno de la Fase 5:** a decidir con el usuario. Opciones:
-      separar lo específico de mslugx en un "perfil de juego" para portar otros títulos de la
-      Neo Geo (Metal Slug 1-5), o más grabaciones de otras misiones.
+- [ ] **Fase 6B** tras el visto bueno de la 6A: plan corto (catálogo de comandos de sonido del
+      Z80, menú de música, voces y efectos, vibración por comandos de sonido; `F7` = pistola)
+      y esperar el OK.
+- [ ] **Perfil de juego** para portar otros Metal Slug (lo propuso el usuario): separar lo
+      específico de mslugx (`src/port/perfil.h`, `roms.c`, protección en `bus.c`).
 - [ ] **Demo del attract sin recompilar:** en 12 000 cuadros sin entradas, 35 millones de pasos
       van por el intérprete (la cobertura de la recompilación viene de la Misión 1). Agregar esa
       cobertura si hace falta rendimiento; hoy rinde unos 1000 cuadros/s igual.
