@@ -25,6 +25,20 @@ CC_C = {"t": "CC_T", "f": "CC_F", "hi": "CC_HI", "ls": "CC_LS", "cc": "CC_CC", "
         "ge": "CC_GE", "lt": "CC_LT", "gt": "CC_GT", "le": "CC_LE"}
 
 
+# Ciclos de las excepciones del 68000 (tabla de Musashi 4.60 para el 68000, MIT).
+CICLOS_EXCEPCION = {4: 34, 5: 38, 6: 40, 7: 34, 8: 34, **{32 + n: 34 for n in range(16)}}
+
+# Ciclos base por opcode (tests/diferencial/volcar_ciclos.c -> archivo de 65536 bytes).
+CICLOS_BASE: bytes | None = None
+
+
+def cargar_ciclos(ruta) -> None:
+    global CICLOS_BASE
+    with open(ruta, "rb") as f:
+        CICLOS_BASE = f.read()
+    assert len(CICLOS_BASE) == 0x10000
+
+
 class NoSoportada(Exception):
     pass
 
@@ -121,7 +135,7 @@ class Emisor:
         return self.leer(ea, tam), None
 
     def privilegiada(self) -> None:
-        self.e(f"if (!c->s) {{ PD_EXCEPCION(8, 0x{self.i.dir:X}u); }}")
+        self.e(f"if (!c->s) {{ {self.excepcion(8, self.i.dir)} }}")
 
     # ------------------------------------------------------------ emisión
     def emitir(self) -> list[str]:
@@ -129,8 +143,21 @@ class Emisor:
         f = getattr(self, "op_" + i.op, None)
         if f is None:
             raise NoSoportada(i.op)
+        if CICLOS_BASE is not None:
+            self.e(f"c->ciclos += {self.base()};")
         f()
         return self.lineas
+
+    def base(self) -> int:
+        return CICLOS_BASE[self.i.opcode] if CICLOS_BASE is not None else 0
+
+    def ciclos(self, n) -> str:
+        """Sentencia que suma `n` ciclos (texto C o entero); vacía si no hay tabla de ciclos."""
+        return f"c->ciclos += {n}; " if CICLOS_BASE is not None else ""
+
+    def excepcion(self, vector: int, pc: int) -> str:
+        """Sentencia de excepción: su costo reemplaza al de la instrucción."""
+        return f"{self.ciclos(CICLOS_EXCEPCION[vector] - self.base())}PD_EXCEPCION({vector}, 0x{pc:X}u);"
 
     def fin(self) -> None:
         self.e(f"PD_SIGUIENTE(0x{self.sig():X}u);")
@@ -309,6 +336,7 @@ class Emisor:
 
     def op_bcc(self):
         self.e(f"if (cond(c, {CC_C[self.i.cc]})) {{ PD_SALTO(0x{self.i.destino:X}u); }}")
+        self.e(self.ciclos(2 if self.i.largo == 4 else -2))
         self.fin()
 
     def op_bsr(self):
@@ -346,7 +374,8 @@ class Emisor:
         r = self.i.ops[0].reg
         self.e(f"if (!cond(c, {CC_C[self.i.cc]})) {{")
         self.e(f"    uint32_t cnt = (c->d[{r}] - 1) & 0xFFFF; set_d(c, {r}, cnt, MASK_W);")
-        self.e(f"    if (cnt != 0xFFFF) {{ PD_SALTO(0x{self.i.destino:X}u); }}")
+        self.e(f"    if (cnt != 0xFFFF) {{ {self.ciclos(-2)}PD_SALTO(0x{self.i.destino:X}u); }}")
+        self.e(f"    {self.ciclos(2)}")
         self.e("}")
         self.fin()
 
@@ -359,20 +388,22 @@ class Emisor:
             self.escribir(ea, "b", v, d)
         else:
             self.escribir(ea, "b", v)
+            if self.i.cc != "t":                  # ST Dn ya trae su costo completo en la tabla base
+                self.e(f"if (cond(c, {CC_C[self.i.cc]})) {{ {self.ciclos(2)}}}")
         self.fin()
 
     def op_nop(self):
         self.fin()
 
     def op_trap(self):
-        self.e(f"PD_EXCEPCION({32 + self.i.dato}, 0x{self.sig():X}u);")
+        self.e(self.excepcion(32 + self.i.dato, self.sig()))
 
     def op_trapv(self):
-        self.e(f"if (c->v) {{ PD_EXCEPCION(7, 0x{self.sig():X}u); }}")
+        self.e(f"if (c->v) {{ {self.excepcion(7, self.sig())} }}")
         self.fin()
 
     def op_illegal(self):
-        self.e(f"PD_EXCEPCION(4, 0x{self.i.dir:X}u);")
+        self.e(self.excepcion(4, self.i.dir))
 
     def op_link(self):
         r = self.i.ops[0].reg
@@ -418,6 +449,7 @@ class Emisor:
         else:
             cnt_ea, dst = self.i.ops
             cnt = f"{cnt_ea.valor}u" if cnt_ea.modo == "#imm" else f"(c->d[{cnt_ea.reg}] & 63u)"
+            self.e(self.ciclos(f"2 * {cnt}"))
             r = self.tmp()
             self.e(f"uint32_t {r} = op_shift(c, SH_{tipo.upper()}, {int(izq)}, {cnt}, "
                    f"c->d[{dst.reg}] & {MASK[t]}, {MASK[t]}, {MSB[t]});")
@@ -437,6 +469,8 @@ class Emisor:
     def _mul(self, con_signo: bool):
         s = self.leer(self.i.ops[0], "w")
         r = self.i.ops[1].reg
+        if CICLOS_BASE is not None:
+            self.e(f"c->ciclos += {'ciclos_muls' if con_signo else 'ciclos_mulu'}({s});")
         if con_signo:
             expr = f"(uint32_t)((int32_t)(int16_t){s} * (int32_t)(int16_t)(c->d[{r}] & 0xFFFF))"
         else:
@@ -450,7 +484,7 @@ class Emisor:
     def _div(self, con_signo: bool):
         s = self.leer(self.i.ops[0], "w")
         r = self.i.ops[1].reg
-        self.e(f"if ({s} == 0) {{ PD_EXCEPCION(5, 0x{self.sig():X}u); }}")
+        self.e(f"if ({s} == 0) {{ {self.excepcion(5, self.sig())} }}")
         self.e(f"op_div{'s' if con_signo else 'u'}(c, {r}, {s});")
         self.fin()
 
@@ -465,6 +499,7 @@ class Emisor:
         t = self.i.tam
         ea = self.i.ops[0]
         n = TAMAÑO_BYTES[t]
+        self.e(self.ciclos(bin(self.i.lista).count("1") * (8 if t == "l" else 4)))
         if ea.modo == "(An)+":
             p = self.tmp("p")
             self.e(f"uint32_t {p} = c->a[{ea.reg}];")
@@ -481,6 +516,7 @@ class Emisor:
         t = self.i.tam
         ea = self.i.ops[0]
         n = TAMAÑO_BYTES[t]
+        self.e(self.ciclos(bin(self.i.lista).count("1") * (8 if t == "l" else 4)))
         regs = self._regs(self.i.lista)
         cop = self.tmp("r")
         self.e(f"uint32_t {cop}[16]; memcpy({cop}, c->d, 32); memcpy({cop} + 8, c->a, 32);")
@@ -550,8 +586,8 @@ class Emisor:
         r = self.i.ops[1].reg
         self.e(f"{{ int32_t v = (int16_t)(c->d[{r}] & 0xFFFF), lim = (int16_t){s};")
         self.e("  c->z = (v == 0); c->v = 0; c->c = 0;")
-        self.e(f"  if (v < 0) {{ c->n = 1; PD_EXCEPCION(6, 0x{self.sig():X}u); }}")
-        self.e(f"  if (v > lim) {{ c->n = 0; PD_EXCEPCION(6, 0x{self.sig():X}u); }} }}")
+        self.e(f"  if (v < 0) {{ c->n = 1; {self.excepcion(6, self.sig())} }}")
+        self.e(f"  if (v > lim) {{ c->n = 0; {self.excepcion(6, self.sig())} }} }}")
         self.fin()
 
     def op_tas(self):
@@ -617,7 +653,7 @@ class Emisor:
 
     def op_reset(self):
         self.privilegiada()
-        self.e("PD_RESET_EXTERNO();")
+        self.e(self.ciclos(132) + "PD_RESET_EXTERNO();")
         self.fin()
 
 

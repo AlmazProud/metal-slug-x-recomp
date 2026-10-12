@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "herramientas" / "recomp68k"))
 from decodificador import decodificar          # noqa: E402
+import generador                                  # noqa: E402
 from generador import Emisor, NoSoportada       # noqa: E402
 
 CABECERA = r"""/* GENERADO por tests/diferencial/generar_pruebas.py: NO EDITAR, NO VERSIONAR. */
@@ -47,7 +48,10 @@ def main() -> int:
     ap.add_argument("--listado", type=Path, required=True)
     ap.add_argument("--salida", type=Path, required=True)
     ap.add_argument("--por-opcode", type=int, default=2)
+    ap.add_argument("--ciclos", type=Path, help="tabla de ciclos base (volcar_ciclos)")
     a = ap.parse_args()
+    if a.ciclos:
+        generador.cargar_ciclos(a.ciclos)
 
     raw = (a.roms / "mslugx_game_m68k").read_bytes()[:1 << 20]
     cpu = bytearray(len(raw))

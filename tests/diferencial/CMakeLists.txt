@@ -11,13 +11,19 @@ if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALISIS}/listad
 endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+# Tabla de ciclos base de Musashi para el 68000, que usa el generador.
+add_executable(volcar_ciclos volcar_ciclos.c)
+target_link_libraries(volcar_ciclos PRIVATE musashi)
+set(CICLOS ${CMAKE_CURRENT_BINARY_DIR}/ciclos_68000.bin)
+add_custom_command(OUTPUT ${CICLOS} COMMAND volcar_ciclos ${CICLOS} DEPENDS volcar_ciclos VERBATIM)
 set(GEN ${CMAKE_CURRENT_BINARY_DIR}/pruebas_gen.c)
 file(GLOB RECOMP_PY ${PROJECT_SOURCE_DIR}/herramientas/recomp68k/*.py)
 add_custom_command(
     OUTPUT ${GEN}
     COMMAND Python3::Interpreter -I ${CMAKE_CURRENT_SOURCE_DIR}/generar_pruebas.py
-            --roms ${PD_ROMS} --listado ${PD_ANALISIS}/listado_p1.txt --salida ${GEN}
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/generar_pruebas.py ${RECOMP_PY}
+            --roms ${PD_ROMS} --listado ${PD_ANALISIS}/listado_p1.txt --salida ${GEN} --ciclos ${CICLOS}
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/generar_pruebas.py ${RECOMP_PY} ${CICLOS}
     COMMENT "Generando pruebas diferenciales desde los ROMs del usuario"
     VERBATIM)
 

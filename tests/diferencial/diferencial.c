@@ -33,7 +33,7 @@ static void estado_aleatorio(Estado *e, uint32_t pc)
     e->pc = pc;
 }
 
-static void ejecutar_recompilado(const Prueba *p, Estado *e)
+static int ejecutar_recompilado(const Prueba *p, Estado *e)
 {
     Cpu68k c;
     memset(&c, 0, sizeof c);
@@ -53,6 +53,7 @@ static void ejecutar_recompilado(const Prueba *p, Estado *e)
     e->sr = cpu_get_sr(&c);
     if (c.s) { e->ssp = c.a[7]; e->usp = c.usp; } else { e->usp = c.a[7]; e->ssp = c.ssp; }
     e->pc = c.pc;
+    return (int)c.ciclos;
 }
 
 static int comparar(const Estado *m, const Estado *r, const Capa *cm, const Capa *cr, char *det, size_t n)
@@ -104,11 +105,17 @@ int main(int argc, char **argv)
             estado_aleatorio(&ini, p->dir);
             mem_semilla(azar());
             em = ini; er = ini;
-            capa_m.n = 0; mem_usar_capa(&capa_m); ms_ejecutar(&em);
-            capa_r.n = 0; mem_usar_capa(&capa_r); ejecutar_recompilado(p, &er);
+            capa_m.n = 0; mem_usar_capa(&capa_m); int cic_m = ms_ejecutar(&em);
+            capa_r.n = 0; mem_usar_capa(&capa_r); int cic_r = ejecutar_recompilado(p, &er);
             casos++;
-            char det[400];
-            if (!comparar(&em, &er, &capa_m, &capa_r, det, sizeof det)) {
+            char det[400] = "";
+            int ok = comparar(&em, &er, &capa_m, &capa_r, det, sizeof det);
+            if (cic_m != cic_r) {
+                size_t k = strlen(det);
+                snprintf(det + k, sizeof det - k, " ciclos musashi=%d recomp=%d;", cic_m, cic_r);
+                ok = 0;
+            }
+            if (!ok) {
                 if (!fallos)
                     snprintf(primero, sizeof primero, "semilla %d, sr_ini=%04X:%s", s, ini.sr, det);
                 fallos++;

@@ -212,6 +212,26 @@ static inline uint32_t op_shift(Cpu68k *c, int tipo, int izq, uint32_t cnt, uint
     return v;
 }
 
+/* ------------------------------------------------------------------ ciclos de MUL */
+/* Ciclos extra del 68000 en MULU/MULS (el costo base ya está en la tabla por opcode):
+ * MULU suma 2 por cada bit en 1 del operando fuente; MULS, 2 por cada transición 0->1 o 1->0
+ * recorriendo el operando con signo extendido. Igual que Musashi 4.60 para el 68000. */
+static inline int ciclos_mulu(uint32_t s)
+{
+    int n = 0;
+    for (uint32_t y = s & 0xFFFF; y; y >>= 1) n += (y & 1) * 2;
+    return n;
+}
+
+static inline int ciclos_muls(uint32_t s)
+{
+    int n = 0;
+    uint32_t f = 0;
+    for (uint32_t y = sext16(s & 0xFFFF); y; y >>= 1)
+        if ((y & 1) != f) { n += 2; f = 1 - f; }
+    return n;
+}
+
 /* ------------------------------------------------------------------ división */
 /* DIVU.W: d[r] (32 bits) / s (16 bits, no cero). Desbordamiento: solo V = 1 y el registro
  * no cambia (N y Z quedan como estaban: indefinidos en el manual; así lo hace Musashi,
