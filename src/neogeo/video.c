@@ -183,6 +183,8 @@ static inline uint8_t pixel_sprite(uint32_t codigo, int fila, int col)
     return (col & 1) ? (*t >> 4) : (*t & 0x0F);
 }
 
+static void dibujar_lista(uint32_t *buf, const uint32_t *pens, int linea, const uint16_t *lista, int ultimo);
+
 static void dibujar_sprites(uint32_t *buf, const uint32_t *pens, int linea)
 {
     const uint16_t *lista = &ng.vram[(linea & 1) ? 0x8680 : 0x8600];
@@ -191,6 +193,12 @@ static void dibujar_sprites(uint32_t *buf, const uint32_t *pens, int linea)
         if (lista[ultimo] != 0) break;
     /* La lista termina en ceros, pero un 0 puede ser el sprite 0: se dibuja uno más. */
     if (ultimo != MAX_POR_LINEA - 1) ultimo++;
+    dibujar_lista(buf, pens, linea, lista, ultimo);
+}
+
+/* Dibuja los sprites lista[0..ultimo] en la línea (los encadenados siguen al anterior de la lista). */
+static void dibujar_lista(uint32_t *buf, const uint32_t *pens, int linea, const uint16_t *lista, int ultimo)
+{
 
     int x = 0, y = 0, filas = 0, zoom_x = 0, zoom_y = 0;
     for (int i = 0; i <= ultimo; i++) {
@@ -292,6 +300,27 @@ static void dibujar_linea(int linea)
     for (int i = 0; i < NG_ANCHO; i++) buf[i] = fondo;
     if (!(ng_dbg.ocultar & NG_OCULTAR_SPRITES)) dibujar_sprites(buf, pens, linea);
     if (!(ng_dbg.ocultar & NG_OCULTAR_FIX)) dibujar_fix(buf, pens, linea);
+}
+
+/* Fase 6C: redibuja solo los sprites [desde, hasta] con la VRAM y la paleta actuales, sobre fondo
+   transparente (0), sin tocar el estado de la máquina. Para usar gráficos del juego en los menús
+   (el logo de la pantalla de título). */
+void ng_video_capturar_sprites(uint32_t *destino, int desde, int hasta)
+{
+    const uint32_t *pens = ng.pen[ng.sombra] + ((uint32_t)ng.banco_paleta << 12);
+    uint16_t lista[MAX_SPRITES];
+    for (int y = 0; y < NG_ALTO; y++) {
+        int linea = y + NG_PRIMERA_LINEA_VISIBLE, n = 0, yc = 0, filas = 0;
+        for (int s = 0; s < MAX_SPRITES; s++) {
+            uint16_t ctl = ng.vram[0x8200 | s];
+            if (!(ctl & 0x40)) { yc = 0x200 - (ctl >> 7); filas = ctl & 0x3F; }
+            if (s < desde || s > hasta || filas == 0 || !en_linea(linea, yc, filas)) continue;
+            lista[n++] = (uint16_t)s;
+        }
+        uint32_t *buf = destino + (size_t)y * NG_ANCHO;
+        memset(buf, 0, NG_ANCHO * sizeof *buf);
+        if (n) dibujar_lista(buf, pens, linea, lista, n - 1);
+    }
 }
 
 void ng_video_inicio_linea(int linea)

@@ -28,6 +28,7 @@
 #include "despachador.h"
 #include "frontend.h"
 #include "fuente.h"
+#include "logo.h"
 #include "menu.h"
 #include "neogeo.h"
 #include "port.h"
@@ -251,8 +252,8 @@ static SDL_FRect dibujar_juego(int w, int h)
 static void dibujar_avisos(int w, int h)
 {
     if (!aviso[0] || SDL_GetTicksNS() >= aviso_hasta) return;
-    int k = fuente_factor(w, h);
-    SDL_SetRenderScale(render, (float)k, (float)k);
+    float k = fuente_factor(w, h);
+    SDL_SetRenderScale(render, k, k);
     SDL_SetRenderDrawBlendMode(render, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(render, 0, 0, 0, 170);
     SDL_FRect f = {4, 4, fuente_ancho(aviso, 1) + 8, 14};               /* arriba a la izquierda */
@@ -447,6 +448,11 @@ int ventana_correr(const Opciones *o)
     fuente_crear(render);
     {
         char r[1100];
+        snprintf(r, sizeof r, "%slogo_titulo.png", dir_pref);
+        logo_preparar(render, r);              /* la primera vez corre la máquina hasta el título */
+    }
+    {
+        char r[1100];
         snprintf(r, sizeof r, "%ssonidos.ini", dir_pref);
         sonidos_iniciar(ventana, r);
     }
@@ -474,13 +480,14 @@ int ventana_correr(const Opciones *o)
        "Jugar" en el cuadro 1300) y sale. */
     long prueba_cuadros = 0;
     char prueba_png[1024] = "";
-    int prueba_menu = 0, prueba_sonidos = 0, prueba_jugar = 0;
+    int prueba_menu = 0, prueba_sonidos = 0, prueba_jugar = 0, prueba_renombrar = 0;
     if (getenv("PD_PRUEBA_VENTANA")) {
         char extra[16] = "";
         sscanf(getenv("PD_PRUEBA_VENTANA"), "%ld,%1023[^,],%15s", &prueba_cuadros, prueba_png, extra);
         prueba_menu = !strcmp(extra, "menu");
         prueba_sonidos = !strcmp(extra, "sonidos");
         prueba_jugar = !strcmp(extra, "jugar");
+        prueba_renombrar = !strcmp(extra, "renombrar");
     }
     long cuadros_vistos = 0;
 
@@ -489,6 +496,17 @@ int ventana_correr(const Opciones *o)
     while (!salir) {
         if (prueba_cuadros && prueba_menu && cuadros_vistos == prueba_cuadros - 1) menu_pausa();
         if (prueba_cuadros && prueba_jugar && cuadros_vistos == 1300) menu_navegar(4);   /* "Jugar" */
+        if (prueba_cuadros && prueba_renombrar) {           /* renombrar dos veces el mismo efecto */
+            long f = prueba_cuadros - cuadros_vistos;
+            if (f == 400) { sonidos_abrir(); sonidos_navegar(3); sonidos_navegar(7); }
+            if (f == 300 || f == 100) {
+                SDL_Delay(80);                              /* pasa la ventana que ignora la tecla R */
+                if (f == 100) for (int i = 0; i < 40; i++) sonidos_tecla_edicion(SDL_SCANCODE_BACKSPACE);
+                sonidos_texto(f == 300 ? "Prueba uno" : "Prueba dos");
+                sonidos_tecla_edicion(SDL_SCANCODE_RETURN);
+            }
+            if (f == 200) sonidos_navegar(7);
+        }
         if (prueba_cuadros && prueba_sonidos && cuadros_vistos == prueba_cuadros - 60) {
             sonidos_abrir();
             sonidos_navegar(1);
@@ -572,6 +590,7 @@ int ventana_correr(const Opciones *o)
     if (audio) SDL_DestroyAudioStream(audio);
     for (int j = 0; j < 2; j++) if (mandos[j]) SDL_CloseGamepad(mandos[j]);
     fuente_destruir();
+    logo_destruir();
     if (tex_grande) SDL_DestroyTexture(tex_grande);
     SDL_DestroyTexture(tex);
     SDL_DestroyRenderer(render);

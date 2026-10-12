@@ -53,7 +53,7 @@ int fuente_crear(SDL_Renderer *r)
     if (!atlas) return -1;
     SDL_UpdateTexture(atlas, NULL, px, 128 * 4);
     SDL_SetTextureBlendMode(atlas, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureScaleMode(atlas, SDL_SCALEMODE_NEAREST);
+    SDL_SetTextureScaleMode(atlas, SDL_SCALEMODE_PIXELART);   /* parejo con escalas no enteras */
     return 0;
 }
 
@@ -71,7 +71,11 @@ float fuente_escala_ajustada(const char *s, float maxima, float ancho)
     return e < maxima ? SDL_floorf(e * 2) / 2 : maxima;      /* en medios píxeles */
 }
 
-int fuente_factor(int w, int h) { return SDL_max(1, SDL_min(w / 440, h / 250)); }
+float fuente_factor(int w, int h)
+{
+    float k = SDL_min(w / 480.0f, h / 300.0f);
+    return k < 0.5f ? 0.5f : k;
+}
 
 void fuente_texto(SDL_Renderer *r, float x, float y, float escala, int tinta, const char *s)
 {

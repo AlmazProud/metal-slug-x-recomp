@@ -15,6 +15,7 @@
 #include "despachador.h"
 #include "fuente.h"
 #include "frontend.h"
+#include "logo.h"
 #include "sonidos.h"
 
 enum {
@@ -267,9 +268,9 @@ void menu_capturar_boton(SDL_GamepadButton b)
 void menu_dibujar(SDL_Renderer *r, int w, int h)
 {
     if (m.nivel < 0) return;
-    /* Coordenadas virtuales de al menos 440 x 250, ampliadas por un factor entero. */
-    int k = fuente_factor(w, h);
-    SDL_SetRenderScale(r, (float)k, (float)k);
+    /* Lienzo virtual de 480 x 300 ajustado a la ventana. */
+    float k = fuente_factor(w, h);
+    SDL_SetRenderScale(r, k, k);
     float vw = (float)w / k, vh = (float)h / k, cx = vw / 2;
     int inicio = m.pila[0] == &P_INICIO;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -295,7 +296,15 @@ void menu_dibujar(SDL_Renderer *r, int w, int h)
 
     const Pagina *p = m.pila[m.nivel];
     float y;
-    if (inicio && m.nivel == 0) {
+    SDL_Texture *logo = logo_textura();
+    if (inicio && m.nivel == 0 && logo) {
+        float lw, lh;
+        SDL_GetTextureSize(logo, &lw, &lh);
+        float e = SDL_min(250 / lw, 116 / lh);                /* el logo del título, a lo ancho */
+        SDL_FRect d = {SDL_roundf(cx - lw * e / 2), 6, lw * e, lh * e};
+        SDL_RenderTexture(r, logo, NULL, &d);
+        y = d.y + d.h + 14;
+    } else if (inicio && m.nivel == 0) {
         fuente_centrado(r, cx, 34, fuente_escala_ajustada("METAL SLUG X", 5, vw - 24), TINTA_ORO, "METAL SLUG X");
         fuente_centrado(r, cx, 80, 1, TINTA_PLATA, "SUPER VEHICLE-001");
         y = 112;

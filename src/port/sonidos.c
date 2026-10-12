@@ -39,6 +39,16 @@ static struct {
     int8_t vib[3][256];                  /* VIB_* del usuario (VIB_AUTO = la de la tabla) */
 } u;
 
+/* Copias propias: SDL_strdup reserva con el asignador de SDL3.dll y liberarlas con free() de otro
+   runtime de C rompía el montón (cuelgue al renombrar dos veces el mismo sonido). */
+static char *copiar(const char *s)
+{
+    size_t n = strlen(s) + 1;
+    char *c = malloc(n);
+    if (c) memcpy(c, s, n);
+    return c;
+}
+
 static void usuario_guardar(void)
 {
     FILE *f = fopen(u.ruta, "w");
@@ -73,7 +83,7 @@ static void usuario_cargar(void)
         if (m < 0) continue;
         if (!strcmp(seccion, "[nombres]") && *v) {
             free(u.nombre[m][c]);
-            u.nombre[m][c] = SDL_strdup(v);
+            u.nombre[m][c] = copiar(v);
         } else if (!strcmp(seccion, "[vibracion]")) {
             for (int i = 0; i < VIB_N; i++) if (!strcmp(v, VIB_NOMBRE[i])) u.vib[m][c] = (int8_t)i;
         }
@@ -152,6 +162,7 @@ static struct {
     int n_reciente;
     int editando;
     char texto[32];
+    Uint64 ignorar_hasta;                        /* el texto de la tecla que abrió la edición */
 } m;
 
 static uint8_t *modo_driver(void);
@@ -259,6 +270,7 @@ static void renombrar(void)
     if (!seleccionado(&c) || !m.ventana) return;
     snprintf(m.texto, sizeof m.texto, "%s", nombre(c.modo, c.cmd));
     m.editando = 1;
+    m.ignorar_hasta = SDL_GetTicksNS() + 50000000ULL;
     SDL_StartTextInput(m.ventana);
 }
 
@@ -294,7 +306,7 @@ int sonidos_editando(void) { return m.editando; }
 
 void sonidos_texto(const char *s)
 {
-    if (!m.editando) return;
+    if (!m.editando || SDL_GetTicksNS() < m.ignorar_hasta) return;
     size_t n = strlen(m.texto);
     for (; *s && n + 1 < sizeof m.texto; s++)
         if ((unsigned char)*s >= 0x20 && (unsigned char)*s < 0x7F) m.texto[n++] = *s;   /* la fuente es ASCII */
@@ -317,7 +329,7 @@ void sonidos_tecla_edicion(SDL_Scancode sc)
     free(u.nombre[i][c.cmd]);
     u.nombre[i][c.cmd] = NULL;
     const Sonido *p = perfil(c.modo, c.cmd);
-    if (m.texto[0] && !(p && !strcmp(p->nombre, m.texto))) u.nombre[i][c.cmd] = SDL_strdup(m.texto);
+    if (m.texto[0] && !(p && !strcmp(p->nombre, m.texto))) u.nombre[i][c.cmd] = copiar(m.texto);
     usuario_guardar();
 }
 
@@ -325,8 +337,8 @@ void sonidos_tecla_edicion(SDL_Scancode sc)
 void sonidos_dibujar(SDL_Renderer *r, int w, int h)
 {
     if (!m.abierto) return;
-    int k = fuente_factor(w, h);
-    SDL_SetRenderScale(r, (float)k, (float)k);
+    float k = fuente_factor(w, h);
+    SDL_SetRenderScale(r, k, k);
     float vw = (float)w / k, vh = (float)h / k, cx = vw / 2;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 215);

@@ -12,4 +12,13 @@
  * lógica: 2 normalmente (30 Hz), 3 o 4 con la ralentización (20 o 15 Hz). Offset en la RAM. */
 #define PERFIL_RAM_CUADROS_LOGICA 0x008Au
 
+/* Logo de la pantalla de título (attract, cuadro ~1150 desde el encendido con la SRAM vacía):
+ * sprites 41-124 (sombra, "METAL SLUG", X, "SUPER VEHICLE-001") y 380 ("TM", primer tile 0x309CA,
+ * que sirve para reconocer el momento). El fondo rojo son los sprites 21-40. */
+#define PERFIL_LOGO_DESDE 41
+#define PERFIL_LOGO_HASTA 124
+#define PERFIL_LOGO_TM 380
+#define PERFIL_LOGO_TM_TILE 0x309CAu
+#define PERFIL_LOGO_CUADROS_MAX 3000
+
 #endif

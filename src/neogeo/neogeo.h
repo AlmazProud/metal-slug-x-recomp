@@ -150,6 +150,8 @@ void ng_rtc_estado(NgEstado *e);
 /* ------------------------------------------------------------------ internos */
 void ng_video_iniciar(void);
 void ng_video_inicio_linea(int linea);   /* dibuja la anterior y prepara la lista de sprites */
+/* Solo los sprites [desde, hasta], sobre fondo transparente (0): imagen de NG_ANCHO x NG_ALTO. */
+void ng_video_capturar_sprites(uint32_t *destino, int desde, int hasta);
 void ng_video_anim_tick(void);
 uint16_t ng_video_leer(uint32_t reg);
 void ng_video_escribir(uint32_t reg, uint16_t v);

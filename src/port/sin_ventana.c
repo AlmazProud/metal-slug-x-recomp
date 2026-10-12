@@ -183,6 +183,48 @@ static uint32_t fnv_bytes(uint32_t h, const uint8_t *d, size_t n)
     return h;
 }
 
+/* PD_VOLCAR_SPRITES=cuadro,archivo: lista de los sprites dibujados en ese cuadro (caja en píxeles
+   visibles y registros SCB2-4, primer tile). Diagnóstico para ubicar gráficos del juego. */
+static void volcar_sprites(void)
+{
+    const char *e = getenv("PD_VOLCAR_SPRITES");
+    if (!e) return;
+    unsigned long long cuadro;
+    char ruta[1024];
+    if (sscanf(e, "%llu,%1023s", &cuadro, ruta) != 2) return;
+    ng_dbg.activo = 1;
+    if (ng.cuadros - 1 != cuadro) return;
+    FILE *f = fopen(ruta, "w");
+    if (!f) return;
+    for (int s = 0; s < 381; s++) {
+        const NgCaja *c = &ng_dbg.caja[s];
+        if (c->x1 < c->x0) continue;
+        fprintf(f, "%3d caja %4d,%4d-%4d,%4d scb2 %04X scb3 %04X scb4 %04X tile0 %05X attr %04X\n", s, c->x0, c->y0,
+                c->x1, c->y1, ng.vram[0x8000 | s], ng.vram[0x8200 | s], ng.vram[0x8400 | s],
+                ((ng.vram[(s << 6) + 1] << 12) & 0xF0000) | ng.vram[s << 6], ng.vram[(s << 6) + 1]);
+    }
+    fclose(f);
+}
+
+/* PD_CAPTURAR_SPRITES=cuadro,desde,hasta,archivo.bmp: imagen solo con esos sprites (fondo magenta). */
+static void capturar_sprites(void)
+{
+    const char *e = getenv("PD_CAPTURAR_SPRITES");
+    if (!e) return;
+    unsigned long long cuadro;
+    int desde, hasta;
+    char ruta[1024];
+    if (sscanf(e, "%llu,%d,%d,%1023s", &cuadro, &desde, &hasta, ruta) != 4 || ng.cuadros - 1 != cuadro) return;
+    static uint32_t img[NG_ALTO][NG_ANCHO];
+    uint32_t copia[NG_ALTO][NG_ANCHO];
+    ng_video_capturar_sprites(&img[0][0], desde, hasta);
+    memcpy(copia, ng.pantalla, sizeof copia);
+    for (int y = 0; y < NG_ALTO; y++)
+        for (int x = 0; x < NG_ANCHO; x++) ng.pantalla[y][x] = img[y][x] ? img[y][x] : 0xFFFF00FF;
+    guardar_bmp(ruta);
+    memcpy(ng.pantalla, copia, sizeof copia);
+}
+
 static FILE *archivo_huellas;
 static unsigned long long n_vblanks;
 
@@ -510,6 +552,8 @@ int sin_ventana_correr(const Opciones *o)
         else guion_aplicar();
         ng_ejecutar_cuadro();
         contar_fin_cuadro();
+        volcar_sprites();
+        capturar_sprites();
         if (huellas) huella(huellas, ng.cuadros - 1);
         if (pedida(o->volcar, ng.cuadros - 1)) {
             char ruta[1200];

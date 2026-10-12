@@ -15,7 +15,7 @@ void fuente_centrado(SDL_Renderer *r, float cx, float y, float escala, int tinta
 float fuente_ancho(const char *s, float escala);
 /* Escala que no pasa de `maxima` y deja el texto dentro de `ancho`. */
 float fuente_escala_ajustada(const char *s, float maxima, float ancho);
-/* Factor entero para la interfaz: lienzo virtual de al menos 440 x 250. */
-int fuente_factor(int w, int h);
+/* Escala de la interfaz: un lienzo virtual de 480 x 300 que se ajusta a la ventana. */
+float fuente_factor(int w, int h);
 
 #endif

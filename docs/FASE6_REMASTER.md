@@ -212,7 +212,25 @@ con un lienzo de al menos 440 x 250.
 - Cada fila muestra la clave del driver (por ejemplo `10:F7`), así los nombres que encuentre el
   usuario se pueden pasar al perfil del repo.
 
+**Logo de la pantalla de inicio** (`src/port/logo.c`): el del propio juego.
+
+- En la pantalla de título del attract (cuadro ~1150 con la SRAM vacía), el logo son los sprites
+  41-124 más el 380 ("TM"); el fondo rojo son los 21-40.
+- La primera vez, el port guarda el estado, corre la máquina en silencio hasta que aparece el
+  "TM" (primer tile `0x309CA`), redibuja solo esos sprites (`ng_video_capturar_sprites`) y
+  restaura el estado. Tarda menos de un segundo.
+- El logo queda en `logo_titulo.png` de la carpeta del usuario, nunca en el repo.
+
+**Escala de la interfaz:** continua, como un lienzo de 480 x 300 ajustado a la ventana
+(`fuente_factor`), con `SDL_SCALEMODE_PIXELART` para que los píxeles se vean parejos con escalas
+no enteras. Así los menús entran en cualquier tamaño de ventana.
+
+**Corregido:** renombrar dos veces el mismo sonido colgaba el port. `SDL_strdup` reserva con el
+asignador de SDL3.dll y el nombre se liberaba con `free()` de otro runtime de C. Ahora el port
+hace sus propias copias. Además, la "R" que abre la edición ya no se cuela en el nombre.
+
 **Pruebas:**
 
-- `PD_PRUEBA_VENTANA=N,png[,menu|sonidos|jugar]` para capturas de cada pantalla;
+- `PD_PRUEBA_VENTANA=N,png[,menu|sonidos|jugar|renombrar]` para capturas de cada pantalla;
+  `renombrar` cambia dos veces el nombre de un efecto;
 - `ctest` 6/6.
