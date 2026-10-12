@@ -32,6 +32,10 @@
 !*.toml
 !*.txt
 !herramientas/hooks/*
+# Fase 3B: ymfm (BSD-3) está escrito en C++; licencias de terceros sin extensión
+!*.cpp
+!*.ipp
+!externo/**/LICENSE
 
 # 4) Siempre ignorado, aunque coincida con la lista blanca
 build/
