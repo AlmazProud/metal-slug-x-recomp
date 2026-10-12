@@ -7,6 +7,7 @@ aquí con su versión, origen, licencia y el uso que se le da.
 
 | Biblioteca | Versión | Origen | Licencia | Uso |
 |---|---|---|---|---|
+| Musashi | 4.60 (commit `313ebf1`) | github.com/kstenerud/Musashi, copiado en `externo/musashi/` | MIT | Intérprete 68000 de referencia (pruebas diferenciales) y de respaldo en el runtime. **Sin SoftFloat**: `m68kfpu.c` y los encabezados de `softfloat/` son sustitutos propios (ver `externo/musashi/LEEME_PD.md`). Se enlaza al port. |
 | Capstone | 5.0.7 | PyPI (`capstone`), github.com/capstone-engine/capstone | BSD-3-Clause | Decodificador de instrucciones 68000 en las herramientas de análisis (Fase 1). No se enlaza al port. |
 | NumPy | 2.5.4 | PyPI (`numpy`) | BSD-3-Clause | Conversión de formatos gráficos en el extractor de ROMs. No se enlaza al port. |
 
