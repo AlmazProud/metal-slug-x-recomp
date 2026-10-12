@@ -64,6 +64,23 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | 6B. Remaster: catálogo de sonidos, menú de sonido, vibración | **Cerrada** (2026-10-12). |
 | 6C. Remaster: menú de inicio moderno | **Cerrada** (2026-10-12). `ctest`: 6/6. |
 | 6D. Remaster: pantalla ancha | **Descartada** por el usuario (2026-10-12): le quita la esencia al juego. |
+| 7A. V-sync y sangre roja | **Cerrada** (2026-10-12), pendiente del visto bueno. Ver `docs/FASE7_AJUSTES.md`. `ctest`: 6/6. |
+
+### Fase 7A: resultado
+
+Detalle en `docs/FASE7_AJUSTES.md`.
+
+- **Sangre roja:** es la opción BLOOD de los soft dips del juego (en EE. UU., OFF), en
+  `0x10FD8F`; el juego la consulta en `0x1B2BE`.
+  - La opción del port fuerza solo la lectura del código del juego (`ng_lectura_forzada`,
+    PC < `0xC00000`). Escribir la RAM rompía el test del BIOS.
+  - Comprobado con capturas: salpicadura blanca frente a roja.
+- **V-sync:**
+  - con un monitor de ~60 Hz, un cuadro por refresco, con el audio en proporción y corrección por
+    la cola;
+  - con otras frecuencias, acumulador al ritmo de la placa.
+  - Medido: 0 cortes y 0 descartes de audio en los tres casos.
+- Pruebas: `PD_SALIR_TRAS`, `PD_HZ`, `--sangre`.
 
 ### Fase 6C: resultado
 
@@ -329,12 +346,9 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Siguiente fase:** el usuario elige entre la hoja de ruta de abajo (plan corto y OK antes de
-      escribir código).
+- [ ] **Siguiente fase** tras el visto bueno de la 7A: 7B, debug estilo Sonic (plan corto y OK
+      antes de escribir código).
 - [ ] **Hoja de ruta pedida por el usuario** (para el resultado final):
-  - [ ] **V-sync** (opción en Video).
-  - [ ] **Sangre roja (sin censura):** investigar si depende de la región del BIOS (el del usuario
-        es de EE. UU.; Japón suele ir sin censura) o de un parche puntual de la comprobación.
   - [ ] **Debug estilo Sonic:** elegir misión, personaje, aparecer armas. Primero buscar un modo
         debug oculto de los desarrolladores ("debug dips"); si no hay, construirlo desde la RAM.
   - [ ] **Nombres de sonidos y vibración del láser:** el usuario los identifica con la pestaña
