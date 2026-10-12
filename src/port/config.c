@@ -155,6 +155,7 @@ int config_load(Config *c, const char *path)
             else if (is_key(k, "autofire_per_second", "autodisparo_por_segundo"))
                 c->auto_speed = lookup(SPEED_NAME, NULL, AUTO_SPEEDS, v, c->auto_speed);
             else if (!strcmp(k, "debug")) c->debug = integer(v, 0, 1, c->debug);
+            else if (!strcmp(k, "devmode")) c->devmode = integer(v, 0, 1, c->devmode);
             else if (is_key(k, "rumble", "vibracion")) c->rumble = integer(v, 0, 100, c->rumble);
             else if (is_key(k, "start_screen", "pantalla_inicio")) c->start_screen = integer(v, 0, 1, c->start_screen);
             else if (is_key(k, "blood", "sangre")) c->blood = integer(v, 0, 1, c->blood);
@@ -193,6 +194,7 @@ int config_save(const Config *c, const char *path)
     fprintf(f, "; autofire_per_second: 10 (the pistol's maximum), 7.5 or 5\nautofire_per_second=%s\n",
             SPEED_NAME[c->auto_speed]);
     fprintf(f, "; debug: debug panel (F3)\ndebug=%d\n", c->debug);
+    fprintf(f, "; devmode: developer mode, the game's hidden menu (F4 in game)\ndevmode=%d\n", c->devmode);
     fprintf(f, "; rumble: gamepad strength on explosions and shots, 0-100 (0 = off)\nrumble=%d\n",
             c->rumble);
     fprintf(f, "; start_screen: start menu when the game opens (1) or straight into the game (0)\nstart_screen=%d\n",

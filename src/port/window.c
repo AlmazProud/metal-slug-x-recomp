@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cheats.h"
 #include "config.h"
 #include "debug.h"
 #include "dispatcher.h"
@@ -168,6 +169,7 @@ static void read_inputs(void)
         ng.joy[j] = joy;
         ng.system[j] = sys;
     }
+    cheats_input(&ng.joy[0], &ng.system[0]);   /* developer menu: SELECT + D for the player */
     if (play_frame >= 0) {                   /* "Play": coin and, a moment later, START */
         if (play_frame < 6) ng.system[0] |= NG_COIN;
         else if (play_frame >= 50 && play_frame < 56) ng.system[0] |= NG_START;
@@ -223,6 +225,14 @@ void fe_apply_blood(void)
 {
     ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){cfg.blood, PROFILE_BLOOD_WORD, PROFILE_BLOOD_MASK, 0x0001};
 }
+/* Developer menu (cheats.h): only with developer mode on and during a mission. */
+void fe_dev_menu(void)
+{
+    if (!cfg.devmode) fe_notify(T("Turn on developer mode first (Extras > Debug)"));
+    else if (!cheats_in_game(0)) fe_notify(T("Only during a mission"));
+    else cheats_dev_menu();
+}
+
 void fe_quit(void) { quit = 1; }
 
 void fe_reset(void)
@@ -355,6 +365,7 @@ static void on_key(const SDL_KeyboardEvent *e, int *paused, int *screenshots)
     switch (sc) {
     case SDL_SCANCODE_ESCAPE: menu_pause(); break;
     case SDL_SCANCODE_P: *paused = !*paused; fe_notify(T(*paused ? "Paused" : "Resume")); break;
+    case SDL_SCANCODE_F4: fe_dev_menu(); break;
     case SDL_SCANCODE_F5: fe_state_save(); break;
     case SDL_SCANCODE_F9: fe_state_load(); break;
     case SDL_SCANCODE_F12: {
@@ -470,6 +481,8 @@ int window_run(const Options *o)
     machine_start(o);
     debug_enable(cfg.debug);
     fe_apply_blood();
+    cheats_devmode = cfg.devmode;
+    cheats_apply();
     rumble_init(pads, 2);
     rumble_strength(cfg.rumble);
     if (!o->empty_sram) sram_load();
@@ -516,17 +529,19 @@ int window_run(const Options *o)
     uint64_t audio_frames = 0, audio_drops = 0, audio_empty = 0, audio_queue_sum = 0;
     if (!cfg.start_screen) fe_notify(T("Esc: menu   F5/F9: save/load game"));
 
-    /* PD_WINDOW_TEST=N,file.png[,menu|settings|sounds|play|rename]: after N frames, saves what
-       the window shows (with the pause menu or its Settings page, with the sound menu playing the
+    /* PD_WINDOW_TEST=N,file.png[,menu|settings|cheats|debug|sounds|play|rename]: after N frames,
+       saves what the window shows (with the pause menu, its Settings page or the Extras pages, with the sound menu playing the
        second music track, or after choosing "Play" at frame 1300) and quits. */
     long test_frame_count = 0;
     char test_png[1024] = "";
-    int test_menu = 0, test_settings = 0, test_sounds = 0, test_play = 0, test_rename = 0;
+    int test_menu = 0, test_settings = 0, test_extras = -1, test_sounds = 0, test_play = 0, test_rename = 0;
     if (getenv("PD_WINDOW_TEST")) {
         char extra[16] = "";
         sscanf(getenv("PD_WINDOW_TEST"), "%ld,%1023[^,],%15s", &test_frame_count, test_png, extra);
         test_settings = !strcmp(extra, "settings");
-        test_menu = test_settings || !strcmp(extra, "menu");
+        if (!strcmp(extra, "cheats")) test_extras = 0;
+        if (!strcmp(extra, "debug")) test_extras = 1;
+        test_menu = test_settings || test_extras >= 0 || !strcmp(extra, "menu");
         test_sounds = !strcmp(extra, "sounds");
         test_play = !strcmp(extra, "play");
         test_rename = !strcmp(extra, "rename");
@@ -545,6 +560,12 @@ int window_run(const Options *o)
             menu_pause();
             if (test_settings) {                     /* Continue, Save, Load, Settings */
                 for (int i = 0; i < 3; i++) menu_navigate(1);
+                menu_navigate(4);
+            }
+            if (test_extras >= 0) {                  /* Extras, then Cheats or Debug */
+                for (int i = 0; i < 5; i++) menu_navigate(1);
+                menu_navigate(4);
+                for (int i = 0; i < test_extras; i++) menu_navigate(1);
                 menu_navigate(4);
             }
         }

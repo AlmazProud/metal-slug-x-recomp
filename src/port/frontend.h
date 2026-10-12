@@ -16,6 +16,7 @@ void fe_play(void);                     /* player 1 coin and START, like a playe
 void fe_reset(void);                 /* machine reset (keeps the SRAM) */
 void fe_service(void);                  /* test button: BIOS service menu */
 void fe_apply_blood(void);
+void fe_dev_menu(void);                 /* the game's hidden developer menu (F4) */
 void fe_quit(void);
 
 #endif

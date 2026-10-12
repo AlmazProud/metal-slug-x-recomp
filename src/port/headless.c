@@ -11,6 +11,7 @@
 
 #include "dispatcher.h"
 #include "neogeo.h"
+#include "cheats.h"
 #include "profile.h"
 #include "port.h"
 #include "sounds.h"
@@ -72,6 +73,30 @@ static void script_apply(void)
     ng.system[0] = s0;
     ng.system[1] = s1;
     ng.test = test ? 0x00 : 0x80;
+}
+
+/* PD_CHEAT=frame,kind,player,value[;...]: cheats applied before that frame (tests). kind:
+   weapon, bombs, lives, soldier, devmenu. */
+static void cheats_test(void)
+{
+    const char *e = getenv("PD_CHEAT");
+    while (e && *e) {
+        unsigned long long frame;
+        char kind[16];
+        int player, value, used = 0;
+        if (sscanf(e, "%llu,%15[a-z],%d,%d%n", &frame, kind, &player, &value, &used) != 4) return;
+        if (frame == ng.frames) {
+            int ok = 1;
+            if (!strcmp(kind, "weapon")) ok = cheats_give_weapon(player, value);
+            else if (!strcmp(kind, "bombs")) ok = cheats_set_bombs(player, value);
+            else if (!strcmp(kind, "lives")) ok = cheats_set_lives(player, value);
+            else if (!strcmp(kind, "soldier")) ok = cheats_set_soldier(player, value);
+            else if (!strcmp(kind, "devmenu")) cheats_dev_menu();
+            if (!ok) fprintf(stderr, "PD_CHEAT: %s not applied at frame %llu (not in game)\n", kind, frame);
+        }
+        e += used;
+        if (*e == ';') e++;
+    }
 }
 
 /* ------------------------------------------------------------------ BMP screenshots */
@@ -547,12 +572,10 @@ int headless_run(const Options *o)
 {
     if (o->blood)
         ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){1, PROFILE_BLOOD_WORD, PROFILE_BLOOD_MASK, 0x0001};
-    if (getenv("PD_DIPS")) {               /* research: the game's debug dips (profile.h) */
-        uint16_t d = (uint16_t)strtoul(getenv("PD_DIPS"), NULL, 16);
-        ng_forced_read[NG_FORCED_DIPS] = (NgForcedRead){1, PROFILE_DIPS_WORD, d, d};
-    }
-    if (getenv("PD_DEVMODE"))           /* research: BIOS development mode */
-        ng_forced_read[NG_FORCED_DEVMODE] = (NgForcedRead){1, PROFILE_DEVMODE_WORD, 0xFF00, 0x0100};
+    /* Debug mode (cheats.h): PD_DIPS=hex forces debug dips, PD_DEVMODE the developer mode. */
+    if (getenv("PD_DIPS")) cheats_dips = (uint16_t)strtoul(getenv("PD_DIPS"), NULL, 16);
+    if (getenv("PD_DEVMODE")) cheats_devmode = 1;
+    cheats_apply();
     if (o->script && script_load(o->script) != 0) return 2;
     if (o->inputs && inputs_load(o->inputs) != 0) return 2;
     instr_trace_init();
@@ -566,6 +589,8 @@ int headless_run(const Options *o)
     for (long n = 0; n < o->frames; n++) {
         if (o->inputs) inputs_apply();
         else script_apply();
+        cheats_test();
+        cheats_input(&ng.joy[0], &ng.system[0]);
         ng_run_frame();
         count_end_frame();
         dump_sprites();

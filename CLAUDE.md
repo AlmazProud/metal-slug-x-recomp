@@ -46,7 +46,7 @@ repo\
 
 Docs: `docs/ROM_MAP.md`, `docs/PHASE1_COVERAGE.md`, `docs/PHASE3_RUNTIME.md`,
 `docs/PHASE4_VERIFICATION.md`, `docs/PHASE5_NATIVE.md`, `docs/PHASE6_REMASTER.md`,
-`docs/PHASE7_TWEAKS.md`.
+`docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`.
 
 Build: `cmake -S repo -B repo\build -G Ninja -DCMAKE_BUILD_TYPE=Release` and
 `cmake --build repo\build`. The recompiled program is generated in `build\src\program\` from
@@ -72,8 +72,20 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 6B. Remaster: sound catalog, sound menu, rumble | **Closed** (2026-10-12). |
 | 6C. Remaster: modern start menu | **Closed** (2026-10-12). `ctest`: 6/6. |
 | 6D. Remaster: widescreen | **Dropped** by the user (2026-10-12): it takes away the essence of the game. |
-| 7A. V-sync and red blood | **Closed** (2026-10-12), pending approval. See `docs/PHASE7_TWEAKS.md`. `ctest`: 6/6. |
-| 7I. English translation | **Closed** (2026-10-12), pending approval. `ctest`: 6/6. Publishing on GitHub (license, plug-and-play release) comes at the end. |
+| 7A. V-sync and red blood | **Closed** (2026-10-12). See `docs/PHASE7_TWEAKS.md`. `ctest`: 6/6. |
+| 7I. English translation | **Closed** (2026-10-12). `ctest`: 6/6. Publishing on GitHub (license, plug-and-play release) comes at the end. |
+| 7B. Debug mode and cheats | **Closed** (2026-10-12), pending approval. See `docs/PHASE7B_DEBUG.md`. `ctest`: 6/6. |
+
+### Phase 7B: result
+
+Details in `docs/PHASE7B_DEBUG.md`.
+
+- The game's own debug tools: development mode (`0x10FE80` and its copy `0x10C2BE` forced for
+  cartridge reads) opens the developers' menu with SELECT + D twice in a mission (port: F4 or
+  Extras > Debug); debug dips at `0x10F000` mapped bit by bit.
+- RAM cheats in `src/port/cheats.c` (addresses in `profile.h`): weapons 0-15 through the
+  pickup routine's ROM tables, bombs, lives, soldier (on respawn).
+- Menus Extras > Cheats and Extras > Debug (EN/ES). Tests: `PD_CHEAT`, `PD_WINDOW_TEST=...,cheats|debug`.
 
 ### Phase 7I: result
 
@@ -364,14 +376,10 @@ ROMs: 13 `mslugx_*` files copied from GOG to `roms\`, with `roms\MANIFEST.sha256
 
 ## To do
 
-- [ ] **Next phase** after 7I approval: 7B, debug mode (short plan and OK
+- [ ] **Next phase** after 7B approval: the user chooses from the roadmap (short plan and OK
       before writing code).
 - [ ] **Roadmap requested by the user** (for the final result):
-  - [ ] **Sonic-style debug (7B):** pick mission, character, spawn weapons. A hidden developer
-        menu was found in the ROM: force BIOS dev mode (`0x10FE80`) for the cartridge's reads;
-        in game, holding SELECT + D opens the pause, and doing it again opens the menu (SET
-        DEBUG DIP, stage select, TEST STAGE, sound test, COLOR BAR); debug dips at
-        `0x10F000`/`0x10F001`. Expose it from the port; build from RAM whatever is missing.
+  - [x] **Sonic-style debug (7B):** done (developer menu, debug dips, RAM cheats).
   - [ ] **Sound names and laser rumble:** the user identifies them with the Recent tab; move
         their names into the profile (`tools/sound_catalog.py`).
 - [ ] **Sound names:** 12 music tracks and most voices and effects go by number. Recordings of

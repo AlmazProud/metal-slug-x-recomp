@@ -23,6 +23,32 @@
 #define PROFILE_DIPS_WORD 0x10F000
 /* BIOS development mode (high byte of the word): opens the developers' hidden menu. */
 #define PROFILE_DEVMODE_WORD 0x10FE80
+/* The game copies the development mode flag to 0x10C2BE when a game starts (0x15408) and the
+ * pause code checks the copy: forced too (high byte), so the mode works mid-mission. */
+#define PROFILE_DEVMODE_COPY_WORD 0x10C2BE
+
+/* Game state (0x100088): 2 while a mission is being played. */
+#define PROFILE_GAME_STATE 0x100088u
+#define PROFILE_GAME_STATE_PLAYING 2
+/* Per-player table at 0x10C718 (bytes interleaved P1, P2; words at +0xC P1, +0xE P2):
+ * +0 0 on foot, 2 in the Slug (0xC07F8), +2 shot counter, +4 weapon sub-type, +6 weapon, +8 bombs,
+ * +0xA bomb type, +0xC ammo (0xFFFF = infinite). */
+#define PROFILE_PLAYER_TABLE 0x10C718u
+/* Player objects (pickup routine 0xC0928: +0x94 weapon flag, +0x95 cleared). */
+#define PROFILE_PLAYER1_OBJECT 0x1014C4u
+#define PROFILE_PLAYER2_OBJECT 0x101574u
+#define PROFILE_OBJECT_CHARACTER 0x6F        /* internal character: Marco 0, Tarma 1, Eri 2, Fio 3 */
+/* Player status objects 0x101204 / 0x1012B4: +0x83 soldier (0 Marco, 1 Eri, 2 Tarma, 3 Fio,
+ * soldier select order), +0x82 the same as internal character, +0x84 lives (from the HERO
+ * soft dip, 0xC942C). */
+#define PROFILE_PLAYER1_SOLDIER 0x101287u
+#define PROFILE_PLAYER2_SOLDIER 0x101337u
+#define PROFILE_PLAYER1_LIVES 0x101288u
+#define PROFILE_PLAYER2_LIVES 0x101338u
+/* Weapon tables in the P ROM, indexed by weapon (0-15), used by the pickup routine. */
+#define PROFILE_ROM_WEAPON_SUBTYPE 0xC08A8u  /* bytes */
+#define PROFILE_ROM_WEAPON_AMMO 0xC08B8u     /* words: ammo on pickup */
+#define PROFILE_ROM_WEAPON_FLAG 0xC0918u     /* bytes: player object +0x94 */
 #define PROFILE_BLOOD_WORD 0x10FD8Eu
 #define PROFILE_BLOOD_MASK 0x00FFu
 

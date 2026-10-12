@@ -35,6 +35,7 @@ typedef struct {
     int autofire[2];                  /* AUTO_* per player */
     int auto_speed;                  /* 0-2: 10, 7.5 or 5 per second */
     int debug;                           /* debug panel visible */
+    int devmode;                         /* developer mode (cheats.h): the game's hidden menu */
     int rumble;                       /* strength 0-100 (0 = off) */
     int start_screen;                 /* show the start menu when the game opens */
     int blood;                          /* 0 = as set in the service menu; 1 = always red */

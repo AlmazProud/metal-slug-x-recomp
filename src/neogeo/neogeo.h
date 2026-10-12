@@ -134,7 +134,7 @@ extern NgDebug ng_dbg;
  * (real & ~mask) | value. The BIOS sees the real RAM (its RAM test and service menu are not
  * affected). Used to turn on game options without touching the SRAM: one slot per use. */
 typedef struct { int active; uint32_t addr; uint16_t mask, value; } NgForcedRead;
-enum { NG_FORCED_BLOOD, NG_FORCED_DIPS, NG_FORCED_DEVMODE, NG_FORCED_COUNT };
+enum { NG_FORCED_BLOOD, NG_FORCED_DIPS, NG_FORCED_DEVMODE, NG_FORCED_DEVMODE_COPY, NG_FORCED_COUNT };
 extern NgForcedRead ng_forced_read[NG_FORCED_COUNT];
 
 /* ------------------------------------------------------------------ save states */

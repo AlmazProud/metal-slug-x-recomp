@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cheats.h"
 #include "debug.h"
 #include "dispatcher.h"
 #include "font.h"
@@ -29,7 +30,12 @@ enum {
     OP_TURBO, OP_BLOOD, OP_AUTO1, OP_AUTO2, OP_AUTO_SPEED, OP_START_SCREEN,
     OP_CONTROLS1, OP_CONTROLS2,
     /* extras */
-    OP_DEBUG, OP_SERVICE, OP_RESET,
+    OP_DEBUG, OP_SERVICE, OP_RESET, OP_CHEATS, OP_DEBUG_PAGE,
+    /* cheats (in game) */
+    OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER,
+    OP_INVINCIBLE, OP_INF_BOMBS, OP_INF_AMMO, OP_D_KILLS,
+    /* debug */
+    OP_DEVMODE, OP_DEV_MENU, OP_BOXES, OP_INFO, OP_GROUND, OP_CPU_METER, OP_PA_POINT, OP_PAUSE_ANY,
 };
 
 typedef struct { const char *title; const int *op; int n; } Page;
@@ -46,7 +52,14 @@ PAGE(P_VIDEO, "VIDEO", OP_FULLSCREEN, OP_VSYNC, OP_ASPECT, OP_FILTER, OP_SCANLIN
 PAGE(P_AUDIO, "AUDIO", OP_VOLUME, OP_RUMBLE);
 PAGE(P_GAME, "GAME", OP_TURBO, OP_BLOOD, OP_AUTO1, OP_AUTO2, OP_AUTO_SPEED, OP_START_SCREEN);
 PAGE(P_CONTROLS, "CONTROLS", OP_CONTROLS1, OP_CONTROLS2);
-PAGE(P_EXTRAS, "EXTRAS", OP_DEBUG, OP_SERVICE, OP_RESET);
+PAGE(P_EXTRAS, "EXTRAS", OP_CHEATS, OP_DEBUG_PAGE, OP_DEBUG, OP_SERVICE, OP_RESET);
+PAGE(P_CHEATS, "CHEATS", OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER,
+     OP_INVINCIBLE, OP_INF_BOMBS, OP_INF_AMMO, OP_D_KILLS);
+PAGE(P_DEBUG, "DEBUG", OP_DEVMODE, OP_DEV_MENU, OP_BOXES, OP_INFO, OP_GROUND, OP_CPU_METER,
+     OP_PA_POINT, OP_PAUSE_ANY);
+
+/* Cheat selections (session only). */
+static int cheat_player, cheat_weapon = 5, cheat_lives = 9;
 
 static struct {
     const Page *stack[6];
@@ -123,7 +136,26 @@ static const char *label_en(int op)
     case OP_START_SCREEN: return "Start screen";
     case OP_CONTROLS1: return "Player 1";
     case OP_CONTROLS2: return "Player 2";
-    case OP_DEBUG: return "Debug mode (F3)";
+    case OP_DEBUG: return "Debug panel (F3)";
+    case OP_CHEATS: return "Cheats";
+    case OP_DEBUG_PAGE: return "Debug";
+    case OP_CHEAT_PLAYER: return "Player";
+    case OP_GIVE_WEAPON: return "Weapon";
+    case OP_MAX_BOMBS: return "Give 99 bombs";
+    case OP_LIVES: return "Set lives";
+    case OP_SOLDIER: return "Soldier";
+    case OP_INVINCIBLE: return "Invincible";
+    case OP_INF_BOMBS: return "Infinite bombs";
+    case OP_INF_AMMO: return "Infinite ammo";
+    case OP_D_KILLS: return "D kills all enemies";
+    case OP_DEVMODE: return "Developer mode";
+    case OP_DEV_MENU: return "Open developer menu (F4)";
+    case OP_BOXES: return "Collision boxes";
+    case OP_INFO: return "Game info";
+    case OP_GROUND: return "Ground lines";
+    case OP_CPU_METER: return "CPU load meter";
+    case OP_PA_POINT: return "PA point";
+    case OP_PAUSE_ANY: return "Pause anywhere";
     case OP_SERVICE: return "Service menu";
     case OP_RESET: return "Reset the machine";
     default: return "?";
@@ -131,6 +163,24 @@ static const char *label_en(int op)
 }
 
 static const char *label(int op) { return T(label_en(op)); }
+
+/* Debug dips behind each switch (cheats.h). */
+static uint16_t dip_of(int op)
+{
+    switch (op) {
+    case OP_INVINCIBLE: return DIP_INVINCIBLE;
+    case OP_INF_BOMBS: return DIP_INFINITE_BOMBS;
+    case OP_INF_AMMO: return DIP_INFINITE_AMMO;
+    case OP_D_KILLS: return DIP_D_KILLS_ALL;
+    case OP_BOXES: return DIP_ATTACK_BOXES | DIP_BODY_BOXES;
+    case OP_INFO: return DIP_INFO;
+    case OP_GROUND: return DIP_GROUND_A | DIP_GROUND_B;
+    case OP_CPU_METER: return DIP_CPU_METER;
+    case OP_PA_POINT: return DIP_PA_POINT;
+    case OP_PAUSE_ANY: return DIP_PAUSE_ANYTIME;
+    default: return 0;
+    }
+}
 
 /* Value on the right (empty if the option has no value). */
 static void value(int op, char *b, size_t n)
@@ -160,7 +210,17 @@ static void value(int op, char *b, size_t n)
     case OP_AUTO_SPEED: snprintf(b, n, "%s", SPEED[cfg.auto_speed]); break;
     case OP_START_SCREEN: snprintf(b, n, "%s", T(cfg.start_screen ? "Yes" : "No")); break;
     case OP_DEBUG: snprintf(b, n, "%s", T(debug_enabled() ? "Yes" : "No")); break;
+    case OP_CHEAT_PLAYER: snprintf(b, n, "< %d >", cheat_player + 1); break;
+    case OP_GIVE_WEAPON: snprintf(b, n, "%s", T(cheats_weapon_name(cheat_weapon))); break;
+    case OP_LIVES: snprintf(b, n, "< %d >", cheat_lives); break;
+    case OP_SOLDIER: snprintf(b, n, "< %s >", CHEATS_SOLDIER_NAME[cheats_soldier(cheat_player)]); break;
+    case OP_INVINCIBLE: case OP_INF_BOMBS: case OP_INF_AMMO: case OP_D_KILLS:
+    case OP_BOXES: case OP_INFO: case OP_GROUND: case OP_CPU_METER: case OP_PA_POINT: case OP_PAUSE_ANY:
+        snprintf(b, n, "%s", T((cheats_dips & dip_of(op)) == dip_of(op) ? "Yes" : "No"));
+        break;
+    case OP_DEVMODE: snprintf(b, n, "%s", T(cfg.devmode ? "Yes" : "No")); break;
     case OP_SETTINGS: case OP_EXTRAS: case OP_VIDEO: case OP_AUDIO: case OP_GAME: case OP_CONTROLS:
+    case OP_CHEATS: case OP_DEBUG_PAGE:
         snprintf(b, n, ">");
         break;
     default: break;
@@ -180,6 +240,15 @@ static const char *help_en(int op)
     case OP_SERVICE: return "BIOS menu: difficulty, lives, time (also with F2)";
     case OP_SOUNDS: return "Listen to the music, voices and effects of the game";
     case OP_DEBUG: return "68000 load, slowdown, sprites, palette, RAM";
+    case OP_CHEATS: return "Weapons, bombs, lives, invincibility";
+    case OP_DEBUG_PAGE: return "The developers' own debug switches and hidden menu";
+    case OP_GIVE_WEAPON: return "</>: choose, Enter/A: give it (during a mission)";
+    case OP_SOLDIER: return "Takes effect when the player respawns";
+    case OP_D_KILLS: return "Press D in game: every enemy on screen dies";
+    case OP_DEVMODE: return "The game believes it runs on SNK's development hardware";
+    case OP_DEV_MENU: return "Stage select, test stages, sound test, debug dips";
+    case OP_PA_POINT: return "Marks a reference point used by the developers";
+    case OP_CPU_METER: return "The screen darkens while the 68000 is busy";
     case OP_START_SCREEN: return "Show this menu when the game opens";
     default: return "";
     }
@@ -237,6 +306,36 @@ static void do_action(int op, int d)
         if (!d) { m.remap_player = op - OP_CONTROLS1; m.remap_action = 0; }
         break;
     case OP_DEBUG: debug_enable(!debug_enabled()); cfg.debug = debug_enabled(); break;
+    case OP_CHEATS: if (!d) push_page(&P_CHEATS); break;
+    case OP_DEBUG_PAGE: if (!d) push_page(&P_DEBUG); break;
+    case OP_CHEAT_PLAYER: cheat_player = !cheat_player; break;
+    case OP_GIVE_WEAPON:
+        if (d) cheat_weapon = cycle(cheat_weapon, d, CHEATS_WEAPONS);
+        else if (cheats_give_weapon(cheat_player, cheat_weapon)) close_menu();
+        else fe_notify(T("Only during a mission"));
+        break;
+    case OP_MAX_BOMBS:
+        if (d) break;
+        if (cheats_set_bombs(cheat_player, 99)) close_menu();
+        else fe_notify(T("Only during a mission"));
+        break;
+    case OP_LIVES:
+        if (d) cheat_lives = cycle(cheat_lives, d, 10);
+        else if (cheats_set_lives(cheat_player, cheat_lives)) close_menu();
+        else fe_notify(T("Only during a mission"));
+        break;
+    case OP_SOLDIER:
+        if (!cheats_set_soldier(cheat_player, cycle(cheats_soldier(cheat_player), d ? d : 1, 4)))
+            fe_notify(T("Only during a mission"));
+        break;
+    case OP_INVINCIBLE: case OP_INF_BOMBS: case OP_INF_AMMO: case OP_D_KILLS:
+    case OP_BOXES: case OP_INFO: case OP_GROUND: case OP_CPU_METER: case OP_PA_POINT: case OP_PAUSE_ANY:
+        if ((cheats_dips & dip_of(op)) == dip_of(op)) cheats_dips &= (uint16_t)~dip_of(op);
+        else cheats_dips |= dip_of(op);
+        cheats_apply();
+        break;
+    case OP_DEVMODE: cfg.devmode = !cfg.devmode; cheats_devmode = cfg.devmode; cheats_apply(); break;
+    case OP_DEV_MENU: if (!d) { close_menu(); fe_dev_menu(); } break;
     case OP_SERVICE: if (!d) { close_menu(); fe_service(); } break;
     case OP_RESET: if (!d) { close_menu(); fe_reset(); } break;
     default: break;
