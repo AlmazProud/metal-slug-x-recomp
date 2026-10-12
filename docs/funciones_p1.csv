@@ -7,7 +7,6 @@ inicio,fin,bytes_codigo,instrucciones,llamadas,motivos
 000884,C1936E,2708,662,20,puntero_en_codigo
 001000,0010EE,130,31,1,llamada
 001004,C1936E,872,203,20,llamada
-0010F2,001158,102,27,0,puntero_en_codigo
 001166,0011E4,126,25,2,puntero_en_codigo
 00116A,0011E4,122,24,2,puntero_en_codigo
 001200,0012B2,150,36,3,puntero_en_codigo
@@ -217,7 +216,6 @@ inicio,fin,bytes_codigo,instrucciones,llamadas,motivos
 013214,01351A,774,239,13,llamada
 01351A,013776,604,189,13,llamada
 013776,013810,154,48,3,llamada
-013810,01424C,262,80,0,puntero_en_codigo
 01381C,01424C,250,77,0,llamada
 01382A,01431A,324,97,0,llamada
 0138A0,013968,200,68,0,llamada
@@ -419,7 +417,6 @@ inicio,fin,bytes_codigo,instrucciones,llamadas,motivos
 01B300,01B332,50,14,4,llamada
 01B332,01B34E,28,8,2,llamada
 01B34E,0C8D0C,22,5,0,llamada
-01B602,01B62C,42,11,1,puntero_en_codigo
 01B60E,01B62C,30,8,1,llamada
 01B62C,01BC2E,926,230,313,tabla_punteros
 01B668,01BC2E,922,230,313,puntero_en_codigo
@@ -1113,7 +1110,6 @@ inicio,fin,bytes_codigo,instrucciones,llamadas,motivos
 03D292,03D2B0,30,8,0,llamada
 03D2B0,03D3B2,258,78,5,llamada
 03D3B2,03D3C4,18,5,2,llamada
-03D4A4,03D4CE,122,29,2,puntero_en_codigo
 03D4AC,03D4CE,114,27,2,llamada
 03D4CE,03D4EE,112,27,2,llamada
 03D4EE,03D512,204,50,2,llamada

@@ -8,20 +8,20 @@ usuario y de la cobertura dinámica de MAME (`herramientas/cobertura.py`,
 
 | Medida | Bytes | % |
 |---|---:|---:|
-| Código (total) | 482,496 | 46.0 |
+| Código (total) | 482,362 | 46.0 |
 | ...confirmado: alcanzado desde vectores, cabecera, llamadas directas o ejecución en MAME | 132,244 | 12.6 |
-| ...heurística A: puntero cargado como constante por código confirmado | 234,420 | 22.4 |
+| ...heurística A: puntero cargado como constante por código confirmado | 234,286 | 22.3 |
 | ...heurística B: tabla de 3 o más punteros a código válido | 116,096 | 11.1 |
 | ...del total, ejecutado en MAME (cobertura dinámica) | 96,476 | 9.2 |
 | Relleno (tramos de 0x00 o 0xFF de 16 bytes o más fuera del código) | 89,476 | 8.5 |
-| Datos o desconocido | 476,604 | 45.5 |
+| Datos o desconocido | 476,738 | 45.5 |
 
-- Funciones detectadas: **4488** (lista completa en `docs/funciones_p1.csv`).
+- Funciones detectadas: **4484** (lista completa en `docs/funciones_p1.csv`).
 - **Validación de las heurísticas contra MAME:** de las 26,406 direcciones de P1 que
   MAME ejecutó, el análisis puramente estático (sin datos de MAME) encuentra el
   **51.3 %** con heurísticas y el 11.0 % sin ellas.
-- Instrucciones decodificadas: 116,616.
-- Direcciones de datos referenciadas fuera del código: 1,242.
+- Instrucciones decodificadas: 116,581.
+- Direcciones de datos referenciadas fuera del código: 1,243.
 - Saltos o llamadas indirectos en P1 **sin resolver** (sin destino observado en MAME):
   99. Primeros: `001972`, `0022AA`, `002354`, `003A76`, `00B680`, `00B9CE`, `00BC86`, `00BF4A`, `00C210`, `00C514`, `00C8AA`, `00CA7C`, `00CE26`, `00CFF8`, `00EB24`
 - Direcciones ejecutadas en MAME que el análisis estático no alcanza: 0
@@ -36,10 +36,12 @@ Bytes marcados como código que caen sobre esas palabras, según la evidencia:
 | Evidencia | Bytes de código | Falsos positivos seguros |
 |---|---:|---:|
 | Confirmado | 132,244 | 0 |
-| Heurística A (puntero en código) | 234,420 | 130 |
+| Heurística A (puntero en código) | 234,286 | 0 |
 | Heurística B (tabla de punteros) | 116,096 | 0 |
 
-Es una cota inferior: solo detecta los datos que el juego leyó durante la traza.
+Es una cota inferior: solo detecta los datos que el juego leyó durante la traza. En el análisis
+combinado, las rutas heurísticas que pisarían esos datos se cortan (0 cortes),
+así que aquí deberían quedar en 0. La validación puramente estática no usa esta información.
 
 ## Verificación cruzada con Ghidra
 
@@ -48,9 +50,9 @@ estáticas (vectores y cabecera) y su análisis automático (`herramientas/ghidr
 
 | Medida | Este análisis (combinado) | Ghidra |
 |---|---:|---:|
-| Bytes de instrucciones | 482,496 | 250,910 |
+| Bytes de instrucciones | 482,362 | 250,910 |
 | Direcciones ejecutadas en MAME que reconoce | 100.0 % | 55.5 % |
-| Bytes marcados como código que MAME leyó como datos (falsos positivos seguros) | 130 | 2 |
+| Bytes marcados como código que MAME leyó como datos (falsos positivos seguros) | 0 | 2 |
 
 - Inicios de instrucción en común: 54,247.
 - Instrucciones nuestras que caen a mitad de una instrucción de Ghidra (desalineación; uno

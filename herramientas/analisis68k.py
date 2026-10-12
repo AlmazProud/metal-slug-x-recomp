@@ -30,6 +30,7 @@ from capstone import m68k as M
 
 MB = 1 << 20
 TERMINA = {"rts", "rte", "rtr", "jmp", "bra", "illegal", "stop"}
+HEURISTICAS = {"puntero_en_codigo", "tabla_punteros"}
 SALTOS_COND = {"bra", "bhi", "bls", "bcc", "bcs", "bne", "beq", "bvc", "bvs",
                "bpl", "bmi", "bge", "blt", "bgt", "ble", "bhs", "blo"}
 
@@ -82,6 +83,8 @@ class Analizador:
         self.refs_datos: Counter = Counter()
         self.invalidos: set[int] = set()
         self.origen: dict[int, str] = {}           # dirección -> motivo de la raíz que la alcanzó
+        self.datos_prohibidos: set[int] = set()    # palabras que MAME leyó como datos
+        self.cortes_por_datos = 0
 
     def decodificar(self, addr: int):
         r = self.mem.region(addr)
@@ -124,6 +127,10 @@ class Analizador:
                 i = self.decodificar(a)
                 if i is None:
                     self.invalidos.add(a)
+                    break
+                if motivo in HEURISTICAS and any(o in self.datos_prohibidos
+                                                 for o in range(a & ~1, a + i.size, 2)):
+                    self.cortes_por_datos += 1        # la heurística pisaría datos demostrados
                     break
                 self.ins[a] = i
                 self.origen[a] = motivo
@@ -189,7 +196,7 @@ class Analizador:
             if self.dentro_de_instruccion(a):
                 return False
             i = self.decodificar(a)
-            if i is None:
+            if i is None or any(o in self.datos_prohibidos for o in range(a & ~1, a + i.size, 2)):
                 return False
             mn = base_mn(i)
             if mn in ("rts", "rte", "rtr", "jmp", "bra"):
@@ -316,8 +323,20 @@ def main() -> int:
     solo_sin_heur.explorar(raices_estaticas, {})
     recall_sin_heur = (sum(1 for pc in dyn_p1 if pc in solo_sin_heur.ins) / len(dyn_p1)) if dyn_p1 else 0.0
 
-    # 2) Análisis combinado: raíces + cobertura dinámica + heurísticas.
+    # Verdad de MAME: bytes leídos como datos. Son las lecturas sobre P1 menos los bytes de
+    # instrucciones ejecutadas, con una holgura de 4 bytes tras cada una (precarga del 68000).
+    datos_leidos: set[int] = set()
+    if cov.get("lecturas_p1"):
+        ejecutado = set()
+        for pc in dyn_p1:
+            i = solo.decodificar(pc)
+            if i is not None:
+                ejecutado.update(range(pc, pc + i.size + 4))
+        datos_leidos = {w for w in cov["lecturas_p1"] if w not in ejecutado and w + 1 not in ejecutado}
+
+    # 2) Análisis combinado: raíces + cobertura dinámica + heurísticas que no pisen esos datos.
     an = Analizador(mem)
+    an.datos_prohibidos = datos_leidos
     an.explorar_con_heuristicas(raices, indirectos_obs, usar_heuristicas=True)
 
     # ------------------------------------------------ cobertura de P1
@@ -337,18 +356,6 @@ def main() -> int:
     for m in re.finditer(rb"(\x00{16,}|\xff{16,})", p1):
         relleno += sum(1 for o in range(m.start(), m.end()) if not codigo[o])
     datos_o_desconocido = MB - est_bytes - relleno
-
-    # ------------------------------------------------ verdad de MAME: bytes leídos como datos
-    # Lecturas sobre P1 menos los bytes de instrucciones ejecutadas y una holgura de 4 bytes
-    # tras cada una (precarga del 68000): lo que queda solo pudo leerse como dato.
-    datos_leidos: set[int] = set()
-    if cov.get("lecturas_p1"):
-        ejecutado = set()
-        for pc in dyn_p1:
-            i = an.ins.get(pc)
-            if i is not None:
-                ejecutado.update(range(pc, pc + i.size + 4))
-        datos_leidos = {w for w in cov["lecturas_p1"] if w not in ejecutado and w + 1 not in ejecutado}
 
     def falsos_positivos(instrucciones) -> int:
         """Bytes de instrucciones que MAME demostró que son datos (en palabras de 2 bytes)."""
@@ -472,7 +479,9 @@ Bytes marcados como código que caen sobre esas palabras, según la evidencia:
 | Heurística A (puntero en código) | {por_evidencia['puntero_en_codigo']:,} | {fp['puntero_en_codigo']:,} |
 | Heurística B (tabla de punteros) | {por_evidencia['tabla_punteros']:,} | {fp['tabla_punteros']:,} |
 
-Es una cota inferior: solo detecta los datos que el juego leyó durante la traza.
+Es una cota inferior: solo detecta los datos que el juego leyó durante la traza. En el análisis
+combinado, las rutas heurísticas que pisarían esos datos se cortan ({an.cortes_por_datos} cortes),
+así que aquí deberían quedar en 0. La validación puramente estática no usa esta información.
 
 ## Verificación cruzada con Ghidra
 
