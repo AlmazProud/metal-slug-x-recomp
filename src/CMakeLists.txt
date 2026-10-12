@@ -72,7 +72,12 @@ if(NOT SDL3_FOUND)
     message(STATUS "Port desactivado: no se encontró SDL3 (CMAKE_PREFIX_PATH)")
     return()
 endif()
-add_executable(mslugx WIN32 port/main.c)
+set(PORT_FUENTES port/main.c port/sin_ventana.c port/ventana.c port/config.c port/gog.c)
+if(WIN32)
+    enable_language(RC)
+    list(APPEND PORT_FUENTES port/mslugx.rc)
+endif()
+add_executable(mslugx WIN32 ${PORT_FUENTES})
 target_link_libraries(mslugx PRIVATE neogeo programa_recompilado SDL3::SDL3)
 target_compile_options(mslugx PRIVATE -Wall -Wextra)
 # Runtime de C++ (por ymfm) enlazado estático: el ejecutable solo necesita SDL3.dll.
@@ -81,6 +86,15 @@ set_target_properties(mslugx PROPERTIES LINKER_LANGUAGE CXX)
 add_custom_command(TARGET mslugx POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:mslugx> $<TARGET_FILE_DIR:mslugx>
     COMMAND_EXPAND_LISTS)
+
+# Distribución (Fase 5): cmake --install build --prefix <carpeta> deja el ejecutable y SDL3.dll.
+# El ejecutable contiene código traducido de la copia del usuario: es para uso personal.
+install(TARGETS mslugx RUNTIME DESTINATION .)
+install(FILES $<TARGET_RUNTIME_DLLS:mslugx> DESTINATION .)
+
+# Fase 5: un estado guardado, cargado en una máquina reiniciada, reproduce RAM, imagen y audio.
+add_test(NAME estado_guardado
+         COMMAND mslugx --roms ${PD_ROMS} --sin-ventana --cuadros 3000 --probar-estado 600)
 
 # Fase 4: la partida grabada del usuario (Misión 1) reproducida contra MAME, sin divergencias en RAM,
 # paleta ni imagen. Las referencias de MAME y las entradas viven en PD_ANALISIS/fase4 (fuera del repo;

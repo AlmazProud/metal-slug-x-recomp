@@ -36,6 +36,8 @@
 !*.cpp
 !*.ipp
 !externo/**/LICENSE
+# Fase 5: manifiesto del ejecutable de Windows (XML, sin datos del juego)
+!src/port/*.manifest
 
 # 4) Siempre ignorado, aunque coincida con la lista blanca
 build/
