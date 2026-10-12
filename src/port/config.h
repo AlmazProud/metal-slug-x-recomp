@@ -25,6 +25,7 @@ typedef struct {
     int aspecto;                         /* ASPECTO_*: 4:3 como el monitor, o píxeles cuadrados */
     int filtro;                          /* FILTRO_* */
     int scanlines;
+    int vsync;                           /* sincronía vertical con el monitor */
     /* audio */
     int volumen;                         /* 0-100 */
     /* juego */
@@ -36,6 +37,7 @@ typedef struct {
     int debug;                           /* panel de depuración visible */
     int vibracion;                       /* intensidad 0-100 (0 = apagada) */
     int pantalla_inicio;                 /* mostrar el menú de inicio al abrir */
+    int sangre;                          /* 0 = la del menú de servicio; 1 = siempre roja */
     /* controles: [jugador][acción] */
     SDL_Scancode tecla[2][ACC_N];
     SDL_GamepadButton boton[2][ACC_N];

@@ -15,6 +15,7 @@ void fe_aplicar_volumen(void);
 void fe_jugar(void);                     /* moneda y START del jugador 1, como un jugador */
 void fe_reiniciar(void);                 /* reinicio de la máquina (conserva la SRAM) */
 void fe_servicio(void);                  /* botón de test: menú de servicio del BIOS */
+void fe_aplicar_sangre(void);
 void fe_salir(void);
 
 #endif

@@ -23,9 +23,9 @@ enum {
     OP_SALIR,
     /* configuración */
     OP_VIDEO, OP_AUDIO, OP_JUEGO, OP_CONTROLES,
-    OP_PANTALLA, OP_ASPECTO, OP_FILTRO, OP_SCANLINES,
+    OP_PANTALLA, OP_VSYNC, OP_ASPECTO, OP_FILTRO, OP_SCANLINES,
     OP_VOLUMEN, OP_VIBRACION,
-    OP_TURBO, OP_AUTO1, OP_AUTO2, OP_AUTO_VEL, OP_PANTALLA_INICIO,
+    OP_TURBO, OP_SANGRE, OP_AUTO1, OP_AUTO2, OP_AUTO_VEL, OP_PANTALLA_INICIO,
     OP_CONTROLES1, OP_CONTROLES2,
     /* extras */
     OP_DEBUG, OP_SERVICIO, OP_REINICIAR,
@@ -41,9 +41,9 @@ PAGINA(P_INICIO, "METAL SLUG X", OP_JUGAR, OP_CARGAR, OP_CONFIG, OP_SONIDOS, OP_
 PAGINA(P_PAUSA, "PAUSA", OP_CONTINUAR, OP_GUARDAR, OP_CARGAR, OP_CONFIG, OP_SONIDOS, OP_EXTRAS,
        OP_VOLVER_INICIO, OP_SALIR);
 PAGINA(P_CONFIG, "CONFIGURACION", OP_VIDEO, OP_AUDIO, OP_JUEGO, OP_CONTROLES);
-PAGINA(P_VIDEO, "VIDEO", OP_PANTALLA, OP_ASPECTO, OP_FILTRO, OP_SCANLINES);
+PAGINA(P_VIDEO, "VIDEO", OP_PANTALLA, OP_VSYNC, OP_ASPECTO, OP_FILTRO, OP_SCANLINES);
 PAGINA(P_AUDIO, "AUDIO", OP_VOLUMEN, OP_VIBRACION);
-PAGINA(P_JUEGO, "JUEGO", OP_TURBO, OP_AUTO1, OP_AUTO2, OP_AUTO_VEL, OP_PANTALLA_INICIO);
+PAGINA(P_JUEGO, "JUEGO", OP_TURBO, OP_SANGRE, OP_AUTO1, OP_AUTO2, OP_AUTO_VEL, OP_PANTALLA_INICIO);
 PAGINA(P_CONTROLES, "CONTROLES", OP_CONTROLES1, OP_CONTROLES2);
 PAGINA(P_EXTRAS, "EXTRAS", OP_DEBUG, OP_SERVICIO, OP_REINICIAR);
 
@@ -106,12 +106,14 @@ static const char *etiqueta(int op)
     case OP_JUEGO: return "Juego";
     case OP_CONTROLES: return "Controles";
     case OP_PANTALLA: return "Pantalla completa";
+    case OP_VSYNC: return "V-sync";
     case OP_ASPECTO: return "Aspecto";
     case OP_FILTRO: return "Filtro";
     case OP_SCANLINES: return "Scanlines";
     case OP_VOLUMEN: return "Volumen";
     case OP_VIBRACION: return "Vibracion";
     case OP_TURBO: return "Ralentizacion";
+    case OP_SANGRE: return "Sangre";
     case OP_AUTO1: return "Autodisparo J1";
     case OP_AUTO2: return "Autodisparo J2";
     case OP_AUTO_VEL: return "Velocidad autodisparo";
@@ -136,6 +138,7 @@ static void valor(int op, char *b, size_t n)
     switch (op) {
     case OP_GUARDAR: case OP_CARGAR: snprintf(b, n, "< Ranura %d >", cfg.ranura); break;
     case OP_PANTALLA: snprintf(b, n, cfg.pantalla_completa ? "Si" : "No"); break;
+    case OP_VSYNC: snprintf(b, n, cfg.vsync ? "Si" : "No"); break;
     case OP_ASPECTO: snprintf(b, n, "%s", ASPECTO[cfg.aspecto]); break;
     case OP_FILTRO: snprintf(b, n, "%s", FILTRO[cfg.filtro]); break;
     case OP_SCANLINES: snprintf(b, n, cfg.scanlines ? "Si" : "No"); break;
@@ -145,6 +148,7 @@ static void valor(int op, char *b, size_t n)
         if (cfg.turbo) snprintf(b, n, "No (x%d)", 1 << cfg.turbo);
         else snprintf(b, n, "Original");
         break;
+    case OP_SANGRE: snprintf(b, n, cfg.sangre ? "Roja" : "Original"); break;
     case OP_AUTO1: case OP_AUTO2: snprintf(b, n, "%s", AUTO[cfg.autodisparo[op - OP_AUTO1]]); break;
     case OP_AUTO_VEL: snprintf(b, n, "%s", VEL[cfg.auto_velocidad]); break;
     case OP_PANTALLA_INICIO: snprintf(b, n, cfg.pantalla_inicio ? "Si" : "No"); break;
@@ -161,6 +165,8 @@ static const char *ayuda(int op)
     switch (op) {
     case OP_TURBO: return "Original: el juego se ralentiza con muchos sprites, como la placa";
     case OP_ASPECTO: return "4:3 como el monitor original, o pixeles cuadrados";
+    case OP_VSYNC: return "Sin cortes en la imagen; a 60 Hz el juego va 1.4% mas rapido";
+    case OP_SANGRE: return "Original: la del menu de servicio (BLOOD, apagada en EE.UU.)";
     case OP_FILTRO: return "Nitido: pixeles parejos sin bordes borrosos";
     case OP_AUTO1: case OP_AUTO2: return "Boton propio: B / G en el teclado, RB en el mando";
     case OP_SERVICIO: return "Menu del BIOS: dificultad, vidas, tiempo (tambien con F2)";
@@ -203,12 +209,14 @@ static void accion(int op, int d)
     case OP_JUEGO: if (!d) entrar(&P_JUEGO); break;
     case OP_CONTROLES: if (!d) entrar(&P_CONTROLES); break;
     case OP_PANTALLA: cfg.pantalla_completa = !cfg.pantalla_completa; fe_aplicar_video(); break;
+    case OP_VSYNC: cfg.vsync = !cfg.vsync; fe_aplicar_video(); break;
     case OP_ASPECTO: cfg.aspecto = ciclar(cfg.aspecto, d ? d : 1, ASPECTO_N); break;
     case OP_FILTRO: cfg.filtro = ciclar(cfg.filtro, d ? d : 1, FILTRO_N); break;
     case OP_SCANLINES: cfg.scanlines = !cfg.scanlines; break;
     case OP_VOLUMEN: cambiar_porcentaje(&cfg.volumen, d); fe_aplicar_volumen(); break;
     case OP_VIBRACION: cambiar_porcentaje(&cfg.vibracion, d); vibracion_intensidad(cfg.vibracion); break;
     case OP_TURBO: cfg.turbo = ciclar(cfg.turbo, d ? d : 1, 3); cpu_turbo = cfg.turbo; break;
+    case OP_SANGRE: cfg.sangre = !cfg.sangre; fe_aplicar_sangre(); break;
     case OP_AUTO1: case OP_AUTO2:
         cfg.autodisparo[op - OP_AUTO1] = ciclar(cfg.autodisparo[op - OP_AUTO1], d ? d : 1, AUTO_N);
         break;

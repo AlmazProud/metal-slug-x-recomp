@@ -36,6 +36,7 @@ void config_por_defecto(Config *c)
     c->ranura = 1;
     c->autodisparo[0] = c->autodisparo[1] = AUTO_BOTON;
     c->vibracion = 70;
+    c->vsync = 1;
     c->pantalla_inicio = 1;
     static const SDL_Scancode t1[ACC_N] = {
         SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT,
@@ -106,6 +107,7 @@ int config_cargar(Config *c, const char *ruta)
             else if (!strcmp(k, "aspecto")) c->aspecto = buscar(ASPECTO_NOMBRE, ASPECTO_N, v, c->aspecto);
             else if (!strcmp(k, "filtro")) c->filtro = buscar(FILTRO_NOMBRE, FILTRO_N, v, c->filtro);
             else if (!strcmp(k, "scanlines")) c->scanlines = entero(v, 0, 1, c->scanlines);
+            else if (!strcmp(k, "vsync")) c->vsync = entero(v, 0, 1, c->vsync);
         } else if (!strcmp(seccion, "audio")) {
             if (!strcmp(k, "volumen")) c->volumen = entero(v, 0, 100, c->volumen);
         } else if (!strcmp(seccion, "juego")) {
@@ -119,6 +121,7 @@ int config_cargar(Config *c, const char *ruta)
             else if (!strcmp(k, "debug")) c->debug = entero(v, 0, 1, c->debug);
             else if (!strcmp(k, "vibracion")) c->vibracion = entero(v, 0, 100, c->vibracion);
             else if (!strcmp(k, "pantalla_inicio")) c->pantalla_inicio = entero(v, 0, 1, c->pantalla_inicio);
+            else if (!strcmp(k, "sangre")) c->sangre = entero(v, 0, 1, c->sangre);
         } else if (!strncmp(seccion, "teclado", 7) || !strncmp(seccion, "mando", 5)) {
             int teclado = seccion[0] == 't';
             int j = seccion[teclado ? 7 : 5] - '1';
@@ -144,6 +147,8 @@ int config_guardar(const Config *c, const char *ruta)
             ASPECTO_NOMBRE[c->aspecto]);
     fprintf(f, "; filtro: nitido (píxeles parejos con bordes suaves), suave o pixeles\nfiltro=%s\nscanlines=%d\n\n",
             FILTRO_NOMBRE[c->filtro], c->scanlines);
+    fprintf(f, "; vsync: 1 = sincronía con el monitor (sin cortes en la imagen), 0 = ritmo exacto de la placa\n"
+               "vsync=%d\n\n", c->vsync);
     fprintf(f, "[audio]\nvolumen=%d\n\n", c->volumen);
     fprintf(f, "[juego]\n; turbo: 0 = como el original (con la ralentización), 1 = 68000 al doble, 2 = al cuádruple\n");
     fprintf(f, "turbo=%d\nranura=%d\nroms=%s\n", c->turbo, c->ranura, c->roms);
@@ -156,6 +161,8 @@ int config_guardar(const Config *c, const char *ruta)
             c->vibracion);
     fprintf(f, "; pantalla_inicio: menú de inicio al abrir el juego (1) o directo al juego (0)\npantalla_inicio=%d\n",
             c->pantalla_inicio);
+    fprintf(f, "; sangre: 0 = la que diga el menú de servicio (BLOOD, en EE. UU. viene apagada), 1 = siempre roja\n"
+               "sangre=%d\n", c->sangre);
     for (int j = 0; j < 2; j++) {
         fprintf(f, "\n[teclado%d]\n", j + 1);
         for (int a = 0; a < ACC_N; a++)

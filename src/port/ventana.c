@@ -12,6 +12,14 @@
  * máximo útil.
  * El resto de los controles se configura en el menú o en mslugx.ini (config.c).
  *
+ * Ritmo (Fase 7A): sin V-sync, un cuadro cada 16,896 ms exactos (59,1856 Hz, la placa). Con V-sync:
+ *   - monitor de ~60 Hz (58-62): un cuadro por refresco; el juego va a la frecuencia del monitor
+ *     (1,4 % más rápido a 60 Hz) y el audio se reproduce en la misma proporción
+ *     (SDL_SetAudioStreamFrequencyRatio), con una corrección suave según la cola para no acumular
+ *     ni cortar, como el "syncrefresh" de MAME;
+ *   - otras frecuencias (75, 120, 144 Hz...): se presenta en cada refresco y se emulan los cuadros
+ *     que tocan según el reloj (acumulador), al ritmo exacto de la placa.
+ *
  * Imagen: la Neo Geo dibuja 320x224 píxeles que el monitor estira a 4:3, así que sus píxeles no
  * son cuadrados. El filtro "nítido" amplía primero por un factor entero sin suavizar y luego
  * ajusta al tamaño final con interpolación lineal: píxeles parejos sin bordes borrosos.
@@ -31,6 +39,7 @@
 #include "logo.h"
 #include "menu.h"
 #include "neogeo.h"
+#include "perfil.h"
 #include "port.h"
 #include "sonidos.h"
 
@@ -183,10 +192,30 @@ static void mando_desconectado(SDL_JoystickID id)
 
 /* ------------------------------------------------------------------ acciones de los menús */
 void fe_guardar_config(void) { config_guardar(&cfg, ruta_cfg); }
-void fe_aplicar_video(void) { SDL_SetWindowFullscreen(ventana, cfg.pantalla_completa != 0); }
+static int sin_esperar;                      /* pruebas: correr lo más rápido posible */
+
+void fe_aplicar_video(void)
+{
+    SDL_SetWindowFullscreen(ventana, cfg.pantalla_completa != 0);
+    SDL_SetRenderVSync(render, cfg.vsync && !sin_esperar ? 1 : 0);
+}
+
+/* Frecuencia del monitor de la ventana (Hz; 60 si no se sabe). */
+static float frecuencia_monitor(void)
+{
+    if (getenv("PD_HZ")) return (float)atof(getenv("PD_HZ"));      /* pruebas: otra frecuencia */
+    const SDL_DisplayMode *m = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(ventana));
+    return m && m->refresh_rate > 1 ? m->refresh_rate : 60.0f;
+}
 void fe_aplicar_volumen(void) { if (audio) SDL_SetAudioStreamGain(audio, cfg.volumen / 100.0f); }
 void fe_jugar(void) { jugar_cuadro = 0; }
 void fe_servicio(void) { test_cuadros = 30; }
+
+/* Sangre roja: el juego lee su opción BLOOD encendida (perfil.h). */
+void fe_aplicar_sangre(void)
+{
+    ng_lectura_forzada = (NgLecturaForzada){cfg.sangre, PERFIL_SANGRE_PALABRA, PERFIL_SANGRE_MASCARA, 0x0001};
+}
 void fe_salir(void) { salir = 1; }
 
 void fe_reiniciar(void)
@@ -432,6 +461,7 @@ int ventana_correr(const Opciones *o)
     cpu_turbo = cfg.turbo;
     maquina_arrancar(o);
     debug_activar(cfg.debug);
+    fe_aplicar_sangre();
     vibracion_iniciar(mandos, 2);
     vibracion_intensidad(cfg.vibracion);
     if (!o->sram_vacia) sram_cargar();
@@ -490,9 +520,14 @@ int ventana_correr(const Opciones *o)
         prueba_renombrar = !strcmp(extra, "renombrar");
     }
     long cuadros_vistos = 0;
+    if (prueba_cuadros) { sin_esperar = 1; fe_aplicar_video(); }
 
     int pausa = 0, capturas = 0;
-    Uint64 proximo = SDL_GetTicksNS();
+    Uint64 proximo = SDL_GetTicksNS(), anterior = proximo, acumulado = 0, inicio = proximo;
+    float hz = frecuencia_monitor();
+    /* PD_SALIR_TRAS=segundos: sale sola (medición del ritmo en tiempo real, con --traza). */
+    double salir_tras = getenv("PD_SALIR_TRAS") ? atof(getenv("PD_SALIR_TRAS")) : 0;
+    uint64_t vueltas = 0, emulados = ng.cuadros;
     while (!salir) {
         if (prueba_cuadros && prueba_menu && cuadros_vistos == prueba_cuadros - 1) menu_pausa();
         if (prueba_cuadros && prueba_jugar && cuadros_vistos == 1300) menu_navegar(4);   /* "Jugar" */
@@ -521,24 +556,53 @@ int ventana_correr(const Opciones *o)
             case SDL_EVENT_GAMEPAD_BUTTON_DOWN: boton(&e.gbutton); break;
             case SDL_EVENT_GAMEPAD_ADDED: mando_conectado(e.gdevice.which); break;
             case SDL_EVENT_GAMEPAD_REMOVED: mando_desconectado(e.gdevice.which); break;
-            case SDL_EVENT_WINDOW_ENTER_FULLSCREEN: cfg.pantalla_completa = 1; break;
-            case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN: cfg.pantalla_completa = 0; break;
+            case SDL_EVENT_WINDOW_ENTER_FULLSCREEN: cfg.pantalla_completa = 1; hz = frecuencia_monitor(); break;
+            case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN: cfg.pantalla_completa = 0; hz = frecuencia_monitor(); break;
+            case SDL_EVENT_WINDOW_DISPLAY_CHANGED: hz = frecuencia_monitor(); break;
             default: break;
             }
         }
-        if (sonidos_abierto()) {
-            sonidos_cuadro();
-        } else if (menu_juego_corre()) {         /* pantalla de inicio: el demo sigue, sin entradas */
-            memset(ng.joy, 0, sizeof ng.joy);
-            memset(ng.sistema, 0, sizeof ng.sistema);
-            ng.test = 0x80;
-            ng_ejecutar_cuadro();
-        } else if ((!pausa || avanzar) && !menu_abierto()) {
-            leer_entradas();
-            ng_ejecutar_cuadro();
-            debug_cuadro();
-            vibracion_cuadro();
-            avanzar = 0;
+        /* Cuántos cuadros emular en esta vuelta (ver el comentario del principio). */
+        Uint64 ahora = SDL_GetTicksNS();
+        int vsync = cfg.vsync && !sin_esperar;
+        int exacto = vsync && hz >= 58.0f && hz <= 62.0f;
+        int cuadros = 1;
+        if (vsync && !exacto) {
+            acumulado += ahora - anterior;
+            if (acumulado > 4 * NS_POR_CUADRO) acumulado = NS_POR_CUADRO;      /* nos atrasamos */
+            cuadros = (int)(acumulado / NS_POR_CUADRO);
+            acumulado -= (Uint64)cuadros * NS_POR_CUADRO;
+        }
+        anterior = ahora;
+        vueltas++;
+        if (salir_tras > 0 && (ahora - inicio) / 1e9 >= salir_tras) salir = 1;
+        for (int c = 0; c < cuadros; c++) {
+            if (sonidos_abierto()) {
+                sonidos_cuadro();
+            } else if (menu_juego_corre()) {     /* pantalla de inicio: el demo sigue, sin entradas */
+                memset(ng.joy, 0, sizeof ng.joy);
+                memset(ng.sistema, 0, sizeof ng.sistema);
+                ng.test = 0x80;
+                ng_ejecutar_cuadro();
+            } else if ((!pausa || avanzar) && !menu_abierto()) {
+                leer_entradas();
+                ng_ejecutar_cuadro();
+                debug_cuadro();
+                vibracion_cuadro();
+                avanzar = 0;
+            }
+        }
+        if (audio && vsync) {
+            /* Con V-sync el reloj es el monitor: el audio se reproduce en la proporción del ritmo
+               de los cuadros, con una corrección de hasta ±0,5 % para mantener la cola en ~50 ms. */
+            float base = exacto ? hz / 59.1856f : 1.0f;
+            float objetivo = NG_AUDIO_HZ * 4 / 20.0f;
+            float error = ((float)SDL_GetAudioStreamQueued(audio) - objetivo) / objetivo;
+            if (error > 1) error = 1;
+            if (error < -1) error = -1;
+            SDL_SetAudioStreamFrequencyRatio(audio, base * (1.0f + 0.005f * error));
+        } else if (audio) {
+            SDL_SetAudioStreamFrequencyRatio(audio, 1.0f);
         }
         if (audio) {
             uint32_t n = ng_audio_leer(muestras, 4096);
@@ -573,9 +637,10 @@ int ventana_correr(const Opciones *o)
         }
         SDL_RenderPresent(render);
 
+        /* Sin V-sync, el ritmo lo marca la espera: un cuadro cada 16,896 ms. */
         proximo += NS_POR_CUADRO;
-        Uint64 ahora = SDL_GetTicksNS();
-        if (prueba_cuadros) proximo = ahora;                              /* pruebas: sin esperar */
+        ahora = SDL_GetTicksNS();
+        if (sin_esperar || vsync) proximo = ahora;          /* pruebas, o el V-sync ya esperó */
         else if (proximo > ahora) SDL_DelayPrecise(proximo - ahora);
         else if (ahora - proximo > 4 * NS_POR_CUADRO) proximo = ahora;   /* nos atrasamos: no acumular */
     }
@@ -583,6 +648,11 @@ int ventana_correr(const Opciones *o)
     sonidos_cerrar();                    /* la SRAM y el estado vuelven a ser los del juego */
     if (!o->sram_vacia) sram_guardar();
     config_guardar(&cfg, ruta_cfg);
+    if (ng_traza) {
+        double s = (SDL_GetTicksNS() - inicio) / 1e9;
+        fprintf(ng_traza, "ritmo: monitor %.2f Hz, vsync %d, %.2f vueltas/s, %.3f cuadros emulados/s\n", hz, cfg.vsync,
+                vueltas / s, (ng.cuadros - emulados) / s);
+    }
     if (audio && ng_traza && audio_cuadros)
         fprintf(ng_traza, "audio: %llu cuadros, cola media %.1f ms, cola vacía %llu veces, descartes %llu\n",
                 (unsigned long long)audio_cuadros, audio_cola_suma / (double)audio_cuadros / (NG_AUDIO_HZ * 4) * 1000,
