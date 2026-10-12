@@ -75,13 +75,29 @@ static void latch(uint32_t a)
 }
 
 /* ------------------------------------------------------------------ E/S */
+static uint16_t leer_es_real(uint32_t a);
+
 static uint16_t leer_es(uint32_t a)
 {
+    if (ng_traza_lecturas && ng_cpu.ciclos >= ng_traza_desde && ng_cpu.ciclos <= ng_traza_hasta &&
+        (a & 0x0E0000) != 0x020000 && (a & 0x0E0000) <= 0x080000) {
+        uint16_t v = leer_es_real(a);
+        fprintf(ng_traza_lecturas, "%.3f pc=%06X %06X %04X\n", ng_cpu.ciclos / 12.0, ng_cpu.pc, a, v);
+        return v;
+    }
+    return leer_es_real(a);
+}
+
+static uint16_t leer_es_real(uint32_t a)
+{
+    if (ng_antes_de_leer_entradas) ng_antes_de_leer_entradas();
     switch (a & 0x0E0000) {
     case 0x000000:                                   /* 300000-31FFFF */
-        if (a & 0x80) return 0xFF00 | (ng.test & 0xFF);
-        return (uint16_t)((uint8_t)~ng.joy[0] << 8 | ng.dsw);
+        if (a & 0x80) return 0xFF00 | (ng.crudo ? ng.crudo_test : ng.test);
+        return (uint16_t)((ng.crudo ? ng.crudo_p1 : (uint8_t)~ng.joy[0]) << 8 | ng.dsw);
     case 0x020000: {                                 /* 320000-33FFFF */
+        if (ng.crudo)
+            return (uint16_t)(ng_sonido_respuesta() << 8 | (ng.crudo_monedas & 0x3F) | ng_rtc_tp() << 6 | ng_rtc_dato() << 7);
         uint8_t monedas = 0x1F;
         if (ng.sistema[0] & NG_MONEDA) monedas &= ~0x01;
         if (ng.sistema[1] & NG_MONEDA) monedas &= ~0x02;
@@ -89,8 +105,9 @@ static uint16_t leer_es(uint32_t a)
         return (uint16_t)(ng_sonido_respuesta() << 8 | monedas | ng_rtc_tp() << 6 | ng_rtc_dato() << 7);
     }
     case 0x040000:                                   /* 340000-35FFFF */
-        return (uint16_t)((uint8_t)~ng.joy[1] << 8 | 0xFF);
+        return (uint16_t)((ng.crudo ? ng.crudo_p2 : (uint8_t)~ng.joy[1]) << 8 | 0xFF);
     case 0x080000: {                                 /* 380000-39FFFF */
+        if (ng.crudo) return (uint16_t)(ng.crudo_sistema << 8 | 0xFF);
         uint8_t s = 0xFF;
         if (ng.sistema[0] & NG_START) s &= ~0x01;
         if (ng.sistema[0] & NG_SELECT) s &= ~0x02;
@@ -186,9 +203,37 @@ uint32_t bus_r8(uint32_t a)
     return (a & 1) ? (w & 0xFF) : (w >> 8);
 }
 
+/* Fin del acceso al bus de una escritura dentro de la instrucción en curso (ng_cpu.op, que
+ * empezó en ng_cpu.ini y termina en ng_cpu.ciclos). Según el microcódigo del 68000: en MOVE la
+ * escritura va antes de la última búsqueda anticipada (termina 4 ciclos antes del final); en el
+ * resto (lectura-modificación-escritura, CLR...) es el último acceso. Las de 32 bits son dos
+ * escrituras seguidas. */
+static int64_t fin_escritura(void)
+{
+    static int64_t ini = -1;
+    static int n;
+    if (ng_cpu.ini != ini) { ini = ng_cpu.ini; n = 0; }
+    n++;
+    uint32_t op = ng_cpu.op;
+    int move = (op & 0xC000) == 0 && (op & 0x3000) != 0;
+    int largo = move ? (op & 0x3000) == 0x2000 : ((op >> 6) & 3) == 2;
+    int64_t fin = ng_cpu.ciclos - (move ? 4 : 0);
+    return (largo && n == 1) ? fin - 4 : fin;
+}
+
+/* MAME procesa un evento en T cuando la CPU se detiene en el primer fin de acceso >= T: si un
+ * acceso anterior a esta escritura ya terminó en T o después, el evento (p. ej. dibujar una
+ * línea) ocurre antes que la escritura. */
+static void ordenar_escritura_video(void)
+{
+    int64_t te = fin_escritura();
+    if (ng_proximo_limite() <= te - 4) ng_al_dia(te - 4);
+}
+
 static void escribir(uint32_t a, uint16_t v, uint16_t mascara)
 {
     a &= 0xFFFFFE;
+    if ((a >= 0x3A0000 && a < 0x3E0000) || (a >= 0x400000 && a < 0x800000)) ordenar_escritura_video();
     switch (a >> 20) {
     case 0x1:
         a &= 0xFFFF;

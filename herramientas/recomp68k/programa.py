@@ -33,6 +33,7 @@ from generador import Emisor, NoSoportada         # noqa: E402
 CABECERA = r"""/* GENERADO por herramientas/recomp68k/programa.py: NO EDITAR, NO VERSIONAR. */
 #include <string.h>
 #include "cpu68k.h"
+#include "ciclos68k.h"
 #include "despachador.h"
 
 #define PD_SALTO_DIN(e)        do { c->pc = (e) & 0xFFFFFFu; return; } while (0)
@@ -41,6 +42,8 @@ CABECERA = r"""/* GENERADO por herramientas/recomp68k/programa.py: NO EDITAR, NO
 #define PD_SR_CAMBIADO(d)      do { c->pc = (d); return; } while (0)
 #define PD_STOP(d)             do { c->pc = (d); c->detenido = 1; return; } while (0)
 #define PD_RESET_EXTERNO()     ((void)0)
+/* Opcode e inicio de la instrucción, para el muestreo de interrupciones (ciclos68k.h). */
+#define PD_INI(o)              do { c->op = (o); c->ini = c->ciclos; } while (0)
 """
 
 RE_SALTO = re.compile(r"PD_(SIGUIENTE|SALTO)\(0x([0-9A-F]+)u\);")

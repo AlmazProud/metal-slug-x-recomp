@@ -7,7 +7,7 @@ if(NOT TARGET programa_recompilado)
 endif()
 
 add_executable(lockstep lockstep.c maquina.c bus.c musashi_ref.c)
-target_include_directories(lockstep PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(lockstep PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/src/cpu)
 target_link_libraries(lockstep PRIVATE programa_recompilado)
 
 add_test(NAME lockstep_reset

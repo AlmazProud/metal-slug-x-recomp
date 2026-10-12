@@ -144,9 +144,27 @@ class Emisor:
         if f is None:
             raise NoSoportada(i.op)
         if CICLOS_BASE is not None:
-            self.e(f"c->ciclos += {self.base()};")
+            self.e(f"PD_INI(0x{self.i.opcode:04X}u); c->ciclos += {self.base()}{self.ajuste()};")
         f()
         return self.lineas
+
+    def ajuste(self) -> str:
+        """Llamada a ciclos_ajuste (src/cpu/ciclos68k.h) para las familias con ciclos corregidos
+        contra MAME; vacía en el resto (no hace falta llamarla)."""
+        op = self.i.opcode
+        modo = (op >> 3) & 7
+        familia = ((((op & 0xF1C0) in (0xD1C0, 0x91C0, 0xD080, 0x9080, 0xC080, 0x8080)) and modo <= 1)
+                   or (op & 0xF1FF) in (0xD0FC, 0x90FC)
+                   or (op & 0xF1F8) == 0x5048
+                   or (op & 0xFFF8) == 0x0280
+                   or (op & 0xFFF8) in (0x0840, 0x0880, 0x08C0)
+                   or (op & 0xF1F8) in (0x0140, 0x0180, 0x01C0))
+        if not familia:
+            return ""
+        ext = 0
+        if (op & 0xFFF8) in (0x0840, 0x0880, 0x08C0) and self.i.ops:
+            ext = self.i.ops[0].valor & 0xFFFF
+        return f" + ciclos_ajuste(c, 0x{op:04X}u, 0x{ext:X}u)"
 
     def base(self) -> int:
         return CICLOS_BASE[self.i.opcode] if CICLOS_BASE is not None else 0
@@ -485,6 +503,8 @@ class Emisor:
         s = self.leer(self.i.ops[0], "w")
         r = self.i.ops[1].reg
         self.e(f"if ({s} == 0) {{ {self.excepcion(5, self.sig())} }}")
+        if CICLOS_BASE is not None:
+            self.e(f"c->ciclos += ciclos_ajuste_div{'s' if con_signo else 'u'}(c->d[{r}], {s});")
         self.e(f"op_div{'s' if con_signo else 'u'}(c, {r}, {s});")
         self.fin()
 

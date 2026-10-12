@@ -24,6 +24,10 @@ typedef struct Cpu68k {
     uint8_t s, t, imask;
     int64_t ciclos;         /* ciclos de reloj del 68000 consumidos */
     uint8_t detenido;       /* STOP ejecutado: espera una interrupción */
+    /* Muestreo de interrupciones (ciclos68k.h): opcode y ciclo de inicio de la última
+     * instrucción ejecutada. */
+    uint16_t op;
+    int64_t ini;
 } Cpu68k;
 
 /* ------------------------------------------------------------------ bus */
@@ -224,12 +228,13 @@ static inline int ciclos_mulu(uint32_t s)
     return n;
 }
 
+/* MULS: 2 ciclos por cada par 01/10 en la fuente de 17 bits (la palabra con un 0 añadido como
+ * bit menos significativo), según el manual del 68000; verificado contra MAME (Fase 4). */
 static inline int ciclos_muls(uint32_t s)
 {
+    uint32_t t = ((s << 1) ^ s) & 0xFFFF;
     int n = 0;
-    uint32_t f = 0;
-    for (uint32_t y = sext16(s & 0xFFFF); y; y >>= 1)
-        if ((y & 1) != f) { n += 2; f = 1 - f; }
+    for (; t; t &= t - 1) n += 2;
     return n;
 }
 

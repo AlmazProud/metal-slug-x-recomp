@@ -12,8 +12,8 @@
  * La NMI está activa mientras haya un comando sin leer y la NMI esté habilitada; la IRQ del
  * YM2610 va a la línea INT (el programa usa IM 1).
  *
- * Tiempo: todo se mide en ciclos del reloj maestro de 24 MHz (68000 = 2, Z80 = 6, YM = 3; una
- * muestra = 144 ciclos del YM = 432 del maestro, 55 555 Hz).
+ * Tiempo: todo se mide en ciclos del reloj maestro de 24 MHz (68000 = 2, Z80 = 6, YM = 3; las
+ * muestras, a 55 555 Hz como en MAME, ver HZ_MUESTRAS).
  *
  * Intercalado con el 68000, como el planificador de MAME (el oráculo):
  *   - el Z80 avanza hasta cada evento del 68000 (inicio de línea, VBlank, temporizadores del YM...),
@@ -26,6 +26,8 @@
 #include "neogeo.h"
 #include "ym2610.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "z80.h"
@@ -33,7 +35,11 @@
 #define MAESTRO_POR_68K 2
 #define MAESTRO_POR_Z80 6
 #define MAESTRO_POR_YM 3
-#define MAESTRO_POR_MUESTRA 432
+/* Muestras: MAME genera el flujo del YM2610 a 55 555 Hz exactos (la frecuencia es entera), no a
+   8 MHz / 144 = 55 555,55 Hz. Como cada muestra hace avanzar el estado del YM (envolventes,
+   ADPCM), se usa la misma cadencia: la muestra k termina en ceil((k + 1) * 24e6 / 55 555). */
+#define HZ_MUESTRAS 55555
+#define MAESTRO_HZ 24000000
 #define VENTANA_FINA 600                 /* ciclos del 68000 = 50 us */
 #define AUDIO_CAP 65536                  /* muestras estéreo en el búfer circular */
 
@@ -49,6 +55,7 @@ static struct {
     int64_t temporizador[2];             /* vencimiento (maestro), -1 = detenido */
     int64_t ocupado_fin;
     int64_t proxima_muestra;
+    int64_t n_muestras;
     int64_t fina_hasta;                  /* ciclo del 68000 */
     int16_t audio[AUDIO_CAP][2];
     uint32_t escritura, lectura;
@@ -103,6 +110,10 @@ uint32_t ng_audio_leer(int16_t *destino, uint32_t max)
 }
 
 /* ------------------------------------------------------------------ bus del Z80 */
+static FILE *traza_z80, *traza_ym;
+static int64_t traza_z80_desde, traza_z80_hasta;
+static int traza_z80_lista;
+
 static uint8_t mem_leer(uint16_t a)
 {
     const uint8_t *m1 = ng_roms.z80;
@@ -126,6 +137,8 @@ static uint8_t puerto_leer(uint16_t p)
 static void puerto_escribir(uint16_t p, uint8_t v)
 {
     uint8_t bajo = (uint8_t)p;
+    if (traza_ym && s.t >= traza_z80_desde && s.t <= traza_z80_hasta)
+        fprintf(traza_ym, "%.3f %02X %02X\n", s.t / 24.0, bajo, v);
     if (bajo == 0x00) s.comando = 0;
     else if (bajo >= 0x04 && bajo <= 0x07) ym_escribir(bajo & 3, v);
     else if (bajo == 0x08) s.nmi_habilitada = 1;
@@ -136,8 +149,26 @@ static void puerto_escribir(uint16_t p, uint8_t v)
     }
 }
 
+/* (declaradas arriba) Traza por instrucción del Z80 (diagnóstico): PD_TRAZA_Z80=archivo,desde_us,hasta_us. Formato
+   "C=<ciclo del Z80> <PC>:", comparable con la traza del depurador de MAME (totalcycles). */
+static void traza_z80_iniciar(void)
+{
+    traza_z80_lista = 1;
+    const char *e = getenv("PD_TRAZA_Z80");
+    double d, h;
+    char ruta[1024];
+    if (!e || sscanf(e, "%1023[^,],%lf,%lf", ruta, &d, &h) != 3) return;
+    if (getenv("PD_TRAZA_YM")) traza_ym = fopen(ruta, "w");   /* solo escrituras de puertos */
+    else traza_z80 = fopen(ruta, "w");
+    traza_z80_desde = (int64_t)(d * 24.0);
+    traza_z80_hasta = (int64_t)(h * 24.0);
+}
+
 static void tick_z80(void)
 {
+    if (!traza_z80_lista) traza_z80_iniciar();
+    if (traza_z80 && z80_opdone(&s.z80) && s.t >= traza_z80_desde && s.t <= traza_z80_hasta)
+        fprintf(traza_z80, "C=%lld %04X:\n", (long long)(s.t / MAESTRO_POR_Z80), s.z80.pc);
     uint64_t p = s.pines & ~(Z80_NMI | Z80_INT);
     if (s.pendiente && s.nmi_habilitada) p |= Z80_NMI;
     if (s.irq_ym) p |= Z80_INT;
@@ -170,7 +201,8 @@ static void perifericos_hasta(int64_t t)
             ym_temporizador_vencido((uint32_t)n);
         } else {
             muestra();
-            s.proxima_muestra += MAESTRO_POR_MUESTRA;
+            s.n_muestras++;
+            s.proxima_muestra = ((s.n_muestras + 1) * MAESTRO_HZ + HZ_MUESTRAS - 1) / HZ_MUESTRAS;
         }
     }
 }
@@ -208,7 +240,16 @@ void ng_sonido_comando(uint8_t v)
 
 uint8_t ng_sonido_respuesta(void)
 {
-    if (ng_cpu.ciclos <= s.fina_hasta) ng_sonido_hasta(ng_cpu.ciclos);
+    if (ng_cpu.ciclos <= s.fina_hasta) {
+        ng_sonido_hasta(ng_cpu.ciclos);
+    } else {
+        /* La lectura de bus ocurre cerca del final de la instrucción (antes de la última
+           búsqueda anticipada): ng_cpu.ciclos ya incluye la instrucción entera. Si un límite de
+           tramo de MAME cae antes de esa lectura, el Z80 ya corrió hasta él (medido en Fase 4:
+           MAME ve la respuesta en la lectura que empieza 5 ciclos antes de un inicio de línea). */
+        int64_t lectura = ng_cpu.ciclos - 8, limite = ng_proximo_limite();
+        if (limite <= lectura) ng_sonido_hasta(limite);
+    }
     static int visto = -1;
     if (ng_traza && s.respuesta != visto) {
         fprintf(ng_traza, "%.3f VISTO %02X\n", ng_cpu.ciclos / 12.0, s.respuesta);
@@ -227,6 +268,6 @@ void ng_sonido_iniciar(void)
        sonido los fija antes de usarlos. */
     s.banco[0] = 0x1E; s.banco[1] = 0x0E; s.banco[2] = 0x06; s.banco[3] = 0x02;
     s.temporizador[0] = s.temporizador[1] = -1;
-    s.proxima_muestra = MAESTRO_POR_MUESTRA;
+    s.proxima_muestra = (MAESTRO_HZ + HZ_MUESTRAS - 1) / HZ_MUESTRAS;
     ym_reiniciar();
 }

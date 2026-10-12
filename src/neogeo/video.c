@@ -130,7 +130,10 @@ void ng_video_escribir(uint32_t reg, uint16_t v)
     case 6:
         if (v & 1) ng.irq3 = 0;
         if (v & 2) ng.irq_raster = 0;
-        if (v & 4) ng.irq_vblank = 0;
+        if (v & 4) {
+            ng.irq_vblank = 0;
+            if (ng_al_reconocer_vblank) ng_al_reconocer_vblank();
+        }
         ng_irq_actualizar();
         break;
     default: break;                                            /* 7: solo PAL */

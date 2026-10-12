@@ -75,6 +75,9 @@ typedef struct {
     /* E/S */
     uint8_t joy[2], sistema[2], dsw;     /* sistema: NG_START | NG_SELECT | NG_MONEDA */
     uint8_t servicio, test;
+    /* Entradas crudas (bytes tal como los ve el bus, activos en bajo) para reproducir grabaciones
+       de MAME: si crudo != 0 reemplazan a joy/sistema/test. */
+    uint8_t crudo, crudo_p1, crudo_p2, crudo_sistema, crudo_monedas, crudo_test;
     int64_t watchdog;                    /* ciclo en que vence */
     uint32_t reinicios_watchdog;
     /* reloj del cuadro */
@@ -91,6 +94,11 @@ extern NgMaquina ng;
 extern FILE *ng_traza;                 /* traza de diagnóstico opcional (NULL = no) */
 extern FILE *ng_traza_es;              /* escrituras de E/S entre dos ciclos (comparación con MAME) */
 extern int64_t ng_traza_desde, ng_traza_hasta;
+extern FILE *ng_traza_lecturas;          /* lecturas de los puertos de entrada (diagnóstico) */
+/* Gancho opcional: se llama cuando el 68000 reconoce la VBlank (3C000C, bit 2). */
+extern void (*ng_al_reconocer_vblank)(void);
+/* Gancho opcional: se llama antes de cada lectura de un puerto de entrada (reproducciones). */
+extern void (*ng_antes_de_leer_entradas)(void);
 extern NgRoms ng_roms;
 extern Cpu68k ng_cpu;
 
@@ -98,7 +106,12 @@ extern Cpu68k ng_cpu;
 void ng_rtc_fijar(int anio, int mes, int dia, int dia_semana, int hora, int minuto, int segundo);
 
 void ng_encender(void);                  /* estado de encendido: reset del 68000 */
-void ng_ejecutar_cuadro(void);           /* hasta el comienzo del cuadro siguiente */
+void ng_ejecutar_cuadro(void);
+/* Próximo límite de tramo (evento de hardware), en ciclos del 68000. */
+int64_t ng_proximo_limite(void);
+/* Procesa los eventos de hardware vencidos hasta t (sin entregar interrupciones), para ordenar
+ * una escritura de video a mitad de instrucción respecto del dibujo de las líneas. */
+void ng_al_dia(int64_t t);           /* hasta el comienzo del cuadro siguiente */
 
 /* ------------------------------------------------------------------ internos */
 void ng_video_iniciar(void);

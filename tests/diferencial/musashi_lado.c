@@ -4,6 +4,7 @@
 #include "m68kcpu.h"
 #include "memoria_prueba.h"
 #include "estado.h"
+#include "ciclos68k.h"
 
 unsigned int m68k_read_memory_8(unsigned int a)  { return mem_leer8(a); }
 unsigned int m68k_read_memory_16(unsigned int a) { return (unsigned)mem_leer8(a) << 8 | mem_leer8(a + 1); }
@@ -34,7 +35,13 @@ int ms_ejecutar(Estado *e)
         if (i < 7) m68k_set_reg(M68K_REG_A0 + i, e->a[i]);
     }
     m68k_set_reg(M68K_REG_PC, e->pc);
-    int ciclos = m68k_execute(1);
+    /* Mismo ajuste de ciclos que el código generado (src/cpu/ciclos68k.h). */
+    Cpu68k previo = {0};
+    for (int i = 0; i < 8; i++) { previo.d[i] = e->d[i]; previo.a[i] = e->a[i]; }
+    previo.a[7] = (e->sr & 0x2000) ? e->ssp : e->usp;
+    previo.pc = e->pc;
+    int ajuste = ciclos_ajuste_previo(&previo);
+    int ciclos = m68k_execute(1) + ajuste;
     for (int i = 0; i < 8; i++) {
         e->d[i] = m68k_get_reg(NULL, M68K_REG_D0 + i);
         e->a[i] = m68k_get_reg(NULL, M68K_REG_A0 + i);

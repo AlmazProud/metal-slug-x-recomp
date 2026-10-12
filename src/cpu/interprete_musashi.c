@@ -2,6 +2,7 @@
  * Cpu68k. Se usa para el código sin versión recompilada (RAM, ventana de P2, código no visto).
  * Las funciones de memoria de Musashi (m68k_read_memory_*, m68k_write_memory_*) las aporta
  * el anfitrión y deben usar el mismo bus que el código recompilado. */
+#include "ciclos68k.h"
 #include "despachador.h"
 #include "m68k.h"
 #include "m68kcpu.h"
@@ -29,8 +30,11 @@ void rc_interprete_paso(Cpu68k *c)
     /* Misma convención que el código generado: los ciclos base de la instrucción se suman
      * ANTES de ejecutarla, así los periféricos que dependen del tiempo (contador de línea)
      * ven el mismo valor en ambos caminos. */
-    int base = CYC_INSTRUCTION[m68k_read_memory_16(c->pc) & 0xFFFF];
-    c->ciclos += base;
+    uint32_t pc_previo = c->pc, op = m68k_read_memory_16(c->pc) & 0xFFFF;
+    int base = CYC_INSTRUCTION[op];
+    int ajuste = ciclos_ajuste_previo(c);         /* con el estado previo, como el generador */
+    c->op = (uint16_t)op; c->ini = c->ciclos;
+    c->ciclos += base + ajuste;
     c->ciclos += m68k_execute(1) - base;
 
     for (int i = 0; i < 8; i++) {
@@ -46,4 +50,5 @@ void rc_interprete_paso(Cpu68k *c)
     c->ssp = m68k_get_reg(NULL, M68K_REG_ISP);
     c->pc = m68k_get_reg(NULL, M68K_REG_PC) & 0xFFFFFF;
     if (CPU_STOPPED) c->detenido = 1;
+    (void)pc_previo;
 }

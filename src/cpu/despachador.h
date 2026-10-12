@@ -49,6 +49,10 @@ void rc_interprete_paso(Cpu68k *c);
 /* Gancho opcional, llamado al inicio de cada paso de despacho (pruebas de lockstep). */
 extern void (*rc_traza)(const Cpu68k *c);
 
+/* Diagnóstico: 1 = ejecutar todo con el intérprete (un paso = una instrucción), para trazas
+ * instrucción a instrucción. Los ciclos son los mismos que los del código recompilado. */
+extern int rc_solo_interprete;
+
 /* Estadísticas */
 extern uint64_t rc_pasos_recompilados, rc_pasos_interpretados;
 

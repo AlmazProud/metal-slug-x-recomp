@@ -8,6 +8,10 @@ target_link_libraries(cpu68k PUBLIC musashi)
 add_executable(volcar_ciclos ${PROJECT_SOURCE_DIR}/herramientas/recomp68k/volcar_ciclos.c)
 target_link_libraries(volcar_ciclos PRIVATE musashi)
 
+# Consulta de las reglas de muestreo de interrupciones (herramientas/verificar_muestreo.py).
+add_executable(clases_muestreo ${PROJECT_SOURCE_DIR}/herramientas/recomp68k/clases_muestreo.c)
+target_link_libraries(clases_muestreo PRIVATE cpu68k)
+
 if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALISIS}/listado_bios.txt")
     message(STATUS "Programa recompilado desactivado: faltan ROMs (${PD_ROMS}) o listados del análisis (${PD_ANALISIS})")
     return()
@@ -77,3 +81,16 @@ set_target_properties(mslugx PROPERTIES LINKER_LANGUAGE CXX)
 add_custom_command(TARGET mslugx POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:mslugx> $<TARGET_FILE_DIR:mslugx>
     COMMAND_EXPAND_LISTS)
+
+# Fase 4: la partida grabada del usuario (Misión 1) reproducida contra MAME, sin divergencias en RAM,
+# paleta ni imagen. Las referencias de MAME y las entradas viven en PD_ANALISIS/fase4 (fuera del repo;
+# cómo generarlas: herramientas/verificar_mision.py).
+if(EXISTS "${PD_ANALISIS}/fase4/mision1_huellas_mame.txt" AND EXISTS "${PD_ANALISIS}/fase4/mision1_entradas.txt")
+    add_test(NAME mision1_contra_mame
+             COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/herramientas/verificar_mision.py
+                     --exe $<TARGET_FILE:mslugx> --roms ${PD_ROMS}
+                     --entradas ${PD_ANALISIS}/fase4/mision1_entradas.txt
+                     --referencia ${PD_ANALISIS}/fase4/mision1_huellas_mame.txt
+                     --cuadros 11970 --fecha 2026-10-11-20-28-31-0
+                     --salida ${CMAKE_CURRENT_BINARY_DIR}/mision1_huellas_port.txt)
+endif()
