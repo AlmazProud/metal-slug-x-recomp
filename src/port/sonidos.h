@@ -1,4 +1,4 @@
-/* Fase 6B: menú de música, efectos y voces, y vibración del mando. */
+/* Fase 6B/6C: menú de música, efectos y voces, y vibración del mando. */
 #ifndef SONIDOS_H
 #define SONIDOS_H
 
@@ -19,13 +19,20 @@ extern const Sonido PERFIL_SONIDOS[];    /* perfil_sonidos.c (generado) */
 extern const int PERFIL_N_SONIDOS;
 
 /* ------------------------------------------------------------------ menú de sonido */
+/* ventana: para escribir nombres; ruta: archivo de nombres y vibración del usuario (sonidos.ini). */
+void sonidos_iniciar(SDL_Window *ventana, const char *ruta);
 void sonidos_abrir(void);                /* guarda el estado del juego y detiene el 68000 */
 void sonidos_cerrar(void);               /* restaura el juego tal como estaba */
 int sonidos_abierto(void);
 void sonidos_cuadro(void);               /* avanza el sonido un cuadro (en lugar del juego) */
-/* Navegación: 0 arriba, 1 abajo, 2 izquierda, 3 derecha, 4 reproducir, 5 salir, 6 detener. */
+/* Navegación: 0 arriba, 1 abajo, 2 izquierda, 3 derecha, 4 escuchar, 5 salir, 6 detener,
+ * 7 renombrar, 8 cambiar la vibración del sonido. */
 void sonidos_navegar(int t);
 void sonidos_dibujar(SDL_Renderer *r, int w, int h);
+/* Escritura de un nombre en curso. */
+int sonidos_editando(void);
+void sonidos_texto(const char *utf8);
+void sonidos_tecla_edicion(SDL_Scancode sc);
 
 /* ------------------------------------------------------------------ vibración */
 /* Mira los comandos de sonido del juego; la intensidad 0-100 (0 = apagada). */
