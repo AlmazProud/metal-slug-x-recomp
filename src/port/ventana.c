@@ -2,7 +2,13 @@
  *
  * Teclas fijas: Esc = menú, P = pausa, F5 / F9 = guardar / cargar estado en la ranura activa,
  * F11 o Alt+Enter = pantalla completa, F12 = captura, F2 = botón de test (menú de servicio del
- * BIOS: dificultad, vidas...). En el mando: Guide (o Back + Start) abre el menú.
+ * BIOS: dificultad, vidas...), F3 = modo debug (debug.c). En el mando: Guide (o Back + Start)
+ * abre el menú.
+ *
+ * Disparo automático: mientras se mantiene, el botón A se pulsa y se suelta solo, con un periodo
+ * de 6, 8 o 12 cuadros. Medido en partida (comando de sonido F7 de la pistola): el juego no
+ * dispara más de 10 veces por segundo aunque el patrón sea más rápido, así que 6 cuadros es el
+ * máximo útil.
  * El resto de los controles se configura en el menú o en mslugx.ini (config.c).
  *
  * Imagen: la Neo Geo dibuja 320x224 píxeles que el monitor estira a 4:3, así que sus píxeles no
@@ -17,6 +23,7 @@
 #include <string.h>
 
 #include "config.h"
+#include "debug.h"
 #include "despachador.h"
 #include "neogeo.h"
 #include "port.h"
@@ -35,6 +42,8 @@ static int test_cuadros;                     /* cuadros que falta mantener el bo
 static char aviso[256];
 static Uint64 aviso_hasta;
 static int salir;
+static int avanzar;                          /* F6 en el modo debug: un cuadro */
+static unsigned auto_fase[2];
 
 static void avisar(const char *fmt, ...)
 {
@@ -116,6 +125,17 @@ static void leer_entradas(void)
             if (ax < -16000) pulsado[ACC_IZQUIERDA] = 1;
             if (ax > 16000) pulsado[ACC_DERECHA] = 1;
         }
+        /* Disparo automático: la mitad del periodo pulsado. */
+        int modo = cfg.autodisparo[j];
+        int auto_on = (modo == AUTO_BOTON && pulsado[ACC_AUTO]) || (modo == AUTO_DISPARO && pulsado[ACC_A]);
+        if (auto_on) {
+            unsigned periodo = (unsigned)AUTO_PERIODO[cfg.auto_velocidad];
+            int pulsar = auto_fase[j]++ % periodo < periodo / 2;
+            if (modo == AUTO_DISPARO) pulsado[ACC_A] = pulsar;
+            else if (pulsar) pulsado[ACC_A] = 1;
+        } else {
+            auto_fase[j] = 0;
+        }
         for (int a = 0; a < 8; a++) if (pulsado[a]) joy |= BIT_JOY[a];
         if (pulsado[ACC_START]) sis |= NG_START;
         if (pulsado[ACC_MONEDA]) sis |= NG_MONEDA;
@@ -152,7 +172,8 @@ static void mando_desconectado(SDL_JoystickID id)
 /* ------------------------------------------------------------------ menú */
 enum {
     M_CONTINUAR, M_GUARDAR, M_CARGAR, M_TURBO, M_PANTALLA, M_ASPECTO, M_FILTRO, M_SCANLINES,
-    M_VOLUMEN, M_CONTROLES1, M_CONTROLES2, M_SERVICIO, M_REINICIAR, M_SALIR, M_N
+    M_VOLUMEN, M_AUTO1, M_AUTO2, M_AUTO_VEL, M_CONTROLES1, M_CONTROLES2, M_SERVICIO, M_DEBUG,
+    M_REINICIAR, M_SALIR, M_N
 };
 static int menu_abierto, menu_sel;
 static int remap_jugador = -1, remap_accion;     /* configuración de controles en curso */
@@ -179,6 +200,17 @@ static void texto_item(int i, char *b, size_t n)
     case M_FILTRO: snprintf(b, n, "Filtro            %s", FILTRO[cfg.filtro]); break;
     case M_SCANLINES: snprintf(b, n, "Scanlines         %s", cfg.scanlines ? "si" : "no"); break;
     case M_VOLUMEN: snprintf(b, n, "Volumen           %d%%", cfg.volumen); break;
+    case M_AUTO1: case M_AUTO2: {
+        static const char *const AUTO[AUTO_N] = {"no", "boton propio", "en el disparo"};
+        snprintf(b, n, "Autodisparo J%d    %s", i - M_AUTO1 + 1, AUTO[cfg.autodisparo[i - M_AUTO1]]);
+        break;
+    }
+    case M_AUTO_VEL: {
+        static const char *const VEL[AUTO_VELOCIDADES] = {"10", "7.5", "5"};
+        snprintf(b, n, "Autodisparo       %s por segundo", VEL[cfg.auto_velocidad]);
+        break;
+    }
+    case M_DEBUG: snprintf(b, n, "Modo debug (F3)   %s", debug_activo() ? "si" : "no"); break;
     case M_CONTROLES1: snprintf(b, n, "Controles del jugador 1"); break;
     case M_CONTROLES2: snprintf(b, n, "Controles del jugador 2"); break;
     case M_SERVICIO: snprintf(b, n, "Menu de servicio (dificultad, vidas)"); break;
@@ -212,6 +244,11 @@ static void menu_accion(int i, int d)
         if (cfg.volumen < 0) cfg.volumen = 0;
         if (audio) SDL_SetAudioStreamGain(audio, cfg.volumen / 100.0f);
         break;
+    case M_AUTO1: case M_AUTO2:
+        cfg.autodisparo[i - M_AUTO1] = ciclar(cfg.autodisparo[i - M_AUTO1], d ? d : 1, AUTO_N);
+        break;
+    case M_AUTO_VEL: cfg.auto_velocidad = ciclar(cfg.auto_velocidad, d ? d : 1, AUTO_VELOCIDADES); break;
+    case M_DEBUG: debug_activar(!debug_activo()); cfg.debug = debug_activo(); break;
     case M_CONTROLES1: case M_CONTROLES2:
         if (!d) { remap_jugador = i - M_CONTROLES1; remap_accion = 0; }
         break;
@@ -267,7 +304,7 @@ static SDL_FRect destino(int w, int h)
     return r;
 }
 
-static void dibujar_juego(int w, int h)
+static SDL_FRect dibujar_juego(int w, int h)
 {
     SDL_UpdateTexture(tex, NULL, ng.pantalla, NG_ANCHO * 4);
     SDL_FRect d = destino(w, h);
@@ -299,6 +336,7 @@ static void dibujar_juego(int w, int h)
         SDL_SetRenderDrawColor(render, 0, 0, 0, 110);
         SDL_RenderFillRects(render, lineas, NG_ALTO);
     }
+    return d;
 }
 
 static void texto(float x, float y, const char *s, Uint8 r, Uint8 g, Uint8 b)
@@ -379,6 +417,9 @@ static void tecla(const SDL_KeyboardEvent *e, int *pausa, int *capturas)
         }
         return;
     }
+    int dbg = debug_tecla(e);
+    if (dbg == DEBUG_AVANZAR) { *pausa = 1; avanzar = 1; }
+    if (dbg != DEBUG_NADA) { cfg.debug = debug_activo(); return; }
     switch (sc) {
     case SDL_SCANCODE_ESCAPE: menu_abierto = 1; break;
     case SDL_SCANCODE_P: *pausa = !*pausa; avisar(*pausa ? "Pausa" : "Continuar"); break;
@@ -504,6 +545,7 @@ int ventana_correr(const Opciones *o)
     ng_audio_activo = !o->sin_audio;
     cpu_turbo = cfg.turbo;
     maquina_arrancar(o);
+    debug_activar(cfg.debug);
     if (!o->sram_vacia) sram_cargar();
 
     int alto = NG_ALTO * cfg.escala;
@@ -563,9 +605,11 @@ int ventana_correr(const Opciones *o)
             default: break;
             }
         }
-        if (!pausa && !menu_abierto) {
+        if ((!pausa || avanzar) && !menu_abierto) {
             leer_entradas();
             ng_ejecutar_cuadro();
+            debug_cuadro();
+            avanzar = 0;
         }
         if (audio) {
             uint32_t n = ng_audio_leer(muestras, 4096);
@@ -588,7 +632,8 @@ int ventana_correr(const Opciones *o)
         SDL_GetRenderOutputSize(render, &w, &h);
         SDL_SetRenderDrawColor(render, 0, 0, 0, 255);
         SDL_RenderClear(render);
-        dibujar_juego(w, h);
+        SDL_FRect juego = dibujar_juego(w, h);
+        debug_dibujar(render, juego, w, h, cfg.turbo);
         dibujar_interfaz(w, h);
         if (prueba_cuadros && ++cuadros_vistos >= prueba_cuadros) {
             SDL_Surface *s = SDL_RenderReadPixels(render, NULL);
@@ -599,7 +644,8 @@ int ventana_correr(const Opciones *o)
 
         proximo += NS_POR_CUADRO;
         Uint64 ahora = SDL_GetTicksNS();
-        if (proximo > ahora) SDL_DelayPrecise(proximo - ahora);
+        if (prueba_cuadros) proximo = ahora;                              /* pruebas: sin esperar */
+        else if (proximo > ahora) SDL_DelayPrecise(proximo - ahora);
         else if (ahora - proximo > 4 * NS_POR_CUADRO) proximo = ahora;   /* nos atrasamos: no acumular */
     }
 
