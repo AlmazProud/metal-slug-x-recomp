@@ -57,9 +57,39 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | 1. Análisis 68000 | **Cerrada** (2026-10-11). Ver `docs/FASE1_COBERTURA.md`. |
 | 2. Recompilador | **Cerrada** (2026-10-11). `ctest`: 3/3. |
 | 3A. Runtime: imagen y controles | **Cerrada** (2026-10-11). Ver `docs/FASE3_RUNTIME.md`. |
-| 3B. Runtime: sonido (Z80 + YM2610) | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE3_RUNTIME.md`. |
-| 4. Arranque y verificación diferencial | No iniciada |
+| 3B. Runtime: sonido (Z80 + YM2610) | **Cerrada** (2026-10-11). Ver `docs/FASE3_RUNTIME.md`. |
+| 4. Arranque y verificación diferencial | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE4_VERIFICACION.md`. `ctest`: 4/4. |
 | 5. Mejoras nativas | No iniciada |
+
+### Fase 4: resultado
+
+Detalle en `docs/FASE4_VERIFICACION.md`.
+
+- **Cero divergencias en la Misión 1:** la grabación del usuario (11 969 cuadros) se reproduce
+  con la RAM y la paleta idénticas en las 11 771 VBlanks y la imagen idéntica en los 11 968
+  cuadros. Prueba automática: `ctest` → `mision1_contra_mame` (referencias en
+  `analisis/fase4/`, fuera del repo).
+- **Exactitud de ciclo del 68000 frente a MAME:**
+  - reset: la primera instrucción empieza en el ciclo 34;
+  - entrada a IRQ: espera al reloj E;
+  - muestreo de IRQ: reglas por familia, verificadas en 2091 casos;
+  - correcciones a la tabla de Musashi: ADD.L con registro, ADDQ.W a An, ADDA.W #, ANDI.L,
+    BSET/BCLR/BCHG con bit < 16, MULS, DIVU/DIVS exactos.
+  - Todo está en `src/cpu/ciclos68k.h`, y lo comparten el código generado, el intérprete y las
+    pruebas.
+- **Runtime:**
+  - entradas grabadas por tiempo;
+  - orden escritura de video / dibujo de línea como en MAME;
+  - lectura de la respuesta del Z80 a mitad de instrucción;
+  - YM2610 a 55 555 muestras/s exactas (como MAME);
+  - corregido: un temporizador del YM adelantaba el procesado de líneas.
+- **Herramientas:**
+  - en `mame/`: `huellas.lua`, `entradas.lua`, `ciclos.lua` (traza de ciclos del depurador),
+    `traza_lecturas.lua` y `traza_ym.lua`;
+  - `comparar_huellas.py`, `verificar_mision.py`, `comparar_ciclos.py` y `auditar_ciclos.py`;
+  - `colas_muestreo.py` + `verificar_muestreo.py` + `recomp68k/clases_muestreo.c`.
+- **Residual:** el sonido difiere de MAME en 0-3 muestras en el arranque de algunos efectos (el
+  Z80 atiende a veces la IRQ del YM una instrucción antes). No afecta al juego.
 
 ### Fase 3B: resultado
 
@@ -233,29 +263,31 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 4:** plan corto (comparación de RAM y framebuffer por cuadro contra MAME) y
-      esperar el OK. Primera divergencia conocida: hacia el cuadro 900 del attract (comando E5
-      un cuadro antes que MAME).
+- [ ] **Fase 5:** plan corto (mejoras nativas: relación de aspecto, filtros, pantalla completa,
+      controles configurables, opción de "overclock" para quitar la ralentización original) y
+      esperar el OK.
+- [ ] **Z80 como MAME a nivel de muestra:** cuándo atiende la IRQ del YM2610 el Z80 de MAME
+      (primer caso a los 15,1 s de la grabación, PC 0x0010). Hoy el audio coincide salvo
+      corrimientos de 0-3 muestras.
+- [ ] **Muestreo de IRQ sin trazas:** DIVU/DIVS con operando en memoria, CHK, TRAPV, MOVEP.
 - [ ] **Orden de las escrituras de 32 bits:** `MOVE.L` a `-(An)` escribe primero la palabra baja
       en el 68000 y en MAME; el port, siempre la alta.
 - [ ] **Límites de tramo de MAME que el port aún no usa** para el intercalado con el Z80: por
       ejemplo, los temporizadores del uPD4990A.
-- [ ] **Deriva de ciclos del 68000 contra MAME** (~0,5 µs por cuadro): tabla de Musashi frente
-      al núcleo de ciclo exacto de MAME. Las escrituras de 32 bits van hoy en el mismo ciclo.
 - [ ] **Relación de aspecto** de los píxeles (hoy cuadrados) y filtros: Fase 5.
-- [ ] **Flags indefinidos y ciclos que siguen a Musashi:** N/V de ABCD/SBCD, N/Z en el
-      desbordamiento de DIVU/DIVS y ciclos fijos de DIVU/DIVS. Hay que confirmarlos contra MAME
-      (núcleo 68000 exacto).
+- [ ] **Flags indefinidos que siguen a Musashi:** N/V de ABCD/SBCD y N/Z en el desbordamiento de
+      DIVU/DIVS. Hay que confirmarlos contra MAME (los ciclos de DIV ya son exactos).
 - [ ] **DIVS 0x80000000/-1:** se implementa como el hardware (V=1); Musashi devuelve 0. Si
       aparece en una prueba, es una diferencia conocida.
 - [ ] **Código de P2:** banco 1, 144 PCs; hoy lo ejecuta el intérprete. Recompilarlo por
       banco si el rendimiento lo pide.
 - [ ] Descartar raíces de la heurística A cuyo código pise datos demostrados por MAME
       (hoy: 130 bytes).
-- [ ] Ampliar la cobertura: el bot se estanca a partir de unos 200 s (26 406 PCs). Mejor
-      grabar entradas reales (`-record`) de una partida de la Misión 1.
+- [ ] Más grabaciones (otras misiones) para ampliar la verificación de la Fase 4 más allá de la
+      Misión 1.
 - [ ] 99 saltos o llamadas indirectos sin destino observado (por ejemplo `0x22AA` y `0x2354`).
 - [ ] Identificar en qué difiere el P1 de GOG del de MAME (Fase 1).
 - [ ] Lua en MAME: las suscripciones (`add_machine_stop_notifier`, taps) deben guardarse en
       variables globales; si no, Lua las recolecta en silencio. No llamar `io` a una variable
-      local: tapa la biblioteca `io` de Lua.
+      local: tapa la biblioteca `io` de Lua. Cada corrida de MAME con nvram vacía necesita una
+      carpeta nueva: MAME guarda la nvram al salir. `tracelog` no funciona en la traza del Z80.

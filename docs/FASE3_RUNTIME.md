@@ -117,6 +117,9 @@ opciones `--capturas`, `--traza` y `--traza-es` producen los mismos formatos.
 
 ## Diferencias conocidas con MAME (para la Fase 4)
 
+> **Resueltas en la Fase 4** (`docs/FASE4_VERIFICACION.md`): el port reproduce la Misión 1 sin
+> divergencias de RAM ni de imagen. Se conserva la lista como registro de lo que se encontró.
+
 1. **Orden de las escrituras de 32 bits.** Con `MOVE.L` a `-(An)`, el 68000 (y MAME) escribe
    primero la palabra baja; el port escribe siempre primero la alta. El valor final es el
    mismo, pero el orden importa en registros de E/S. Se observó en las escrituras de paleta.
