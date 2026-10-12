@@ -56,31 +56,43 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | 0. Reconocimiento | **Cerrada** (2026-10-11). Ver `docs/ROM_MAP.md`. |
 | 1. Análisis 68000 | **Cerrada** (2026-10-11). Ver `docs/FASE1_COBERTURA.md`. |
 | 2. Recompilador | **Cerrada** (2026-10-11). `ctest`: 3/3. |
-| 3A. Runtime: imagen y controles | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE3_RUNTIME.md`. |
-| 3B. Runtime: sonido (Z80 + YM2610) | No iniciada |
+| 3A. Runtime: imagen y controles | **Cerrada** (2026-10-11). Ver `docs/FASE3_RUNTIME.md`. |
+| 3B. Runtime: sonido (Z80 + YM2610) | **Cerrada** (2026-10-11), pendiente del visto bueno. Ver `docs/FASE3_RUNTIME.md`. |
 | 4. Arranque y verificación diferencial | No iniciada |
 | 5. Mejoras nativas | No iniciada |
+
+### Fase 3B: resultado
+
+- **Sonido real:** Z80 (`externo/chips/z80.h`, zlib) + YM2610 (`externo/ymfm`, BSD-3, el mismo
+  núcleo que MAME) en `src/neogeo/sonido.c`; `ym2610.cpp` es el único C++ del port (runtime de
+  C++ estático: el ejecutable solo necesita `SDL3.dll`). Audio por SDL3 a 55 555 Hz, colchón
+  de 50 ms, sin cortes.
+- **Intercalado como el planificador de MAME:** el Z80 avanza hasta cada límite de tramo del
+  68000; un comando sincroniza en el acto y abre 50 µs de intercalado fino. Comandos,
+  respuestas y lecturas coinciden con MAME a pocos µs hasta el cuadro 880.
+- **Audio contra `-wavwrite`:** correlación 1,00000 por tramo (`herramientas/comparar_audio.py`).
+- **Numeración de cuadros corregida:** la captura N de MAME es la imagen que se completa al
+  ejecutar el cuadro N. Así coinciden 448 de 451 cuadros consecutivos (antes, 321).
 
 ### Fase 3A: resultado
 
 Detalle y evidencia en `docs/FASE3_RUNTIME.md`.
 
 - **Arranque:** el port ejecuta el BIOS MVS del usuario recompilado (no HLE), entra al juego y
-  la Misión 1 es jugable con teclado o mando. Todavía no tiene sonido.
+  la Misión 1 es jugable con teclado o mando (sonido: Fase 3B).
 - **Runtime (`src/neogeo/`):** mapa de memoria completo, protección, LSPC (sprites, fix,
   reducción, paletas, autoanimación, IRQ1/IRQ2/IRQ3), uPD4990A, watchdog y SRAM persistente.
   Los ROMs se leen de la carpeta de GOG y se validan por SHA-256.
 - **Contra MAME:**
-  - 9 de 10 capturas del arranque son idénticas píxel a píxel (colores incluidos), y 321 de
-    451 cuadros consecutivos;
+  - capturas idénticas píxel a píxel, colores incluidos (cifras actuales en la Fase 3B);
   - las escrituras de E/S coinciden en orden y dato, con un desfase de unos 1 µs.
 - **Interrupciones en el límite de la instrucción:** el generador pone un punto de control
   antes de cada instrucción. El despachador usa `rc_irq_nivel` para volver a `rc_evento`
   cuando la máscara baja.
 - **Fase del cuadro como en MAME:** al encender, el haz está en vpos 240; el cuadro termina en
   el VBlank.
-- **Sustituto del Z80** (`sonido.c`): latencias medidas (comando 1: 175 929 ciclos, comando 3:
-  729). Se reemplaza en la 3B.
+- **Sustituto del Z80** con latencias medidas (comando 1: 175 929 ciclos, comando 3: 729);
+  reemplazado en la 3B.
 - **Herramientas:**
   - `comparar_capturas.py`, `imagenes.py` (PNG/BMP sin dependencias);
   - en `mame/`: `capturas.lua`, `traza_puertos.lua`, `traza_sonido.lua`, `latencia_z80.lua` y
@@ -221,10 +233,13 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 3B:** plan corto (Z80 con licencia permisiva + ymfm para el YM2610) y esperar el OK.
-- [ ] **Intercalado 68000/Z80 como MAME:** en MAME el 68000 ve la respuesta del Z80 entre 15,8
-      y 33,9 µs después de que el Z80 la escribe, por los tramos de su planificador. Hay que
-      reproducirlo para la Fase 4.
+- [ ] **Fase 4:** plan corto (comparación de RAM y framebuffer por cuadro contra MAME) y
+      esperar el OK. Primera divergencia conocida: hacia el cuadro 900 del attract (comando E5
+      un cuadro antes que MAME).
+- [ ] **Orden de las escrituras de 32 bits:** `MOVE.L` a `-(An)` escribe primero la palabra baja
+      en el 68000 y en MAME; el port, siempre la alta.
+- [ ] **Límites de tramo de MAME que el port aún no usa** para el intercalado con el Z80: por
+      ejemplo, los temporizadores del uPD4990A.
 - [ ] **Deriva de ciclos del 68000 contra MAME** (~0,5 µs por cuadro): tabla de Musashi frente
       al núcleo de ciclo exacto de MAME. Las escrituras de 32 bits van hoy en el mismo ciclo.
 - [ ] **Relación de aspecto** de los píxeles (hoy cuadrados) y filtros: Fase 5.
