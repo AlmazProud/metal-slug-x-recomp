@@ -13,3 +13,4 @@ enable_testing()
 
 add_subdirectory(externo/musashi)
 add_subdirectory(tests/diferencial)
+add_subdirectory(tests/lockstep)

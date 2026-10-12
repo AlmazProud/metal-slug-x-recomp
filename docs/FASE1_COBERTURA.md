@@ -2,42 +2,42 @@
 
 Generado por `herramientas/analisis68k.py` (Capstone 5.0.7) a partir de los ROMs del
 usuario y de la cobertura dinámica de MAME (`herramientas/cobertura.py`,
-297,058,129 instrucciones trazadas).
+513,345,320 instrucciones trazadas).
 
 ## P1 (`0x000000`–`0x0FFFFF`, 1 MB)
 
 | Medida | Bytes | % |
 |---|---:|---:|
-| Código (total) | 482,362 | 46.0 |
-| ...confirmado: alcanzado desde vectores, cabecera, llamadas directas o ejecución en MAME | 132,244 | 12.6 |
-| ...heurística A: puntero cargado como constante por código confirmado | 234,286 | 22.3 |
-| ...heurística B: tabla de 3 o más punteros a código válido | 116,096 | 11.1 |
-| ...del total, ejecutado en MAME (cobertura dinámica) | 96,476 | 9.2 |
-| Relleno (tramos de 0x00 o 0xFF de 16 bytes o más fuera del código) | 89,476 | 8.5 |
-| Datos o desconocido | 476,738 | 45.5 |
+| Código (total) | 503,166 | 48.0 |
+| ...confirmado: alcanzado desde vectores, cabecera, llamadas directas o ejecución en MAME | 201,888 | 19.3 |
+| ...heurística A: puntero cargado como constante por código confirmado | 202,062 | 19.3 |
+| ...heurística B: tabla de 3 o más punteros a código válido | 99,458 | 9.5 |
+| ...del total, ejecutado en MAME (cobertura dinámica) | 156,422 | 14.9 |
+| Relleno (tramos de 0x00 o 0xFF de 16 bytes o más fuera del código) | 91,298 | 8.7 |
+| Datos o desconocido | 454,112 | 43.3 |
 
-- Funciones detectadas: **4484** (lista completa en `docs/funciones_p1.csv`).
-- **Validación de las heurísticas contra MAME:** de las 26,406 direcciones de P1 que
+- Funciones detectadas: **4872** (lista completa en `docs/funciones_p1.csv`).
+- **Validación de las heurísticas contra MAME:** de las 40,404 direcciones de P1 que
   MAME ejecutó, el análisis puramente estático (sin datos de MAME) encuentra el
-  **51.3 %** con heurísticas y el 11.0 % sin ellas.
-- Instrucciones decodificadas: 116,581.
-- Direcciones de datos referenciadas fuera del código: 1,243.
+  **57.3 %** con heurísticas y el 7.3 % sin ellas.
+- Instrucciones decodificadas: 121,528.
+- Direcciones de datos referenciadas fuera del código: 1,303.
 - Saltos o llamadas indirectos en P1 **sin resolver** (sin destino observado en MAME):
-  99. Primeros: `001972`, `0022AA`, `002354`, `003A76`, `00B680`, `00B9CE`, `00BC86`, `00BF4A`, `00C210`, `00C514`, `00C8AA`, `00CA7C`, `00CE26`, `00CFF8`, `00EB24`
+  83. Primeros: `001972`, `0022AA`, `002354`, `003A76`, `00B680`, `00BF4A`, `00C210`, `00CE26`, `00CFF8`, `00F098`, `00F35A`, `00F65A`, `00F82C`, `00F9EC`, `00FBBE`
 - Direcciones ejecutadas en MAME que el análisis estático no alcanza: 0
   (deben ser 0; si no, hay un fallo de decodificación).
-- Direcciones de arranque inválidas (no decodifican): 80.
+- Direcciones de arranque inválidas (no decodifican): 82.
 
 ## Precisión: código que MAME demostró que es dato
 
-MAME registró 6,590 palabras de P1 leídas como datos, y no como instrucciones.
+MAME registró 12,992 palabras de P1 leídas como datos, y no como instrucciones.
 Bytes marcados como código que caen sobre esas palabras, según la evidencia:
 
 | Evidencia | Bytes de código | Falsos positivos seguros |
 |---|---:|---:|
-| Confirmado | 132,244 | 0 |
-| Heurística A (puntero en código) | 234,286 | 0 |
-| Heurística B (tabla de punteros) | 116,096 | 0 |
+| Confirmado | 201,888 | 0 |
+| Heurística A (puntero en código) | 202,062 | 0 |
+| Heurística B (tabla de punteros) | 99,458 | 0 |
 
 Es una cota inferior: solo detecta los datos que el juego leyó durante la traza. En el análisis
 combinado, las rutas heurísticas que pisarían esos datos se cortan (0 cortes),
@@ -50,19 +50,19 @@ estáticas (vectores y cabecera) y su análisis automático (`herramientas/ghidr
 
 | Medida | Este análisis (combinado) | Ghidra |
 |---|---:|---:|
-| Bytes de instrucciones | 482,362 | 250,910 |
-| Direcciones ejecutadas en MAME que reconoce | 100.0 % | 55.5 % |
-| Bytes marcados como código que MAME leyó como datos (falsos positivos seguros) | 0 | 2 |
+| Bytes de instrucciones | 503,166 | 250,910 |
+| Direcciones ejecutadas en MAME que reconoce | 100.0 % | 47.9 % |
+| Bytes marcados como código que MAME leyó como datos (falsos positivos seguros) | 0 | 4 |
 
-- Inicios de instrucción en común: 54,247.
+- Inicios de instrucción en común: 54,609.
 - Instrucciones nuestras que caen a mitad de una instrucción de Ghidra (desalineación; uno
-  de los dos se equivoca): 65.
-- Sin datos de MAME, este análisis reconoce el 51.3 % de lo ejecutado; Ghidra,
-  también sin MAME, el 55.5 %.
+  de los dos se equivoca): 64.
+- Sin datos de MAME, este análisis reconoce el 57.3 % de lo ejecutado; Ghidra,
+  también sin MAME, el 47.9 %.
 
 ## Cobertura dinámica por región (direcciones de instrucción distintas)
 
-bios: 1254, p1: 26406, p2_banco1: 2, ram: 28
+bios: 1569, p1: 40404, p2_banco1: 144, ram: 28
 
 ## Vectores del 68000 (en P1)
 

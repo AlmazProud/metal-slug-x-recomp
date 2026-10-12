@@ -23,6 +23,7 @@ typedef struct Cpu68k {
     /* resto del SR: modo supervisor, traza y máscara de interrupciones */
     uint8_t s, t, imask;
     int64_t ciclos;         /* ciclos de reloj del 68000 consumidos */
+    uint8_t detenido;       /* STOP ejecutado: espera una interrupción */
 } Cpu68k;
 
 /* ------------------------------------------------------------------ bus */

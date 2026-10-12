@@ -267,9 +267,9 @@ class Analizador:
                 self.explorar({v: "puntero_en_codigo" for v in n2}, indirectos_obs)
 
     # ---------------------------------------------------------------- funciones
-    def funciones(self) -> list[dict]:
+    def funciones(self, desde: int = 0, hasta: int = MB) -> list[dict]:
         out = []
-        for e in sorted(x for x in self.entradas if x in self.ins and x < MB):
+        for e in sorted(x for x in self.entradas if x in self.ins and desde <= x < hasta):
             visto, pila = set(), [e]
             while pila:
                 a = pila.pop()
@@ -290,12 +290,22 @@ def main() -> int:
     raiz = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[2]))
     repo = Path(__file__).resolve().parents[1]
     ap.add_argument("--roms", type=Path, default=raiz / "roms")
-    ap.add_argument("--cobertura", type=Path, default=raiz / "analisis" / "cobertura.json")
+    ap.add_argument("--cobertura", type=Path, nargs="+", default=[raiz / "analisis" / "cobertura.json"],
+                    help="uno o más JSON de cobertura (herramientas/cobertura.py); se combinan")
     a = ap.parse_args()
 
     mem = Memoria(a.roms)
     p1 = mem.regiones[0][1]
-    cov = json.loads(a.cobertura.read_text()) if a.cobertura.exists() else {"pcs": {}, "indirectos": []}
+    cov = {"pcs": {}, "indirectos": [], "lecturas_p1": [], "instrucciones_trazadas": 0}
+    for ruta in a.cobertura:
+        if not ruta.exists():
+            continue
+        parte = json.loads(ruta.read_text())
+        for region, pcs in parte["pcs"].items():
+            cov["pcs"][region] = sorted(set(cov["pcs"].get(region, [])) | set(pcs))
+        cov["indirectos"] = sorted({tuple(x) for x in cov["indirectos"]} | {tuple(x) for x in parte["indirectos"]})
+        cov["lecturas_p1"] = sorted(set(cov["lecturas_p1"]) | set(parte.get("lecturas_p1", [])))
+        cov["instrucciones_trazadas"] += parte.get("instrucciones_trazadas", 0)
     dyn_p1 = set(cov["pcs"].get("p1", []))
     dyn_bios = set(cov["pcs"].get("bios", []))
     indirectos_obs: dict[int, set[int]] = defaultdict(set)
@@ -416,6 +426,16 @@ estáticas (vectores y cabecera) y su análisis automático (`herramientas/ghidr
                 f.write(f"\n; ---- funcion {addr:06X}  ({', '.join(sorted(an.entradas[addr]))})\n")
             i = an.ins[addr]
             marca = "*" if addr in dyn_p1 else " "
+            f.write(f"{addr:06X}{marca} {i.mnemonic:<8} {i.op_str}\n")
+
+    # Listado del BIOS (código alcanzado desde lo que se ejecutó en MAME), mismo formato.
+    funcs_bios = {fn["inicio"] for fn in an.funciones(0xC00000, 0xC20000)}
+    with (raiz / "analisis" / "listado_bios.txt").open("w", encoding="utf-8") as f:
+        for addr in sorted(x for x in an.ins if 0xC00000 <= x < 0xC20000):
+            if addr in funcs_bios:
+                f.write(f"\n; ---- funcion {addr:06X}  ({', '.join(sorted(an.entradas[addr]))})\n")
+            i = an.ins[addr]
+            marca = "*" if addr in dyn_bios else " "
             f.write(f"{addr:06X}{marca} {i.mnemonic:<8} {i.op_str}\n")
 
     with (repo / "docs" / "funciones_p1.csv").open("w", newline="", encoding="utf-8") as f:
