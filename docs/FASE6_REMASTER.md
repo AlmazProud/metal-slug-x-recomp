@@ -7,7 +7,7 @@ emulación cuando está apagada: `ctest` (con la Misión 1 contra MAME) sigue pa
 |---|---|---|
 | 6A | Disparo automático y modo debug | Cerrada (2026-10-12) |
 | 6B | Catálogo de sonidos, menú de música, voces y efectos; vibración del mando | Cerrada (2026-10-12) |
-| 6C | Menú de inicio moderno con la fuente del juego | Pendiente |
+| 6C | Menú de inicio moderno con la fuente del juego | Cerrada (2026-10-12) |
 | 6D | Pantalla ancha: investigación primero | Pendiente |
 
 ## 6A: disparo automático
@@ -168,3 +168,51 @@ efectos identificados, pide una vibración del mando:
 - Dentro de un cuadro gana la más fuerte, y una vibración fuerte en curso no se corta por una leve.
 - Vibran los dos mandos, porque el juego no indica de qué jugador es cada sonido.
 - Intensidad: menú "Vibracion", o `vibracion=0-100` en `mslugx.ini` (70 por defecto; 0 la apaga).
+
+## 6C: pantalla de inicio y menús
+
+**Fuente** (`src/port/fuente.c`): la fuente sombreada 8x8 del propio juego, leída de la copia del
+usuario.
+
+- Está en la capa fix del cartucho, tiles `0x300` + código ASCII (la de "CREDIT").
+- Índices: 1 contorno, 2-5 degradé, 7 sombra y 15 brillo. La paleta se dedujo comparando una
+  captura con los tiles (`CREDIT 0`).
+- Los colores son del port: plata, oro, gris y verde.
+- Se dibuja en mayúsculas, porque sus minúsculas son muy bajas y se confunden.
+- En `0x20` + ASCII hay otra fuente plana, sin usar.
+
+**Menús** (`src/port/menu.c`): páginas apiladas, sobre el juego oscurecido. La escala es entera,
+con un lienzo de al menos 440 x 250.
+
+- **Inicio**, al abrir el juego (se apaga con `pantalla_inicio=0`): Jugar, Cargar partida,
+  Configuración, Música y sonidos, Extras, Salir.
+  - De fondo sigue corriendo el demo, sin recibir las entradas.
+  - "Jugar" inserta una moneda y pulsa START como un jugador. Comprobado: CREDIT 1, y luego el
+    juego empieza ("How to play", música `2E`).
+- **Pausa** (Esc, o Guide / Back + Start): Continuar, Guardar y Cargar partida (9 ranuras),
+  Configuración, Música y sonidos, Extras, Volver al inicio (reinicia la máquina conservando la
+  SRAM), Salir.
+- **Configuración:**
+  - Video: pantalla completa, aspecto, filtro, scanlines;
+  - Audio: volumen, vibración;
+  - Juego: ralentización, autodisparo J1/J2 y velocidad, pantalla de inicio;
+  - Controles: jugador 1 y 2.
+- **Extras:** modo debug, menú de servicio del BIOS, reiniciar la máquina.
+- Debajo del panel, una línea de ayuda explica la opción elegida.
+
+**Menú de sonido**, ahora con la misma fuente:
+
+- **Pestaña "Recientes":** los últimos 16 sonidos que pidió el juego. Sirve para identificar uno:
+  usar el arma y abrir el menú.
+- **F2 o R:** renombrar el sonido elegido (con el teclado).
+- **V, o X en el mando:** su vibración. Ciclo: auto → no → leve → media → fuerte. "Auto" es la de
+  la tabla de efectos identificados.
+- Se guarda en `%APPDATA%\ProjectoDecompile\mslugx\sonidos.ini`. La clave es modo y comando en
+  hexadecimal, por ejemplo `10F7=Pistola`.
+- Cada fila muestra la clave del driver (por ejemplo `10:F7`), así los nombres que encuentre el
+  usuario se pueden pasar al perfil del repo.
+
+**Pruebas:**
+
+- `PD_PRUEBA_VENTANA=N,png[,menu|sonidos|jugar]` para capturas de cada pantalla;
+- `ctest` 6/6.

@@ -61,9 +61,21 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | 4. Arranque y verificación diferencial | **Cerrada** (2026-10-11). Ver `docs/FASE4_VERIFICACION.md`. |
 | 5. Mejoras nativas | **Cerrada** (2026-10-11). Ver `docs/FASE5_NATIVO.md`. |
 | 6A. Remaster: autodisparo y modo debug | **Cerrada** (2026-10-12). Ver `docs/FASE6_REMASTER.md`. |
-| 6B. Remaster: catálogo de sonidos, menú de sonido, vibración | **Cerrada** (2026-10-12), pendiente del visto bueno. `ctest`: 6/6. |
-| 6C. Remaster: menú de inicio moderno | No iniciada |
+| 6B. Remaster: catálogo de sonidos, menú de sonido, vibración | **Cerrada** (2026-10-12). |
+| 6C. Remaster: menú de inicio moderno | **Cerrada** (2026-10-12), pendiente del visto bueno. `ctest`: 6/6. |
 | 6D. Remaster: pantalla ancha (investigar primero) | No iniciada |
+
+### Fase 6C: resultado
+
+Detalle en `docs/FASE6_REMASTER.md`.
+
+- **Fuente** (`src/port/fuente.c`): la sombreada 8x8 del juego (fix del cartucho, tiles `0x300` +
+  ASCII), leída de la copia del usuario y dibujada en mayúsculas con tintas propias.
+- **Menús por páginas** (`src/port/menu.c`, interfaz `frontend.h` hacia `ventana.c`):
+  - Inicio: el demo sigue de fondo; "Jugar" inserta moneda + START.
+  - Pausa, Configuración (Video, Audio, Juego, Controles) y Extras.
+- **Menú de sonido:** pestaña Recientes, renombrar (F2/R) y vibración por sonido (V/X), guardados
+  en `sonidos.ini` del usuario.
 
 ### Fase 6B: resultado
 
@@ -317,8 +329,16 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 6C** tras el visto bueno de la 6B: plan corto (menú de inicio moderno con la fuente
-      del juego) y esperar el OK.
+- [ ] **Fase 6D** tras el visto bueno de la 6C: investigación corta de la pantalla ancha (16:9,
+      HUD en los bordes) y reporte antes de seguir.
+- [ ] **Hoja de ruta pedida por el usuario** (para el resultado final, después de la 6D):
+  - [ ] **V-sync** (opción en Video).
+  - [ ] **Sangre roja (sin censura):** investigar si depende de la región del BIOS (el del usuario
+        es de EE. UU.; Japón suele ir sin censura) o de un parche puntual de la comprobación.
+  - [ ] **Debug estilo Sonic:** elegir misión, personaje, aparecer armas. Primero buscar un modo
+        debug oculto de los desarrolladores ("debug dips"); si no hay, construirlo desde la RAM.
+  - [ ] **Nombres de sonidos y vibración del láser:** el usuario los identifica con la pestaña
+        Recientes; pasar sus nombres al perfil (`herramientas/catalogo_sonidos.py`).
 - [ ] **Nombres de sonidos:** 12 músicas y la mayoría de las voces y efectos van por número. Hacen
       falta grabaciones de otras misiones (el attract no tiene música).
 - [ ] **Perfil de juego** para portar otros Metal Slug (lo propuso el usuario): separar lo
