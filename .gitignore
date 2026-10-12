@@ -23,6 +23,7 @@
 !*.ps1
 !*.bat
 !*.rc
+!*.lua
 !CMakeLists.txt
 !*.cmake
 !*.json
