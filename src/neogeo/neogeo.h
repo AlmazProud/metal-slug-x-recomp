@@ -114,6 +114,21 @@ int64_t ng_proximo_limite(void);
  * una escritura de video a mitad de instrucción respecto del dibujo de las líneas. */
 void ng_al_dia(int64_t t);           /* hasta el comienzo del cuadro siguiente */
 
+/* ------------------------------------------------------------------ modo debug (Fase 6A) */
+/* Mediciones que no forman parte del estado de la máquina (no cambian la emulación). */
+typedef struct { int16_t x0, x1, y0, y1; } NgCaja;      /* x1 < x0: sprite no dibujado */
+typedef struct {
+    int activo;                          /* 1: medir carga y cajas de sprites */
+    uint32_t espera_ini, espera_fin;     /* PCs del bucle de espera de la VBlank del juego */
+    uint8_t ocultar;                     /* NG_OCULTAR_*: capas que no se dibujan */
+    int lineas_espera;                   /* del último cuadro: inicios de línea con el 68000 esperando */
+    int lineas_espera_actual;
+    NgCaja caja[381];                    /* del último cuadro, en píxeles visibles (0-319, 0-223) */
+    NgCaja caja_actual[381];
+} NgDebug;
+enum { NG_OCULTAR_SPRITES = 1, NG_OCULTAR_FIX = 2 };
+extern NgDebug ng_dbg;
+
 /* ------------------------------------------------------------------ estados guardados */
 /* Estado completo de la máquina, tomado entre cuadros (después de ng_ejecutar_cuadro): 68000,
  * hardware de video y E/S, reloj, Z80 y YM2610. ng_estado_guardar devuelve un búfer de malloc;

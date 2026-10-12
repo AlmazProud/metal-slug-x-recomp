@@ -45,6 +45,7 @@ void (*ng_al_reconocer_vblank)(void);
 void (*ng_antes_de_leer_entradas)(void);
 NgRoms ng_roms;
 uint32_t ng_pc_vblank;
+NgDebug ng_dbg;
 Cpu68k ng_cpu;
 
 #define T_VBLANK (NG_LINEA_VBLANK * NG_CICLOS_LINEA + 29)
@@ -169,11 +170,19 @@ static int procesar(int64_t ahora)
         ng.linea = 0;
         vblank_hecho = recarga_hecha = 0;
     }
+    if (ng_dbg.activo && ng_cpu.pc >= ng_dbg.espera_ini && ng_cpu.pc < ng_dbg.espera_fin)
+        ng_dbg.lineas_espera_actual++;
     ng_video_inicio_linea(ng.linea);
     if (ng.linea == 0x100) ng_video_anim_tick();
     ng.linea++;
     if (ng.linea - 1 == NG_LINEA_VBLANK) {        /* imagen completa: fin del cuadro */
         ng.cuadros++;
+        if (ng_dbg.activo) {
+            ng_dbg.lineas_espera = ng_dbg.lineas_espera_actual;
+            ng_dbg.lineas_espera_actual = 0;
+            memcpy(ng_dbg.caja, ng_dbg.caja_actual, sizeof ng_dbg.caja);
+            for (int i = 0; i < 381; i++) ng_dbg.caja_actual[i] = (NgCaja){1, 0, 1, 0};
+        }
         return 1;
     }
     return 0;

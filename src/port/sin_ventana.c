@@ -190,9 +190,9 @@ static void huella_vblank(void)
     uint8_t pal[0x2000];
     const uint16_t *banco = ng.paleta + ((uint32_t)ng.banco_paleta << 12);
     for (int i = 0; i < 0x1000; i++) { pal[2 * i] = (uint8_t)(banco[i] >> 8); pal[2 * i + 1] = (uint8_t)banco[i]; }
-    fprintf(archivo_huellas, "V %llu %08X %08X f=%llu pc=%06X int=%06X a5=%06X b=%02X\n", ++n_vblanks, fnv_bytes(0x811C9DC5u, ng.ram, sizeof ng.ram),
+    fprintf(archivo_huellas, "V %llu %08X %08X f=%llu pc=%06X int=%06X a5=%06X l=%02X\n", ++n_vblanks, fnv_bytes(0x811C9DC5u, ng.ram, sizeof ng.ram),
             fnv_bytes(0x811C9DC5u, pal, sizeof pal), (unsigned long long)ng.cuadros, ng_cpu.pc, ng_pc_vblank,
-            ng_cpu.a[5], ng.ram[(ng_cpu.a[5] - 0x7F75) & 0xFFFF]);
+            ng_cpu.a[5], ng.ram[0x008A]);
     const char *lista = getenv("PD_VOLCAR_V");
     if (lista) {
         for (const char *p = lista; *p;) {

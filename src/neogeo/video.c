@@ -236,6 +236,18 @@ static void dibujar_sprites(uint32_t *buf, const uint32_t *pens, int linea)
         codigo &= 0x7FFFF;                            /* 64 MB direccionables */
         if (codigo >= ng_roms.n_tiles) continue;      /* fuera del ROM: transparente */
 
+        if (ng_dbg.activo) {                          /* caja del sprite (modo debug) */
+            NgCaja *k = &ng_dbg.caja_actual[s];
+            int x0 = x > 0x1F0 ? x - 0x200 : x, x1 = x0 + zoom_x;
+            int yv = linea - NG_PRIMERA_LINEA_VISIBLE;
+            if (k->x1 < k->x0) *k = (NgCaja){(int16_t)x0, (int16_t)x1, (int16_t)yv, (int16_t)yv};
+            else {
+                if (x0 < k->x0) k->x0 = (int16_t)x0;
+                if (x1 > k->x1) k->x1 = (int16_t)x1;
+                if (yv < k->y0) k->y0 = (int16_t)yv;
+                if (yv > k->y1) k->y1 = (int16_t)yv;
+            }
+        }
         const uint32_t *p = pens + ((attr >> 8) << 4);
         uint16_t mapa = ZOOM_X[zoom_x];
         int volteo = attr & 0x01;
@@ -278,8 +290,8 @@ static void dibujar_linea(int linea)
     const uint32_t *pens = ng.pen[ng.sombra] + ((uint32_t)ng.banco_paleta << 12);
     uint32_t fondo = pens[0xFFF];
     for (int i = 0; i < NG_ANCHO; i++) buf[i] = fondo;
-    dibujar_sprites(buf, pens, linea);
-    dibujar_fix(buf, pens, linea);
+    if (!(ng_dbg.ocultar & NG_OCULTAR_SPRITES)) dibujar_sprites(buf, pens, linea);
+    if (!(ng_dbg.ocultar & NG_OCULTAR_FIX)) dibujar_fix(buf, pens, linea);
 }
 
 void ng_video_inicio_linea(int linea)
