@@ -25,6 +25,7 @@
 !*.rc
 !*.lua
 !*.java
+!docs/*.csv
 !CMakeLists.txt
 !*.cmake
 !*.json
