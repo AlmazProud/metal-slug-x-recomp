@@ -27,6 +27,10 @@ rc_fn rc_buscar(uint32_t pc);
 extern int64_t rc_limite_ciclos;
 extern volatile int rc_salir;          /* 1 = desenrollar todo y volver al llamador superior */
 void rc_evento(Cpu68k *c);             /* lo implementa el anfitrión */
+/* Nivel de la interrupción pendiente más alta (0 = ninguna). Si supera la máscara del SR, el
+ * despachador llama a rc_evento aunque no se haya alcanzado el límite de ciclos: así una
+ * instrucción que baja la máscara (MOVE/ANDI a SR, RTE) deja entrar la interrupción. */
+extern volatile int rc_irq_nivel;
 
 /* Ejecuta hasta que rc_salir se active. */
 void rc_ejecutar(Cpu68k *c);

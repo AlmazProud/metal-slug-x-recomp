@@ -102,7 +102,11 @@ def main() -> int:
     ap.add_argument("--ciclos", type=Path, required=True)
     ap.add_argument("--salida", type=Path, required=True)
     ap.add_argument("--archivos", type=int, default=16, help="número fijo de archivos .c de salida")
+    ap.add_argument("--sin-punto-por-instruccion", action="store_true",
+                    help="solo puntos de control en los saltos hacia atrás (las interrupciones entran "
+                         "en los puntos de despacho, no en el límite exacto de la instrucción)")
     a = ap.parse_args()
+    por_instruccion = not a.sin_punto_por_instruccion
     generador.cargar_ciclos(a.ciclos)
     mem = Memoria(a.roms)
 
@@ -163,7 +167,7 @@ def main() -> int:
             def salto(m, d=d):
                 destino = int(m.group(2), 16)
                 if destino in en_region:
-                    if destino <= d:          # hacia atrás: punto de control
+                    if destino <= d and not por_instruccion:   # hacia atrás: punto de control
                         return (f"if (c->ciclos >= rc_limite_ciclos) {{ c->pc = 0x{destino:X}u; return; }} "
                                 f"goto L_{destino:06X};")
                     return f"goto L_{destino:06X};"
@@ -180,6 +184,11 @@ def main() -> int:
             texto = RE_LLAMADA_DIN.sub(lambda m: f"if (!rc_llamar(c, {m.group(1)}, 0x{m.group(2)}u)) return; "
                                                  + continuar(int(m.group(2), 16)), texto)
             lineas.append(f"  L_{d:06X}: {{  /* {i.texto()} */")
+            if por_instruccion:
+                # Punto de control en el límite de cada instrucción: los eventos (interrupciones,
+                # líneas del video) se atienden antes de la primera instrucción que empieza en o
+                # después de su ciclo, como en el 68000 real.
+                lineas.append(f"        if (c->ciclos >= rc_limite_ciclos) {{ c->pc = 0x{d:X}u; return; }}")
             lineas.append("        " + texto)
             lineas.append("    }")
         lineas.append("}")

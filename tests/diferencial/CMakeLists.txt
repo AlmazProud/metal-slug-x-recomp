@@ -2,19 +2,12 @@
 # Requieren los ROMs del usuario (PD_ROMS) y el listado del análisis de la Fase 1 (PD_ANALISIS).
 # El C de las pruebas se genera aquí, en el directorio de compilación, y nunca se versiona.
 
-set(PD_ROMS "$ENV{PD_ROMS}" CACHE PATH "Carpeta con los ROMs del usuario (mslugx_*)")
-set(PD_ANALISIS "$ENV{PD_ROOT}/analisis" CACHE PATH "Carpeta de salida del análisis (listado_p1.txt)")
-
 if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALISIS}/listado_p1.txt")
     message(STATUS "Pruebas diferenciales desactivadas: faltan ROMs (${PD_ROMS}) o listado (${PD_ANALISIS})")
     return()
 endif()
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
-# Tabla de ciclos base de Musashi para el 68000, que usa el generador.
-add_executable(volcar_ciclos volcar_ciclos.c)
-target_link_libraries(volcar_ciclos PRIVATE musashi)
+# Tabla de ciclos base de Musashi (el ejecutable volcar_ciclos se define en src/).
 set(CICLOS ${CMAKE_CURRENT_BINARY_DIR}/ciclos_68000.bin)
 add_custom_command(OUTPUT ${CICLOS} COMMAND volcar_ciclos ${CICLOS} DEPENDS volcar_ciclos VERBATIM)
 set(GEN ${CMAKE_CURRENT_BINARY_DIR}/pruebas_gen.c)

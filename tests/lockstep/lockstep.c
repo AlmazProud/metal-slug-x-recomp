@@ -99,8 +99,14 @@ static int irq_pendiente;
 
 static void programar(const Cpu68k *c)
 {
-    (void)c;
-    rc_limite_ciclos = irq_pendiente ? 0 : (proxima_vblank < limite ? proxima_vblank : limite);
+    /* Además de VBlank y el final, un punto de control cada ~1000 ciclos: con los puntos de
+     * control por instrucción del código generado, así se verifica el estado con frecuencia
+     * (un número primo para no sincronizarse con los bucles del programa). */
+    int64_t t = c->ciclos + 997;
+    if (proxima_vblank < t) t = proxima_vblank;
+    if (limite < t) t = limite;
+    rc_limite_ciclos = t;
+    rc_irq_nivel = irq_pendiente;     /* el despachador vuelve a rc_evento si la máscara baja */
 }
 
 void rc_evento(Cpu68k *c)

@@ -4,6 +4,7 @@
 
 int64_t rc_limite_ciclos = INT64_MAX;
 volatile int rc_salir = 0;
+volatile int rc_irq_nivel = 0;
 uint64_t rc_pasos_recompilados = 0, rc_pasos_interpretados = 0;
 void (*rc_traza)(const Cpu68k *c) = NULL;
 
@@ -29,7 +30,7 @@ rc_fn rc_buscar(uint32_t pc)
 
 void rc_paso(Cpu68k *c)
 {
-    if (c->ciclos >= rc_limite_ciclos) {
+    if (c->ciclos >= rc_limite_ciclos || rc_irq_nivel > c->imask) {
         rc_evento(c);
         if (rc_salir) return;
     }
@@ -39,7 +40,9 @@ void rc_paso(Cpu68k *c)
     }
     c->pc &= 0xFFFFFF;
     if (rc_traza) rc_traza(c);
-    rc_fn f = rc_buscar(c->pc);
+    /* El código generado sale en cuanto c->ciclos alcanza el límite: si el anfitrión dejó un
+     * límite ya vencido, una instrucción interpretada garantiza el avance. */
+    rc_fn f = c->ciclos < rc_limite_ciclos ? rc_buscar(c->pc) : NULL;
     if (f) { rc_pasos_recompilados++; f(c); }
     else   { rc_pasos_interpretados++; rc_interprete_paso(c); }
 }
