@@ -84,7 +84,8 @@ Details in `docs/PHASE7B_DEBUG.md`.
   cartridge reads) opens the developers' menu with SELECT + D twice in a mission (port: F4 or
   Extras > Debug); debug dips at `0x10F000` mapped bit by bit.
 - RAM cheats in `src/port/cheats.c` (addresses in `profile.h`): weapons 0-15 through the
-  pickup routine's ROM tables, bombs, lives, soldier (on respawn).
+  pickup routine's ROM tables, bombs, lives, soldier (on respawn), form (fat / mummy; fat kept
+  with a forced read limited to the PC range of 0xC0BAE: `NgForcedRead.pc_first/pc_last`).
 - Menus Extras > Cheats and Extras > Debug (EN/ES). Tests: `PD_CHEAT`, `PD_WINDOW_TEST=...,cheats|debug`.
 
 ### Phase 7I: result

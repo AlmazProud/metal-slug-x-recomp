@@ -38,6 +38,15 @@
 #define PROFILE_PLAYER1_OBJECT 0x1014C4u
 #define PROFILE_PLAYER2_OBJECT 0x101574u
 #define PROFILE_OBJECT_CHARACTER 0x6F        /* internal character: Marco 0, Tarma 1, Eri 2, Fio 3 */
+#define PROFILE_OBJECT_FORM 0x93             /* 0 normal, 2 fat, 3 mummy; +0x94 = requested form */
+#define PROFILE_FAT_FOOD 0x780               /* food counter (table +0x10) that makes the soldier fat */
+/* While fat, each tick the routine 0xC0BAE-0xC0BF2 checks the stage (word 0x10C2F6): only in
+ * stages 4-7, 9 and 10 (or with a food object, 0x10E9F8) the counter runs down slowly; elsewhere
+ * the soldier slims down at once. The fat cheat makes that routine read stage 4. */
+#define PROFILE_STAGE_WORD 0x10C2F6u
+#define PROFILE_FAT_CHECK_FIRST 0xC0BAEu
+#define PROFILE_FAT_CHECK_LAST 0xC0BF2u
+#define PROFILE_FAT_STAGE 4
 /* Player status objects 0x101204 / 0x1012B4: +0x83 soldier (0 Marco, 1 Eri, 2 Tarma, 3 Fio,
  * soldier select order), +0x82 the same as internal character, +0x84 lives (from the HERO
  * soft dip, 0xC942C). */

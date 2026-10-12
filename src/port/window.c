@@ -223,7 +223,7 @@ void fe_service(void) { test_frames = 30; }
 /* Red blood: the game reads its BLOOD option as on (profile.h). */
 void fe_apply_blood(void)
 {
-    ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){cfg.blood, PROFILE_BLOOD_WORD, PROFILE_BLOOD_MASK, 0x0001};
+    ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){cfg.blood, PROFILE_BLOOD_WORD, PROFILE_BLOOD_MASK, 0x0001, 0, 0};
 }
 /* Developer menu (cheats.h): only with developer mode on and during a mission. */
 void fe_dev_menu(void)
@@ -626,6 +626,7 @@ int window_run(const Options *o)
             } else if ((!paused || step) && !menu_open()) {
                 read_inputs();
                 ng_run_frame();
+                cheats_frame();
                 debug_frame();
                 rumble_frame();
                 step = 0;

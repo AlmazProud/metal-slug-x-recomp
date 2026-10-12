@@ -177,7 +177,8 @@ uint32_t bus_r16(uint32_t a)
         uint32_t v = (uint32_t)ng.ram[a & 0xFFFF] << 8 | ng.ram[(a & 0xFFFF) + 1];
         for (int i = 0; i < NG_FORCED_COUNT; i++) {
             const NgForcedRead *f = &ng_forced_read[i];
-            if (f->active && a == f->addr && ng_cpu.pc < 0xC00000)
+            if (f->active && a == f->addr && ng_cpu.pc < 0xC00000 &&
+                (!f->pc_last || (ng_cpu.pc >= f->pc_first && ng_cpu.pc <= f->pc_last)))
                 v = (v & ~(uint32_t)f->mask) | f->value;
         }
         return v;

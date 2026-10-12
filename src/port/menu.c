@@ -32,7 +32,7 @@ enum {
     /* extras */
     OP_DEBUG, OP_SERVICE, OP_RESET, OP_CHEATS, OP_DEBUG_PAGE,
     /* cheats (in game) */
-    OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER,
+    OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER, OP_FORM,
     OP_INVINCIBLE, OP_INF_BOMBS, OP_INF_AMMO, OP_D_KILLS,
     /* debug */
     OP_DEVMODE, OP_DEV_MENU, OP_BOXES, OP_INFO, OP_GROUND, OP_CPU_METER, OP_PA_POINT, OP_PAUSE_ANY,
@@ -53,7 +53,7 @@ PAGE(P_AUDIO, "AUDIO", OP_VOLUME, OP_RUMBLE);
 PAGE(P_GAME, "GAME", OP_TURBO, OP_BLOOD, OP_AUTO1, OP_AUTO2, OP_AUTO_SPEED, OP_START_SCREEN);
 PAGE(P_CONTROLS, "CONTROLS", OP_CONTROLS1, OP_CONTROLS2);
 PAGE(P_EXTRAS, "EXTRAS", OP_CHEATS, OP_DEBUG_PAGE, OP_DEBUG, OP_SERVICE, OP_RESET);
-PAGE(P_CHEATS, "CHEATS", OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER,
+PAGE(P_CHEATS, "CHEATS", OP_CHEAT_PLAYER, OP_GIVE_WEAPON, OP_MAX_BOMBS, OP_LIVES, OP_SOLDIER, OP_FORM,
      OP_INVINCIBLE, OP_INF_BOMBS, OP_INF_AMMO, OP_D_KILLS);
 PAGE(P_DEBUG, "DEBUG", OP_DEVMODE, OP_DEV_MENU, OP_BOXES, OP_INFO, OP_GROUND, OP_CPU_METER,
      OP_PA_POINT, OP_PAUSE_ANY);
@@ -144,6 +144,7 @@ static const char *label_en(int op)
     case OP_MAX_BOMBS: return "Give 99 bombs";
     case OP_LIVES: return "Set lives";
     case OP_SOLDIER: return "Soldier";
+    case OP_FORM: return "Form";
     case OP_INVINCIBLE: return "Invincible";
     case OP_INF_BOMBS: return "Infinite bombs";
     case OP_INF_AMMO: return "Infinite ammo";
@@ -214,6 +215,11 @@ static void value(int op, char *b, size_t n)
     case OP_GIVE_WEAPON: snprintf(b, n, "%s", T(cheats_weapon_name(cheat_weapon))); break;
     case OP_LIVES: snprintf(b, n, "< %d >", cheat_lives); break;
     case OP_SOLDIER: snprintf(b, n, "< %s >", CHEATS_SOLDIER_NAME[cheats_soldier(cheat_player)]); break;
+    case OP_FORM: {
+        int f = cheats_form(cheat_player);
+        snprintf(b, n, "< %s >", T(f == FORM_FAT ? "Fat" : f == FORM_MUMMY ? "Mummy" : "Normal"));
+        break;
+    }
     case OP_INVINCIBLE: case OP_INF_BOMBS: case OP_INF_AMMO: case OP_D_KILLS:
     case OP_BOXES: case OP_INFO: case OP_GROUND: case OP_CPU_METER: case OP_PA_POINT: case OP_PAUSE_ANY:
         snprintf(b, n, "%s", T((cheats_dips & dip_of(op)) == dip_of(op) ? "Yes" : "No"));
@@ -244,6 +250,7 @@ static const char *help_en(int op)
     case OP_DEBUG_PAGE: return "The developers' own debug switches and hidden menu";
     case OP_GIVE_WEAPON: return "</>: choose, Enter/A: give it (during a mission)";
     case OP_SOLDIER: return "Takes effect when the player respawns";
+    case OP_FORM: return "Fat lasts until you die or change it; mummy until cured";
     case OP_D_KILLS: return "Press D in game: every enemy on screen dies";
     case OP_DEVMODE: return "The game believes it runs on SNK's development hardware";
     case OP_DEV_MENU: return "Stage select, test stages, sound test, debug dips";
@@ -328,6 +335,14 @@ static void do_action(int op, int d)
         if (!cheats_set_soldier(cheat_player, cycle(cheats_soldier(cheat_player), d ? d : 1, 4)))
             fe_notify(T("Only during a mission"));
         break;
+    case OP_FORM: {
+        static const int NEXT[4] = {FORM_FAT, FORM_FAT, FORM_MUMMY, FORM_NORMAL};   /* by current form */
+        static const int PREV[4] = {FORM_MUMMY, FORM_MUMMY, FORM_NORMAL, FORM_FAT};
+        int f = cheats_form(cheat_player) & 3;
+        if (cheats_set_form(cheat_player, d < 0 ? PREV[f] : NEXT[f])) close_menu();
+        else fe_notify(T("Only during a mission"));
+        break;
+    }
     case OP_INVINCIBLE: case OP_INF_BOMBS: case OP_INF_AMMO: case OP_D_KILLS:
     case OP_BOXES: case OP_INFO: case OP_GROUND: case OP_CPU_METER: case OP_PA_POINT: case OP_PAUSE_ANY:
         if ((cheats_dips & dip_of(op)) == dip_of(op)) cheats_dips &= (uint16_t)~dip_of(op);
@@ -430,7 +445,7 @@ void menu_draw(SDL_Renderer *r, int w, int h)
         y = 70;
     }
     /* options panel */
-    const float row_h = 20, panel_w = 360;
+    const float row_h = p->n > 9 ? 18 : 20, panel_w = 360;
     float x0 = cx - panel_w / 2;
     SDL_SetRenderDrawColor(r, 0, 0, 0, 140);
     SDL_FRect panel = {x0 - 10, y - 8, panel_w + 20, p->n * row_h + 12};

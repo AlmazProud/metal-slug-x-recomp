@@ -76,7 +76,7 @@ static void script_apply(void)
 }
 
 /* PD_CHEAT=frame,kind,player,value[;...]: cheats applied before that frame (tests). kind:
-   weapon, bombs, lives, soldier, devmenu. */
+   weapon, bombs, lives, soldier, form, devmenu (poke: research). */
 static void cheats_test(void)
 {
     const char *e = getenv("PD_CHEAT");
@@ -91,7 +91,10 @@ static void cheats_test(void)
             else if (!strcmp(kind, "bombs")) ok = cheats_set_bombs(player, value);
             else if (!strcmp(kind, "lives")) ok = cheats_set_lives(player, value);
             else if (!strcmp(kind, "soldier")) ok = cheats_set_soldier(player, value);
+            else if (!strcmp(kind, "form")) ok = cheats_set_form(player, value);
             else if (!strcmp(kind, "devmenu")) cheats_dev_menu();
+            else if (!strcmp(kind, "poke"))       /* research: player object byte, value = off*256+v */
+                ng.ram[((player ? PROFILE_PLAYER2_OBJECT : PROFILE_PLAYER1_OBJECT) + (value >> 8)) & 0xFFFF] = (uint8_t)value;
             if (!ok) fprintf(stderr, "PD_CHEAT: %s not applied at frame %llu (not in game)\n", kind, frame);
         }
         e += used;
@@ -571,7 +574,7 @@ int headless_prepare(const Options *o)
 int headless_run(const Options *o)
 {
     if (o->blood)
-        ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){1, PROFILE_BLOOD_WORD, PROFILE_BLOOD_MASK, 0x0001};
+        ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){1, PROFILE_BLOOD_WORD, PROFILE_BLOOD_MASK, 0x0001, 0, 0};
     /* Debug mode (cheats.h): PD_DIPS=hex forces debug dips, PD_DEVMODE the developer mode. */
     if (getenv("PD_DIPS")) cheats_dips = (uint16_t)strtoul(getenv("PD_DIPS"), NULL, 16);
     if (getenv("PD_DEVMODE")) cheats_devmode = 1;
@@ -592,6 +595,7 @@ int headless_run(const Options *o)
         cheats_test();
         cheats_input(&ng.joy[0], &ng.system[0]);
         ng_run_frame();
+        cheats_frame();
         count_end_frame();
         dump_sprites();
         capture_sprites();

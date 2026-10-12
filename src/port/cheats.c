@@ -5,6 +5,7 @@
 #include "profile.h"
 
 uint16_t cheats_dips;
+static int keep_fat[2];
 int cheats_devmode;
 
 const char *const CHEATS_SOLDIER_NAME[4] = {"Marco", "Eri", "Tarma", "Fio"};
@@ -16,9 +17,11 @@ static uint16_t rom16(uint32_t a) { return (uint16_t)(ng_roms.p[a] << 8 | ng_rom
 
 void cheats_apply(void)
 {
-    ng_forced_read[NG_FORCED_DIPS] = (NgForcedRead){cheats_dips != 0, PROFILE_DIPS_WORD, cheats_dips, cheats_dips};
-    ng_forced_read[NG_FORCED_DEVMODE] = (NgForcedRead){cheats_devmode, PROFILE_DEVMODE_WORD, 0xFF00, 0x0100};
-    ng_forced_read[NG_FORCED_DEVMODE_COPY] = (NgForcedRead){cheats_devmode, PROFILE_DEVMODE_COPY_WORD, 0xFF00, 0x0100};
+    ng_forced_read[NG_FORCED_DIPS] = (NgForcedRead){cheats_dips != 0, PROFILE_DIPS_WORD, cheats_dips, cheats_dips, 0, 0};
+    ng_forced_read[NG_FORCED_DEVMODE] = (NgForcedRead){cheats_devmode, PROFILE_DEVMODE_WORD, 0xFF00, 0x0100, 0, 0};
+    ng_forced_read[NG_FORCED_DEVMODE_COPY] = (NgForcedRead){cheats_devmode, PROFILE_DEVMODE_COPY_WORD, 0xFF00, 0x0100, 0, 0};
+    ng_forced_read[NG_FORCED_FAT_STAGE] = (NgForcedRead){keep_fat[0] || keep_fat[1], PROFILE_STAGE_WORD, 0xFFFF,
+                                                         PROFILE_FAT_STAGE, PROFILE_FAT_CHECK_FIRST, PROFILE_FAT_CHECK_LAST};
 }
 
 int cheats_in_game(int player)
@@ -74,6 +77,45 @@ int cheats_set_soldier(int player, int soldier)
     *ram8(status - 1) = INTERNAL[s];
     *ram8((p ? PROFILE_PLAYER2_OBJECT : PROFILE_PLAYER1_OBJECT) + PROFILE_OBJECT_CHARACTER) = INTERNAL[s];
     return 1;
+}
+
+/* Transformations (player object +0x93 current form, +0x94 requested form). Fat: the food
+   routine (0xC0BF4) adds 0x100 per food to the player's counter (table +0x10) and requests form 2
+   at 0x780; the game then plays the transformation. Mummy: form 3 requested the same way. */
+int cheats_form(int player)
+{
+    return *ram8(((player & 1) ? PROFILE_PLAYER2_OBJECT : PROFILE_PLAYER1_OBJECT) + PROFILE_OBJECT_FORM);
+}
+
+/* Normal form is 0 with the pistol and 1 with any other weapon (pickup table flag). */
+static int normal_form(int p)
+{
+    return rom8(PROFILE_ROM_WEAPON_FLAG + (*ram8(PROFILE_PLAYER_TABLE + 6 + p) & 15));
+}
+
+int cheats_set_form(int player, int form)
+{
+    if (!cheats_in_game(player)) return 0;
+    int p = player & 1;
+    uint32_t obj = p ? PROFILE_PLAYER2_OBJECT : PROFILE_PLAYER1_OBJECT;
+    keep_fat[p] = form == FORM_FAT;
+    ram16(PROFILE_PLAYER_TABLE + 0x10 + 2 * p, keep_fat[p] ? PROFILE_FAT_FOOD : 0);
+    *ram8(obj + PROFILE_OBJECT_FORM + 1) = (uint8_t)(form == FORM_NORMAL ? normal_form(p) : form);
+    cheats_apply();
+    return 1;
+}
+
+/* Every frame: keeps a fat soldier fat (food counter topped up) until he dies or the cheat is
+   turned off. */
+void cheats_frame(void)
+{
+    for (int p = 0; p < 2; p++) {
+        if (!keep_fat[p]) continue;
+        uint32_t obj = p ? PROFILE_PLAYER2_OBJECT : PROFILE_PLAYER1_OBJECT;
+        int form = *ram8(obj + PROFILE_OBJECT_FORM), pending = *ram8(obj + PROFILE_OBJECT_FORM + 1);
+        if (!cheats_in_game(p) || (form != FORM_FAT && pending != FORM_FAT)) { keep_fat[p] = 0; cheats_apply(); continue; }
+        ram16(PROFILE_PLAYER_TABLE + 0x10 + 2 * p, PROFILE_FAT_FOOD);
+    }
 }
 
 const char *cheats_weapon_name(int weapon)

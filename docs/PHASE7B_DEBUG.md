@@ -79,12 +79,23 @@ Found in the code and confirmed with dumps (addresses in `src/port/profile.h`):
 - **Soldier:** status object `+0x83` (select order: Marco, Eri, Tarma, Fio), `+0x82` and player
   object `+0x6F` (internal: Marco 0, Tarma 1, Eri 2, Fio 3). It takes effect when the player
   respawns.
+- **Forms** (player object `+0x93` current, `+0x94` requested; transitions table `0xC32E4`,
+  handler around `0xC340E`): 0 normal with the pistol, 1 normal with another weapon, 2 fat,
+  3 mummy. The game plays its own transformation when a form is requested.
+  - Fat: each food adds `0x100` to the player's counter (table `+0x10`, routine `0xC0BF4`) and
+    form 2 is requested at `0x780`. While fat, the routine `0xC0BAE` checks the stage
+    (`0x10C2F6`): only in stages 4-7, 9 and 10 (or near a food object, `0x10E9F8`) the counter
+    runs down slowly; anywhere else the soldier slims down at once. The cheat keeps the counter
+    full and makes that routine alone read stage 4 (a forced read limited to its PC range), so
+    the soldier stays fat until he dies or the cheat changes the form. Fat soldiers fire the big
+    shots.
+  - Mummy: form 3 requested directly; back to normal with form 0 (or 1 with a weapon).
 - **In a mission:** `0x100088 == 2`.
 
 ## In the port
 
 - **Extras > Cheats:** player 1/2, weapon (choose with left/right, give with Enter), 99 bombs,
-  lives, soldier, and the invincible / infinite bombs / infinite ammo / D kills all switches.
+  lives, soldier, form (normal / fat / mummy), and the invincible / infinite bombs / infinite ammo / D kills all switches.
   Session only: they are off on the next start.
 - **Extras > Debug:** developer mode (saved as `devmode=1`), open the developer menu (also
   **F4**: the port presses SELECT + D for the player, who has no SELECT button on a gamepad),
@@ -95,10 +106,10 @@ Found in the code and confirmed with dumps (addresses in `src/port/profile.h`):
 ## Tests
 
 - Headless: `PD_DIPS=hex`, `PD_DEVMODE=1` and `PD_CHEAT=frame,kind,player,value[;...]` (kind:
-  weapon, bombs, lives, soldier, devmenu). The script file accepts `select1`.
+  weapon, bombs, lives, soldier, form, devmenu; poke = player object byte, for research). The script file accepts `select1`.
 - Window: `PD_WINDOW_TEST=N,file.png,cheats` or `,debug` for screenshots of the pages.
 - Verified: the 16 weapons fire over the Mission 1 recording; lives 9 and 99 bombs show in the
-  HUD; Fio after a respawn; `devmenu` opens the developer menu with no manual input.
+  HUD; Fio after a respawn; fat in Mission 1 from frame 1872 until the cheat turned it off at 2600; mummy and cured; `devmenu` opens the developer menu with no manual input.
 
 ## Risks
 

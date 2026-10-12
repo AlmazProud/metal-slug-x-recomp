@@ -44,6 +44,12 @@ int cheats_set_lives(int player, int n);
 int cheats_set_soldier(int player, int soldier);     /* takes effect on the next life */
 int cheats_soldier(int player);
 
+/* Soldier transformations: request one; the game plays its own transformation. */
+enum { FORM_NORMAL = 0, FORM_FAT = 2, FORM_MUMMY = 3 };
+int cheats_form(int player);
+int cheats_set_form(int player, int form);
+void cheats_frame(void);                 /* after every emulated frame (keeps the fat form) */
+
 #define CHEATS_WEAPONS 16
 const char *cheats_weapon_name(int weapon);          /* English; NULL if unused */
 extern const char *const CHEATS_SOLDIER_NAME[4];
