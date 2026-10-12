@@ -60,10 +60,24 @@ Activar el entorno: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) o
 | 3B. Runtime: sonido (Z80 + YM2610) | **Cerrada** (2026-10-11). Ver `docs/FASE3_RUNTIME.md`. |
 | 4. Arranque y verificación diferencial | **Cerrada** (2026-10-11). Ver `docs/FASE4_VERIFICACION.md`. |
 | 5. Mejoras nativas | **Cerrada** (2026-10-11). Ver `docs/FASE5_NATIVO.md`. |
-| 6A. Remaster: autodisparo y modo debug | **Cerrada** (2026-10-12), pendiente del visto bueno. Ver `docs/FASE6_REMASTER.md`. `ctest`: 5/5. |
-| 6B. Remaster: catálogo de sonidos, menú de sonido, vibración | No iniciada |
+| 6A. Remaster: autodisparo y modo debug | **Cerrada** (2026-10-12). Ver `docs/FASE6_REMASTER.md`. |
+| 6B. Remaster: catálogo de sonidos, menú de sonido, vibración | **Cerrada** (2026-10-12), pendiente del visto bueno. `ctest`: 6/6. |
 | 6C. Remaster: menú de inicio moderno | No iniciada |
 | 6D. Remaster: pantalla ancha (investigar primero) | No iniciada |
+
+### Fase 6B: resultado
+
+Detalle en `docs/FASE6_REMASTER.md`.
+
+- **Driver de sonido:** comandos de modo `00` (música), `10` (efectos) y `11` (voces) que quedan
+  activos; `03` reinicia el driver (el juego envía `03 03 06` antes de cada música).
+- **Catálogo:** `--catalogo-sonido` + `PD_CATALOGO_PREFIJO`; `herramientas/catalogo_sonidos.py`
+  genera `src/port/perfil_sonidos.c` (18 músicas, 185 efectos, 61 voces).
+- **Nombres:** solo los confirmados con capturas de la partida; el resto, por número.
+- **Menú "Musica y sonidos"** (`src/port/sonidos.c`): guarda el estado, avanza solo el Z80 y el YM
+  (`ng_sonido_solo_*`) y restaura al salir. Prueba `menu_sonido`.
+- **Vibración** por comandos de sonido (`ng_al_comando_sonido`): explosiones, cañón, disparos;
+  intensidad 0-100.
 
 ### Fase 6A: resultado
 
@@ -303,9 +317,10 @@ verificado.
 
 ## Pendientes
 
-- [ ] **Fase 6B** tras el visto bueno de la 6A: plan corto (catálogo de comandos de sonido del
-      Z80, menú de música, voces y efectos, vibración por comandos de sonido; `F7` = pistola)
-      y esperar el OK.
+- [ ] **Fase 6C** tras el visto bueno de la 6B: plan corto (menú de inicio moderno con la fuente
+      del juego) y esperar el OK.
+- [ ] **Nombres de sonidos:** 12 músicas y la mayoría de las voces y efectos van por número. Hacen
+      falta grabaciones de otras misiones (el attract no tiene música).
 - [ ] **Perfil de juego** para portar otros Metal Slug (lo propuso el usuario): separar lo
       específico de mslugx (`src/port/perfil.h`, `roms.c`, protección en `bus.c`).
 - [ ] **Demo del attract sin recompilar:** en 12 000 cuadros sin entradas, 35 millones de pasos
