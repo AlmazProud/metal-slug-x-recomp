@@ -1,0 +1,40 @@
+# Builds the distributable executable (interpreter only, no game files needed) on every push.
+# The toolchain comes from the same pinned, hash-checked sources as the local installer
+# (setup/versions.json). Tests need the user's copy of the game, so they are not run here.
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain (CMake, Ninja, llvm-mingw, SDL3)
+        shell: pwsh
+        run: python setup/ci_tools.py "${{ runner.temp }}/tools" cmake ninja llvm-mingw sdl3
+
+      - name: Build (interpreter only)
+        shell: pwsh
+        run: |
+          $t = "${{ runner.temp }}/tools"
+          $env:PATH = "$t/cmake/bin;$t/ninja;$t/llvm-mingw/bin;$env:PATH"
+          cmake -S . -B build-dist -G Ninja -DCMAKE_BUILD_TYPE=Release -DPD_RECOMPILED=OFF `
+                -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ `
+                "-DCMAKE_PREFIX_PATH=$t/sdl3/x86_64-w64-mingw32"
+          cmake --build build-dist
+          ./build-dist/src/mslugx.exe --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mslugx-win64
+          path: |
+            build-dist/src/mslugx.exe
+            build-dist/src/SDL3.dll
