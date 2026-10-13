@@ -44,6 +44,7 @@
 #include "neogeo.h"
 #include "port.h"
 #include "profile.h"
+#include "version.h"
 
 /* The recompiled program (or the empty one of an interpreter-only build, cpu/program_none.c),
    with the SHA-256 of the P1 and BIOS it was generated from. */
@@ -98,6 +99,9 @@ static int parse_options(int argc, char **argv, Options *o)
             if (sscanf(v, "%d-%d-%d-%d-%d-%d-%d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6]) != 7) return -1;
             o->has_date = 1;
             i++;
+        } else if (!strcmp(a, "--version")) {
+            printf("metal-slug-x-recomp %s\n", PORT_VERSION);
+            exit(0);
         } else if (a[0] != '-' && !o->roms) o->roms = a;      /* path dropped on the executable */
         else return -1;
     }

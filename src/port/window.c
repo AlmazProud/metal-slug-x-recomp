@@ -44,6 +44,7 @@
 #include "profile.h"
 #include "port.h"
 #include "sounds.h"
+#include "version.h"
 
 void machine_start(const Options *o);
 
@@ -457,7 +458,7 @@ static int ask_for_game(char *error, int error_size)
             "Or copy it to the \"game\" folder", "next to the executable.",
         };
         SDL_SetRenderDrawColor(r, 255, 200, 64, 255);
-        SDL_RenderDebugText(r, 8, 8, "METAL SLUG X");
+        SDL_RenderDebugText(r, 8, 8, "METAL SLUG X  native port v" PORT_VERSION);
         SDL_SetRenderDrawColor(r, 230, 230, 230, 255);
         float y = 28;
         for (size_t i = 0; i < sizeof LINES / sizeof LINES[0]; i++, y += 10)

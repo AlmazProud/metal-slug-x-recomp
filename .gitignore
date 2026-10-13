@@ -32,6 +32,9 @@
 !*.toml
 !*.txt
 !tools/hooks/*
+# Phase 10: license file and the GitHub Actions workflow
+!LICENSE
+!.github/workflows/*.yml
 # Phase 3B: ymfm (BSD-3) is written in C++; third-party licenses without extension
 !*.cpp
 !*.ipp

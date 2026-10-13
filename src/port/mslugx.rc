@@ -1,2 +1,32 @@
-// Recursos del ejecutable de Windows: solo el manifiesto (sin íconos ni gráficos del juego).
+// Windows executable resources: the manifest and the version information (no icons or game
+// graphics).
+#include <winver.h>
+#include "version.h"
+
 1 24 "mslugx.manifest"
+
+1 VERSIONINFO
+FILEVERSION PORT_VERSION_MAJOR, PORT_VERSION_MINOR, PORT_VERSION_PATCH, 0
+PRODUCTVERSION PORT_VERSION_MAJOR, PORT_VERSION_MINOR, PORT_VERSION_PATCH, 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "metal-slug-x-recomp contributors"
+            VALUE "FileDescription", "Metal Slug X native port (unofficial; bring your own copy)"
+            VALUE "FileVersion", PORT_VERSION
+            VALUE "InternalName", "mslugx"
+            VALUE "LegalCopyright", "Port code: MIT License. Metal Slug X is (c) SNK; no game data included."
+            VALUE "OriginalFilename", "mslugx.exe"
+            VALUE "ProductName", "metal-slug-x-recomp"
+            VALUE "ProductVersion", PORT_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

@@ -18,6 +18,7 @@
 #include "neogeo.h"
 #include "port.h"
 #include "profile.h"
+#include "version.h"
 
 #define HISTORY 600                          /* 10 s */
 #define GRAPH 240                            /* 4 s */
@@ -170,7 +171,7 @@ void debug_draw(SDL_Renderer *r, SDL_FRect game, int w, int h, int turbo)
     char b[128];
     float x = 8, y = 8;
     backdrop(r, 4, 4, 51 * 8, 12 * L + 48);
-    text(r, x, y, "DEBUG  F3 close  F6 step  P pause", 255, 210, 80);
+    text(r, x, y, "DEBUG  F3 close  F6 step  P pause   v" PORT_VERSION, 255, 210, 80);
 
     snprintf(b, sizeof b, "FPS %5.1f  frame %llu  turbo x%d", d.fps, (unsigned long long)ng.frames, 1 << turbo);
     text(r, x, y + L, b, 220, 220, 220);

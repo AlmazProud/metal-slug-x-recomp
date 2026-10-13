@@ -16,12 +16,13 @@ unmodified, together with their license file.
 ## Environment tools (not distributed with the repo)
 
 The installer (`setup/setup.ps1`) downloads them into `tools\` from their official sources.
-None of them is linked into or redistributed with the port.
+Only SDL3 and llvm-mingw's runtime end up in the release; the rest are only used for building
+and analysis.
 
 | Tool | License | Use |
 |---|---|---|
-| SDL3 | zlib | Runtime window, input and audio. Linked dynamically (SDL3.dll). |
-| llvm-mingw | Apache-2.0 with LLVM exception, plus the mingw-w64 components | C compiler |
+| SDL3 | zlib | Runtime window, input and audio. Linked dynamically: the release zip ships `SDL3.dll` with its license (`licenses/SDL3.txt`). |
+| llvm-mingw | Apache-2.0 with LLVM exception, plus the mingw-w64 components | C compiler. Its C++ runtime (libc++, for ymfm) is linked statically into the executable; the LLVM exception requires no attribution for binaries. |
 | CMake | BSD-3-Clause | Build |
 | Ninja | Apache-2.0 | Build |
 | Python (CPython) | PSF-2.0 | Analysis tools |
@@ -31,3 +32,4 @@ None of them is linked into or redistributed with the port.
 | 7-Zip | LGPL-2.1 with unRAR restriction | Decompression |
 | ImHex | GPL-2.0 | Hex editor |
 | MinGit (Git for Windows) | GPL-2.0 | Version control |
+| GitHub CLI | MIT | Publishing (repository and releases) |
