@@ -46,7 +46,7 @@ repo\
 
 Docs: `docs/ROM_MAP.md`, `docs/PHASE1_COVERAGE.md`, `docs/PHASE3_RUNTIME.md`,
 `docs/PHASE4_VERIFICATION.md`, `docs/PHASE5_NATIVE.md`, `docs/PHASE6_REMASTER.md`,
-`docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`.
+`docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`, `docs/PHASE8_STAGES.md`.
 
 Build: `cmake -S repo -B repo\build -G Ninja -DCMAKE_BUILD_TYPE=Release` and
 `cmake --build repo\build`. The recompiled program is generated in `build\src\program\` from
