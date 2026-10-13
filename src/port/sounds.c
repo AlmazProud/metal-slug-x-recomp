@@ -147,6 +147,12 @@ static const struct { uint8_t command; Rumble v; } TABLE[] = {
     {0x8C, {0x2800, 0x5000, 45}},                /* Slug vulcan */
     {0x8D, {0x2000, 0x4000, 40}},                /* burst */
     {0xF7, {0x1800, 0x3000, 35}},                /* pistol */
+    /* tuned by the user (Phase 8) */
+    {0x27, {0xE000, 0x9800, 320}},               /* grenade explosion */
+    {0x2F, {0xE000, 0x9800, 320}},               /* explosion */
+    {0xF8, {0xE000, 0x9800, 320}},               /* laser */
+    {0xF4, {0x9000, 0x7000, 150}},               /* (medium) */
+    {0x48, {0x2000, 0x4000, 45}},                /* rope cut */
 };
 
 static const Rumble *rumble_of(uint8_t mode, uint8_t cmd)

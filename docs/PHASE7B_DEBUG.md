@@ -60,7 +60,7 @@ Found in the code and confirmed with dumps (addresses in `src/port/profile.h`):
 - **Weapons:** the pickup routine `0xC0928` takes the weapon number (0-15) and reads three
   tables in the ROM (sub-type `0xC08A8`, ammo `0xC08B8`, flag `0xC0918`); the port does the same
   writes reading those tables from the user's ROM, without the announcer voice. Names from the
-  shots seen and the voice each weapon plays (`0xC08F8`):
+  shots seen and the voice each weapon plays (`0xC08F8`; voices named by the user):
 
   | # | Weapon | # | Weapon |
   |---|---|---|---|
@@ -68,10 +68,10 @@ Found in the code and confirmed with dumps (addresses in `src/port/profile.h`):
   | 1 | Big blast (no voice; unused?) | 9 | Big Flame Shot |
   | 2 | Shotgun | 10 | Big Heavy Machine Gun |
   | 3 | Rocket Launcher | 11 | Big Laser Shot |
-  | 4 | Flame Shot | 12 | Super Grenade |
+  | 4 | Flame Shot | 12 | Enemy Chaser |
   | 5 | Heavy Machine Gun | 13 | Iron Lizard |
   | 6 | Laser Shot | 14 | Drop Shot |
-  | 7 | Big Shotgun | 15 | Enemy Chaser |
+  | 7 | Big Shotgun | 15 | Super Grenade |
 
   7-11 share the voice of 2-6 and fire bigger shots (probably the versions used when the soldier
   is fat).

@@ -75,6 +75,20 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 7A. V-sync and red blood | **Closed** (2026-10-12). See `docs/PHASE7_TWEAKS.md`. `ctest`: 6/6. |
 | 7I. English translation | **Closed** (2026-10-12). `ctest`: 6/6. Publishing on GitHub (license, plug-and-play release) comes at the end. |
 | 7B. Debug mode and cheats | **Closed** (2026-10-12). See `docs/PHASE7B_DEBUG.md`. `ctest`: 6/6. |
+| 8. Every stage against MAME | **Closed** (2026-10-12), pending approval. See `docs/PHASE8_STAGES.md`. `ctest`: 16/16. |
+
+### Phase 8: result
+
+Details in `docs/PHASE8_STAGES.md`.
+
+- Scripted runs of the developers' stage select in MAME and the port (`tools/stage_run.py`,
+  `tools/mame/scripted_run.lua`; MAME `-record`, clock date from the `.inp` header, `--replay`).
+- 10 of the 12 stage select entries (3-5, 7-13) match MAME exactly over 9,000 frames: tests
+  `stageNN_vs_mame`. Entry 2: RAM identical, 3 images differ on one line. Entry 6: Z80 reply
+  timing (the pending sample-accurate Z80 item).
+- Fix: the line counter `0x3C0006` is sampled 6 cycles before the end of the reading
+  instruction.
+- The user's sound names in the profile; weapons 12/15 renamed (Enemy Chaser / Super Grenade).
 
 ### Phase 7B: result
 
@@ -379,8 +393,8 @@ ROMs: 13 `mslugx_*` files copied from GOG to `roms\`, with `roms\MANIFEST.sha256
 
 ## To do
 
-- [ ] **Next phase** after 7B approval: the user chooses from the roadmap (short plan and OK
-      before writing code).
+- [ ] **Next phase** after Phase 8 approval: the user chooses from the roadmap (short plan and OK
+      before writing code). Open from Phase 8: stage 6 (Z80 slices) and stage 2 (3 images).
 - [ ] **Roadmap requested by the user** (for the final result):
   - [x] **Sonic-style debug (7B):** done (developer menu, debug dips, RAM cheats).
   - [ ] **Sound names and laser rumble:** the user identifies them with the Recent tab; move

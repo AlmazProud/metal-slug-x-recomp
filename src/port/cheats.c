@@ -175,8 +175,8 @@ const char *cheats_weapon_name(int weapon)
            the game as far as we know. */
         "Pistol", "Big blast (unused?)", "Shotgun", "Rocket Launcher", "Flame Shot",
         "Heavy Machine Gun", "Laser Shot", "Big Shotgun", "Big Rocket Launcher", "Big Flame Shot",
-        "Big Heavy Machine Gun", "Big Laser Shot", "Super Grenade", "Iron Lizard", "Drop Shot",
-        "Enemy Chaser",
+        "Big Heavy Machine Gun", "Big Laser Shot", "Enemy Chaser", "Iron Lizard", "Drop Shot",
+        "Super Grenade",
     };
     return weapon >= 0 && weapon < CHEATS_WEAPONS ? NAME[weapon] : NULL;
 }
