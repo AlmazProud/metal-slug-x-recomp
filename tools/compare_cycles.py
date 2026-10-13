@@ -18,12 +18,13 @@ from collections import Counter
 from pathlib import Path
 
 LINE = re.compile(r"^C=(\d+) ([0-9A-F]+):\s*(.*)$")
+REGS = re.compile(r" D[0-7]=[0-9A-F]{8}")
 
 
 def read_trace(path: Path) -> list[tuple[int, int, str]]:
     r = []
     for l in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        m = LINE.match(l)
+        m = LINE.match(REGS.sub("", l))                 # registers (PD_TRACE_REGS) are ignored
         if m:
             r.append((int(m.group(1)), int(m.group(2), 16), m.group(3).strip()))
     return r

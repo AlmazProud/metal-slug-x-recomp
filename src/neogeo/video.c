@@ -91,6 +91,11 @@ static void irq2_schedule(void)
     ng.irq2_when = ng_cpu.cycles + ((int64_t)ng.irq2_counter + 1) * 2;   /* pixel clock = 6 MHz */
 }
 
+/* The line counter is sampled during the operand read, not at the end of the instruction (when
+ * ng_cpu.cycles already includes the final prefetch): every reader in the game is a word read of
+ * an absolute address followed by a 4-cycle prefetch. 6 cycles before the end matches MAME in all
+ * the Phase 8 runs (4 and 8 do not: missions where a read falls right on a line boundary). */
+#define LINE_READ_OFFSET 6
 uint16_t ng_video_read(uint32_t reg)
 {
     switch (reg) {
@@ -98,7 +103,7 @@ uint16_t ng_video_read(uint32_t reg)
     case 2: return ng.vram_mod;
     default: {
         /* Vertical counter: 0x100 + vpos, from 0xF8 to 0x1FF. */
-        int64_t t = ng_cpu.cycles - ng.frame_start;
+        int64_t t = ng_cpu.cycles - LINE_READ_OFFSET - ng.frame_start;
         int vpos = (int)(t / NG_CYCLES_PER_LINE);
         if (vpos >= NG_LINES) vpos = NG_LINES - 1;
         int v = vpos + 0x100;

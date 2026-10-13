@@ -94,8 +94,10 @@ for n in string.gmatch(os.getenv("PD_DUMP_V") or "", "%d+") do dump_v[tonumber(n
 wtap_ack = mem:install_write_tap(0x3C000C, 0x3C000D, "pd_ack", function(offset, data, mask)
     if (data & mask & 0x0004) == 0 then return end
     vblanks = vblanks + 1
+    pd_lua_read = true                     -- read taps that alter data must skip this read
     local ram = mem:read_range(0x100000, 0x10FFFF, 8)
     local pal = mem:read_range(0x400000, 0x401FFF, 8)
+    pd_lua_read = false
     output:write(string.format("V %d %08X %08X f=%d pc=%06X\n", vblanks, fnv(ram), fnv(pal), scr:frame_number(), cpu.state["PC"].value))
     if dump_v[vblanks] then
         local v = io.open(string.format("%s/ram_mame_v%06d.bin", dump_dir, vblanks), "wb")
@@ -107,8 +109,10 @@ end)
 fingerprints_sub = emu.add_machine_frame_notifier(function()
     local f = scr:frame_number()
     if f < first or f > last then return end
+    pd_lua_read = true                     -- read taps that alter data must skip this read
     local ram = mem:read_range(0x100000, 0x10FFFF, 8)
     local pal = mem:read_range(0x400000, 0x401FFF, 8)
+    pd_lua_read = false
     output:write(string.format("%d %08X %08X\n", f, fnv(ram), fnv(pal)))
     if os.getenv("PD_PIXELS") then
         local px = scr:pixels()

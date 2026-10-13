@@ -19,6 +19,7 @@ How the references are produced (MAME 0.289, empty nvram in a new folder):
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,11 +34,18 @@ def main() -> int:
     ap.add_argument("--frames", type=int, required=True)
     ap.add_argument("--date", required=True)
     ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument("--devmode", action="store_true", help="BIOS development mode (Phase 8 runs)")
+    ap.add_argument("--dips", help="debug dips forced on, hex (Phase 8 runs)")
     a = ap.parse_args()
 
+    env = dict(os.environ)
+    if a.devmode:
+        env["PD_DEVMODE"] = "1"
+    if a.dips:
+        env["PD_DIPS"] = a.dips
     r = subprocess.run([str(a.exe), "--roms", str(a.roms), "--headless", "--frames", str(a.frames),
                         "--inputs", str(a.inputs), "--fingerprints", str(a.output), "--date", a.date],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, env=env)
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
