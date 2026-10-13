@@ -32,7 +32,8 @@ $__dirs = @(
     (Join-Path $__t 'mame'),
     $__7z,
     (Join-Path $__t 'imhex'),
-    (Join-Path $__t 'git\cmd')
+    (Join-Path $__t 'git\cmd'),
+    (Join-Path $__t 'gh\bin')
 )
 $__current = @($env:PATH -split ';' | Where-Object { $_ -ne '' })
 $__new = @($__dirs | Where-Object { $__current -notcontains $_ })
@@ -47,6 +48,8 @@ $env:CXX                = 'clang++'
 $env:PIP_CACHE_DIR      = Join-Path $__t '_cache\pip'
 $env:PYTHONNOUSERSITE   = '1'
 $env:PYTHONUTF8         = '1'
+# GitHub CLI settings in the workspace (the token itself goes to Windows' credential store).
+$env:GH_CONFIG_DIR      = Join-Path $__t '_cache\gh'
 
 if (-not (Test-Path Function:\__pd_prompt_original)) {
     Copy-Item Function:\prompt Function:\__pd_prompt_original

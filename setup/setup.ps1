@@ -380,6 +380,7 @@ function Test-Environment {
     Test-Tool 'Java'     "$t\jdk21\bin\java.exe" @('-version') 'version "21'
     Test-Tool 'MAME'     "$t\mame\mame.exe" @('-version') '^\d+\.\d+'
     Test-Tool 'Git'      "$t\git\cmd\git.exe" @('--version') 'git version'
+    Test-Tool 'GitHub CLI' "$t\gh\bin\gh.exe" @('--version') 'gh version'
 
     # imhex.exe is the CLI (imhex-gui.exe is the GUI); --version opens no windows.
     Test-Tool 'ImHex'    "$t\imhex\imhex.exe" @('--version') 'Version:\s+\d+\.\d+'

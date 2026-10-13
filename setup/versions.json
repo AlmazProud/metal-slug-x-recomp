@@ -179,6 +179,21 @@
           "hash_source": "GitHub git-for-windows/git release v2.56.0.windows.2 (asset digest)"
         }
       ]
+    },
+    {
+      "name": "gh",
+      "version": "2.102.0",
+      "install": "archive",
+      "check": "bin\\gh.exe",
+      "downloads": [
+        {
+          "file": "gh_2.102.0_windows_amd64.zip",
+          "url": "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_windows_amd64.zip",
+          "algorithm": "SHA256",
+          "hash": "ae64e556ecc240b200f7eba60d550e4bb60d78e860e69dd88c449405b86067f4",
+          "hash_source": "GitHub cli/cli release v2.102.0 (asset digest)"
+        }
+      ]
     }
   ]
 }
