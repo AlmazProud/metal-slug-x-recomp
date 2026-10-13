@@ -15,7 +15,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Toolchain (CMake, Ninja, llvm-mingw, SDL3)
         shell: pwsh
@@ -32,7 +32,7 @@ jobs:
           cmake --build build-dist
           ./build-dist/src/mslugx.exe --version
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mslugx-win64
           path: |
