@@ -46,12 +46,16 @@ repo\
 
 Docs: `docs/ROM_MAP.md`, `docs/PHASE1_COVERAGE.md`, `docs/PHASE3_RUNTIME.md`,
 `docs/PHASE4_VERIFICATION.md`, `docs/PHASE5_NATIVE.md`, `docs/PHASE6_REMASTER.md`,
-`docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`, `docs/PHASE8_STAGES.md`.
+`docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`, `docs/PHASE8_STAGES.md`, `docs/PHASE9_LOADER.md`.
 
 Build: `cmake -S repo -B repo\build -G Ninja -DCMAKE_BUILD_TYPE=Release` and
 `cmake --build repo\build`. The recompiled program is generated in `build\src\program\` from
-`roms\` and `analysis\`. Play: `repo\build\src\mslugx.exe` (finds the GOG install on its own).
-Tests: `ctest` in `repo\build`.
+`roms\` and `analysis\`. Play: `repo\build\src\mslugx.exe` (finds the user's copy on its own:
+`game\` next to the exe, GOG, Steam, or a dropped folder / zip). Tests: `ctest` in `repo\build`.
+Distributable build (no code derived from the game, interpreter only):
+`cmake -S repo -B repo\build-dist -G Ninja -DCMAKE_BUILD_TYPE=Release -DPD_RECOMPILED=OFF`.
+Build folders always go in `repo\build` or `repo\build-*` (ignored): a configure into `repo\`
+itself would generate the recompiled program inside the source tree.
 
 Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 `call "C:\Projecto Decompile\env.bat"` (cmd).
@@ -75,7 +79,36 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 7A. V-sync and red blood | **Closed** (2026-10-12). See `docs/PHASE7_TWEAKS.md`. `ctest`: 6/6. |
 | 7I. English translation | **Closed** (2026-10-12). `ctest`: 6/6. Publishing on GitHub (license, plug-and-play release) comes at the end. |
 | 7B. Debug mode and cheats | **Closed** (2026-10-12). See `docs/PHASE7B_DEBUG.md`. `ctest`: 6/6. |
-| 8. Every stage against MAME | **Closed** (2026-10-12), pending approval. See `docs/PHASE8_STAGES.md`. `ctest`: 16/16. |
+| 8. Every stage against MAME | **Closed** (2026-10-12). See `docs/PHASE8_STAGES.md`. `ctest`: 16/16. |
+| 9. Universal loader | **Closed** (2026-10-12), pending approval. See `docs/PHASE9_LOADER.md`. `ctest`: 20/20 (distributable build 18/18). |
+
+### Phase 9: result
+
+Details in `docs/PHASE9_LOADER.md`.
+
+- **Loader:** `src/neogeo/roms.c` takes a folder or a zip.
+  - **DotEmu files** (GOG; Steam most likely): validated by SHA-256.
+  - **MAME set** (`mslugx` + `neogeo`, zips or loose files): matched by CRC-32 + SHA-1 from
+    `mame -listxml`. Graphics are converted to the DotEmu layout (the inverse of
+    `extract_roms.py`).
+  - Our own zip/inflate (`unzip.c`), CRC-32 and SHA-1 (`hashes.c`).
+- **Finding the copy** (`src/port/find_game.c`): `--roms` or a path dropped on the exe, the
+  remembered one, `game\` or `roms\` next to the exe, GOG, Steam libraries, then usual folders.
+  If nothing is found, a bilingual screen accepts a dropped folder or zip, or ENTER for a folder
+  picker.
+- **Recompiled program:** used only with the exact P1 and BIOS it was generated from (their
+  SHA-256 is embedded by `program.py`); otherwise the interpreter runs.
+  - `-DPD_RECOMPILED=OFF` gives the distributable exe (1.3 MB, no game code; audited).
+  - The interpreter-only suite matches MAME in Mission 1 and the 10 stage runs.
+- **Profile check:** `src/port/profile.c` hashes 11 windows of P1. Cheats, debug and red blood
+  are only offered when they match the GOG code.
+- **Not verified for lack of files:** Steam's copy and the arcade P1. They load and play in the
+  interpreter.
+- **Also:**
+  - CMake takes Python from PATH (`Python3_FIND_REGISTRY NEVER`).
+  - `.gitignore` ignores `build-*/`.
+  - A folder named `roms/` is always ignored, which is why the zip test helper lives in
+    `tests/loader/`.
 
 ### Phase 8: result
 
@@ -393,8 +426,21 @@ ROMs: 13 `mslugx_*` files copied from GOG to `roms\`, with `roms\MANIFEST.sha256
 
 ## To do
 
-- [ ] **Next phase** after Phase 8 approval: the user chooses from the roadmap (short plan and OK
-      before writing code). Open from Phase 8: stage 6 (Z80 slices) and stage 2 (3 images).
+- [ ] **Next phase** after Phase 9 approval: Phase 10, publishing on GitHub (license, README,
+      history audit, release zip with the distributable build). Open from Phase 8: stage 6
+      (Z80 slices) and stage 2 (3 images).
+- [ ] **Later, in their own conversations (the user's decision):**
+  - **Metal Slug 3 port.** GOG copy at `K:\Metal Slug 3` (GOG id 1370911530), same DotEmu
+    layout: `resources\game\mslug3_*`, with a 9 MB 68000 program and 64 MB of tiles.
+    Expected work:
+    - the SMA protection (bank switching of the 8 MB P2, random number generator);
+    - CMC42-encrypted graphics and an SMA-encrypted program in arcade dumps;
+    - first risk: the MAME oracle expects the encrypted cartridge ROMs.
+    - Do the game profile split first (see below).
+  - **PS Vita port.** C17 + SDL3 (SDL3 supports the Vita). The risk is CPU speed (444 MHz).
+    Measure the interpreter on hardware first. Options if it is too slow: a pre-decoded
+    interpreter, a JIT (allowed for Vita homebrew), or a PC tool that builds the `.vpk` from the
+    user's copy.
 - [ ] **Roadmap requested by the user** (for the final result):
   - [x] **Sonic-style debug (7B):** done (developer menu, debug dips, RAM cheats).
   - [ ] **Sound names and laser rumble:** the user identifies them with the Recent tab; move
