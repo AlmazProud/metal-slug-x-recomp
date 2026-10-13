@@ -86,7 +86,7 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 7B. Debug mode and cheats | **Closed** (2026-10-12). See `docs/PHASE7B_DEBUG.md`. `ctest`: 6/6. |
 | 8. Every stage against MAME | **Closed** (2026-10-12). See `docs/PHASE8_STAGES.md`. `ctest`: 16/16. |
 | 9. Universal loader | **Closed** (2026-10-12). See `docs/PHASE9_LOADER.md`. `ctest`: 20/20 (distributable build 18/18). |
-| 10. Publishing on GitHub | **Closed** (2026-10-12), pending approval. See `docs/PHASE10_RELEASE.md`. Release v1.0.0. |
+| 10. Publishing on GitHub | **Closed** (2026-10-12). Public repository. See `docs/PHASE10_RELEASE.md`. Release v1.0.0. |
 
 ### Phase 10: result
 
