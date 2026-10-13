@@ -4,8 +4,11 @@
 
 <!-- Write your own comments here: Markdown works (paragraphs, **bold**, lists, links).
      Delete the placeholder line below when you write yours. -->
-*The author's notes will go here.*
+Hey everyone, real human here, keep in mind this is vibe coded and it may have some errors, this was a personal project just to play MSX on my PS Vita lol, which is still on my to-do list, but I imagined that this could be a step foward regarding Metal Slug ports, I have no prior experience coding, nor I intend to learn any, feel free to use this freely, I asked Claude to add some thing I wanted that I think could be useful.
 
+If you find any bugs please report them and I'll ask Claude c:
+
+Enjoy!
 ---
 
 A native Windows port of **Metal Slug X** (Neo Geo MVS, 1999), built by statically recompiling
