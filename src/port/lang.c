@@ -1,8 +1,8 @@
 /* Frontend translations (see lang.h).
  *
  * The Spanish texts are the port's original ones. The menu font only has ASCII (font.c), so
- * they are written without accents or n-tilde; the only exception is the ROM folder dialog,
- * which is a native Windows message box. Lookup is a linear strcmp over the table: a few dozen
+ * they are written without accents or n-tilde.
+ * Lookup is a linear strcmp over the table: a few dozen
  * strings per frame against ~150 entries, negligible.
  */
 #include "lang.h"
@@ -205,10 +205,19 @@ static const struct { const char *en, *es; } TABLE[] = {
     {"Resume", "Continuar"},
     {"Screenshot: %s", "Captura: %s"},
     {"Esc: menu   F5/F9: save/load game", "Esc: menu   F5/F9: guardar/cargar partida"},
-    {"No valid GOG copy of Metal Slug X was found.\n\n%s\n\n"
-     "Choose the folder where you installed the game (or its resources\\game subfolder).",
-     "No se encontró una copia válida de Metal Slug X de GOG.\n\n%s\n\n"
-     "Elige la carpeta donde instalaste el juego (o su subcarpeta resources\\game)."},
+    /* "game not found" screen (window.c, SDL's built-in ASCII font) */
+    {"Your copy of the game was not found.", "No se encontro tu copia del juego."},
+    {"Drop its folder or zip on this window,", "Arrastra aqui su carpeta o su zip,"},
+    {"or press ENTER to choose a folder.", "o pulsa ENTER para elegir una carpeta."},
+    {"It works with the GOG or Steam release", "Sirve la version de GOG o Steam"},
+    {"(the install folder) or a MAME set", "(carpeta instalada) o un set de MAME"},
+    {"(mslugx + neogeo, zips or files).", "(mslugx + neogeo, en zip o sueltos)."},
+    {"Or copy it to the \"game\" folder", "O copialo a la carpeta \"game\""},
+    {"next to the executable.", "junto al ejecutable."},
+    {"ESC: quit", "ESC: salir"},
+    {"Loading...", "Cargando..."},
+    {"Unrecognized game version: cheats and debug are off",
+     "Version del juego no reconocida: sin trucos ni depuracion"},
 };
 
 const char *tr(const char *en)

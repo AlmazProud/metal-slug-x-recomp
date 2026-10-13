@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "neogeo.h"
+#include "port.h"
 #include "profile.h"
 
 #define HISTORY 600                          /* 10 s */
@@ -168,7 +169,7 @@ void debug_draw(SDL_Renderer *r, SDL_FRect game, int w, int h, int turbo)
     const float L = 10;
     char b[128];
     float x = 8, y = 8;
-    backdrop(r, 4, 4, 51 * 8, 10 * L + 48);
+    backdrop(r, 4, 4, 51 * 8, 12 * L + 48);
     text(r, x, y, "DEBUG  F3 close  F6 step  P pause", 255, 210, 80);
 
     snprintf(b, sizeof b, "FPS %5.1f  frame %llu  turbo x%d", d.fps, (unsigned long long)ng.frames, 1 << turbo);
@@ -220,6 +221,11 @@ void debug_draw(SDL_Renderer *r, SDL_FRect game, int w, int h, int turbo)
     snprintf(b, sizeof b, "Ctrl+3 boxes %s  Ctrl+4 palette %s  Ctrl+5 RAM %s", d.boxes ? "yes" : "no",
              d.palette ? "yes" : "no", d.memory ? "yes" : "no");
     text(r, x, ty + L, b, 170, 170, 170);
+    /* the loaded copy (neogeo/roms.c) and how the 68000 runs it (main.c) */
+    snprintf(b, sizeof b, "%.50s", ng_roms.info.description);
+    text(r, x, ty + 2 * L, b, 140, 180, 255);
+    snprintf(b, sizeof b, "68000: %s", machine_recompiled() ? "recompiled program" : "interpreter");
+    text(r, x, ty + 3 * L, b, 140, 180, 255);
 
     if (d.palette) draw_palette(r, vw - 64 * 3 - 8, 22, 64 * 3);
     if (d.memory) draw_memory(r, 8, vh - 18 * L - 8);

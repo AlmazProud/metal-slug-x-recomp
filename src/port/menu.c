@@ -18,6 +18,7 @@
 #include "frontend.h"
 #include "lang.h"
 #include "logo.h"
+#include "profile.h"
 #include "sounds.h"
 
 enum {
@@ -306,7 +307,10 @@ static void do_action(int op, int d)
     case OP_VOLUME: step_percent(&cfg.volume, d); fe_apply_volume(); break;
     case OP_RUMBLE: step_percent(&cfg.rumble, d); rumble_strength(cfg.rumble); break;
     case OP_TURBO: cfg.turbo = cycle(cfg.turbo, d ? d : 1, 3); cpu_turbo = cfg.turbo; break;
-    case OP_BLOOD: cfg.blood = !cfg.blood; fe_apply_blood(); break;
+    case OP_BLOOD:
+        if (!profile_supported()) fe_notify(T("Unrecognized game version: cheats and debug are off"));
+        else { cfg.blood = !cfg.blood; fe_apply_blood(); }
+        break;
     case OP_AUTO1: case OP_AUTO2:
         cfg.autofire[op - OP_AUTO1] = cycle(cfg.autofire[op - OP_AUTO1], d ? d : 1, AUTO_COUNT);
         break;
@@ -316,8 +320,11 @@ static void do_action(int op, int d)
         if (!d) { m.remap_player = op - OP_CONTROLS1; m.remap_action = 0; }
         break;
     case OP_DEBUG: debug_enable(!debug_enabled()); cfg.debug = debug_enabled(); break;
-    case OP_CHEATS: if (!d) push_page(&P_CHEATS); break;
-    case OP_DEBUG_PAGE: if (!d) push_page(&P_DEBUG); break;
+    case OP_CHEATS: case OP_DEBUG_PAGE:
+        if (d) break;
+        if (!profile_supported()) fe_notify(T("Unrecognized game version: cheats and debug are off"));
+        else push_page(op == OP_CHEATS ? &P_CHEATS : &P_DEBUG);
+        break;
     case OP_CHEAT_PLAYER: cheat_player = !cheat_player; break;
     case OP_GIVE_WEAPON:
         if (d) cheat_weapon = cycle(cheat_weapon, d, CHEATS_WEAPONS);

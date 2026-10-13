@@ -223,12 +223,14 @@ void fe_service(void) { test_frames = 30; }
 /* Red blood: the game reads its BLOOD option as on (profile.h). */
 void fe_apply_blood(void)
 {
-    ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){cfg.blood, PROFILE_BLOOD_WORD, PROFILE_BLOOD_MASK, 0x0001, 0, 0};
+    ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){cfg.blood && profile_supported(), PROFILE_BLOOD_WORD,
+                                                     PROFILE_BLOOD_MASK, 0x0001, 0, 0};
 }
 /* Developer menu (cheats.h): only with developer mode on and during a mission. */
 void fe_dev_menu(void)
 {
-    if (!cfg.devmode) fe_notify(T("Turn on developer mode first (Extras > Debug)"));
+    if (!profile_supported()) fe_notify(T("Unrecognized game version: cheats and debug are off"));
+    else if (!cfg.devmode) fe_notify(T("Turn on developer mode first (Extras > Debug)"));
     else if (!cheats_in_game(0)) fe_notify(T("Only during a mission"));
     else cheats_dev_menu();
 }
@@ -407,52 +409,109 @@ static void SDLCALL on_folder_chosen(void *data, const char *const *list, int fi
     dialog_done = 1;
 }
 
-static int try_roms(const char *folder, char *error, int size)
+/* The user's copy: a folder (searched a few levels deep) or a zip; remembered in mslugx.ini. */
+static int try_roms(const char *path, char *error, int size)
 {
-    if (ng_roms_load(&ng_roms, folder, error, size) == 0) {
-        snprintf(cfg.roms, sizeof cfg.roms, "%s", folder);
-        return 1;
-    }
-    char sub[1100];                          /* the game's root folder works too */
-    snprintf(sub, sizeof sub, "%s\\resources\\game", folder);
-    if (ng_roms_load(&ng_roms, sub, error, size) == 0) {
-        snprintf(cfg.roms, sizeof cfg.roms, "%s", sub);
-        return 1;
-    }
-    return 0;
+    if (ng_roms_load(&ng_roms, path, error, size) != 0) return 0;
+    snprintf(cfg.roms, sizeof cfg.roms, "%s", path);
+    return 1;
 }
 
-/* --roms, the remembered folder, "roms" next to the executable, the GOG installation and, if
-   none of those works, the folder chosen by the user. */
+/* "Game not found" screen: drop a folder or zip on the window, or ENTER for a folder picker.
+   Drawn with SDL's built-in 8x8 ASCII font (the game's own font comes from the copy). */
+static int ask_for_game(char *error, int error_size)
+{
+    SDL_Window *w;
+    SDL_Renderer *r;
+    if (!SDL_CreateWindowAndRenderer("Metal Slug X", 960, 672, SDL_WINDOW_RESIZABLE, &w, &r)) return 0;
+    SDL_SetRenderLogicalPresentation(r, 320, 224, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    int found = 0, done = 0, loading = 0;
+    char dropped[1024] = "";
+    while (!done) {
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_EVENT_QUIT) done = 1;
+            else if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) done = 1;
+            else if (e.type == SDL_EVENT_DROP_FILE && e.drop.data) snprintf(dropped, sizeof dropped, "%s", e.drop.data);
+            else if ((e.type == SDL_EVENT_KEY_DOWN && (e.key.key == SDLK_RETURN || e.key.key == SDLK_KP_ENTER)) ||
+                     (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT) ||
+                     (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH)) {
+                dialog_done = 0;
+                dialog_path[0] = 0;
+                SDL_ShowOpenFolderDialog(on_folder_chosen, NULL, w, NULL, false);
+                while (!dialog_done) {
+                    SDL_Event ignored;
+                    SDL_WaitEventTimeout(&ignored, 50);
+                }
+                if (dialog_path[0]) snprintf(dropped, sizeof dropped, "%s", dialog_path);
+            }
+        }
+        if (getenv("PD_FIND_TEST")) done = 1;       /* test: draw once and quit */
+        SDL_SetRenderDrawColor(r, 16, 16, 24, 255);
+        SDL_RenderClear(r);
+        static const char *const LINES[] = {
+            "Your copy of the game was not found.", "",
+            "Drop its folder or zip on this window,", "or press ENTER to choose a folder.", "",
+            "It works with the GOG or Steam release", "(the install folder) or a MAME set",
+            "(mslugx + neogeo, zips or files).", "",
+            "Or copy it to the \"game\" folder", "next to the executable.",
+        };
+        SDL_SetRenderDrawColor(r, 255, 200, 64, 255);
+        SDL_RenderDebugText(r, 8, 8, "METAL SLUG X");
+        SDL_SetRenderDrawColor(r, 230, 230, 230, 255);
+        float y = 28;
+        for (size_t i = 0; i < sizeof LINES / sizeof LINES[0]; i++, y += 10)
+            if (LINES[i][0]) SDL_RenderDebugText(r, 8, y, T(LINES[i]));
+        /* the reason, wrapped at 38 characters */
+        SDL_SetRenderDrawColor(r, 255, 120, 100, 255);
+        y += 8;
+        const char *msg = loading ? T("Loading...") : error;
+        for (size_t at = 0, n = strlen(msg); at < n && y < 200; at += 38, y += 10) {
+            char line[40];
+            snprintf(line, sizeof line, "%.38s", msg + at);
+            SDL_RenderDebugText(r, 8, y, line);
+        }
+        SDL_SetRenderDrawColor(r, 160, 160, 160, 255);
+        SDL_RenderDebugText(r, 8, 210, T("ESC: quit"));
+        if (getenv("PD_FIND_TEST")) {             /* PD_FIND_TEST=file.png: saves the screen */
+            SDL_Surface *s = SDL_RenderReadPixels(r, NULL);
+            if (s) { SDL_SavePNG(s, getenv("PD_FIND_TEST")); SDL_DestroySurface(s); }
+        }
+        SDL_RenderPresent(r);
+        if (dropped[0] && !loading) { loading = 1; continue; }   /* show "Loading..." first */
+        if (loading) {
+            loading = 0;
+            if (try_roms(dropped, error, error_size)) { found = 1; done = 1; }
+            dropped[0] = 0;
+        }
+        SDL_Delay(16);
+    }
+    SDL_DestroyRenderer(r);
+    SDL_DestroyWindow(w);
+    return found;
+}
+
+/* The path given (--roms or dropped on the executable), the remembered one, the usual places
+   (find_game.c: "game"/"roms" next to the executable, GOG, Steam) and, if none of those works,
+   the "game not found" screen. */
 static int find_roms(const Options *o)
 {
-    char error[1200] = "", folder[1024];
+    char error[1200] = "", first_error[1200] = "";
     if (o->roms) {
         if (try_roms(o->roms, error, sizeof error)) return 1;
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Metal Slug X", error, NULL);
-        return 0;
+        return ask_for_game(error, sizeof error);
     }
     if (cfg.roms[0] && try_roms(cfg.roms, error, sizeof error)) return 1;
     const char *base = SDL_GetBasePath();
-    snprintf(folder, sizeof folder, "%sroms", base ? base : "");
-    if (try_roms(folder, error, sizeof error)) return 1;
-    if (gog_find(folder, sizeof folder) && try_roms(folder, error, sizeof error)) return 1;
-    for (;;) {
-        char msg[1600];
-        snprintf(msg, sizeof msg,
-                 T("No valid GOG copy of Metal Slug X was found.\n\n%s\n\n"
-                   "Choose the folder where you installed the game (or its resources\\game subfolder)."), error);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Metal Slug X", msg, NULL);
-        dialog_done = 0;
-        dialog_path[0] = 0;
-        SDL_ShowOpenFolderDialog(on_folder_chosen, NULL, NULL, NULL, false);
-        while (!dialog_done) {
-            SDL_Event e;
-            SDL_WaitEventTimeout(&e, 50);
-        }
-        if (!dialog_path[0]) return 0;           /* cancelled */
-        if (try_roms(dialog_path, error, sizeof error)) return 1;
+    static char places[16][1024];
+    int n = game_places(base ? base : "", places, 16);
+    for (int i = 0; i < n; i++) {
+        if (try_roms(places[i], error, sizeof error)) return 1;
+        if (!first_error[0]) snprintf(first_error, sizeof first_error, "%s", error);
     }
+    if (first_error[0]) snprintf(error, sizeof error, "%s", first_error);
+    else error[0] = 0;
+    return ask_for_game(error, sizeof error);
 }
 
 /* ------------------------------------------------------------------ main */
@@ -528,6 +587,7 @@ int window_run(const Options *o)
     static int16_t samples[4096 * 2];
     uint64_t audio_frames = 0, audio_drops = 0, audio_empty = 0, audio_queue_sum = 0;
     if (!cfg.start_screen) fe_notify(T("Esc: menu   F5/F9: save/load game"));
+    if (!profile_supported()) fe_notify(T("Unrecognized game version: cheats and debug are off"));
 
     /* PD_WINDOW_TEST=N,file.png[,menu|settings|cheats|debug|sounds|play|rename]: after N frames,
        saves what the window shows (with the pause menu, its Settings page or the Extras pages, with the sound menu playing the

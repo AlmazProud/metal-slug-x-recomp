@@ -75,4 +75,8 @@
 #define PROFILE_LOGO_TM_TILE 0x309CAu
 #define PROFILE_LOGO_MAX_FRAMES 3000
 
+/* profile.c: 1 if the loaded program has the GOG copy's code at every address above (the cheats,
+ * debug options and red blood are only offered then). */
+int profile_supported(void);
+
 #endif

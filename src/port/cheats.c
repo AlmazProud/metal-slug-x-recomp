@@ -15,19 +15,22 @@ static void ram16(uint32_t a, uint16_t v) { ram8(a)[0] = (uint8_t)(v >> 8); ram8
 static uint8_t rom8(uint32_t a) { return ng_roms.p[a]; }
 static uint16_t rom16(uint32_t a) { return (uint16_t)(ng_roms.p[a] << 8 | ng_roms.p[a + 1]); }
 
+/* Everything here relies on profile.h: with another version of the game program
+   (profile_supported() == 0) nothing is forced and the cheats do nothing. */
 void cheats_apply(void)
 {
-    ng_forced_read[NG_FORCED_DIPS] = (NgForcedRead){cheats_dips != 0, PROFILE_DIPS_WORD, cheats_dips, cheats_dips, 0, 0};
-    ng_forced_read[NG_FORCED_DEVMODE] = (NgForcedRead){cheats_devmode, PROFILE_DEVMODE_WORD, 0xFF00, 0x0100, 0, 0};
-    ng_forced_read[NG_FORCED_DEVMODE_COPY] = (NgForcedRead){cheats_devmode, PROFILE_DEVMODE_COPY_WORD, 0xFF00, 0x0100, 0, 0};
-    ng_forced_read[NG_FORCED_FAT_STAGE] = (NgForcedRead){keep_fat[0] || keep_fat[1], PROFILE_STAGE_WORD, 0xFFFF,
+    int ok = profile_supported();
+    ng_forced_read[NG_FORCED_DIPS] = (NgForcedRead){ok && cheats_dips != 0, PROFILE_DIPS_WORD, cheats_dips, cheats_dips, 0, 0};
+    ng_forced_read[NG_FORCED_DEVMODE] = (NgForcedRead){ok && cheats_devmode, PROFILE_DEVMODE_WORD, 0xFF00, 0x0100, 0, 0};
+    ng_forced_read[NG_FORCED_DEVMODE_COPY] = (NgForcedRead){ok && cheats_devmode, PROFILE_DEVMODE_COPY_WORD, 0xFF00, 0x0100, 0, 0};
+    ng_forced_read[NG_FORCED_FAT_STAGE] = (NgForcedRead){ok && (keep_fat[0] || keep_fat[1]), PROFILE_STAGE_WORD, 0xFFFF,
                                                          PROFILE_FAT_STAGE, PROFILE_FAT_CHECK_FIRST, PROFILE_FAT_CHECK_LAST};
 }
 
 int cheats_in_game(int player)
 {
     (void)player;
-    return *ram8(PROFILE_GAME_STATE) == PROFILE_GAME_STATE_PLAYING;
+    return profile_supported() && *ram8(PROFILE_GAME_STATE) == PROFILE_GAME_STATE_PLAYING;
 }
 
 /* Same effect as the game's own pickup routine (0xC0928) minus the announcer: weapon, its

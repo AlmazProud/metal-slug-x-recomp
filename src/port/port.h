@@ -18,6 +18,10 @@ typedef struct {
     int date[7], has_date;
 } Options;
 
+/* main.c: 1 if the recompiled program runs the loaded copy (same P1 and BIOS it was generated
+ * from); otherwise the 68000 runs in the interpreter. */
+int machine_recompiled(void);
+
 /* headless.c */
 int save_bmp(const char *path);
 int headless_prepare(const Options *o);
@@ -26,8 +30,8 @@ int headless_run(const Options *o);
 /* window.c */
 int window_run(const Options *o);
 
-/* gog.c: resources\game folder of a GOG installation of Metal Slug X (Windows registry and
- * usual folders). Returns 1 if it found one whose files validate. */
-int gog_find(char *folder, int size);
+/* find_game.c: places where the user's copy may be, in order of preference ("game" and "roms"
+ * next to the executable, GOG, Steam, usual folders). Returns how many were written to `list`. */
+int game_places(const char *exe_dir, char (*list)[1024], int max);
 
 #endif
