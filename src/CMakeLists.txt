@@ -111,3 +111,22 @@ if(EXISTS "${PD_ANALYSIS}/phase4/mission1_fingerprints_mame.txt" AND EXISTS "${P
                      --frames 11970 --date 2026-10-11-20-28-31-0
                      --output ${CMAKE_CURRENT_BINARY_DIR}/mission1_fingerprints_port.txt)
 endif()
+
+# Phase 8: scripted runs of the developers' stage select against MAME (tools/stage_run.py writes
+# the references to PD_ANALYSIS/phase8, outside the repo). Stages 2 and 6 still have known
+# differences (docs/PHASE8_STAGES.md) and are not tests yet.
+foreach(stage 03 04 05 07 08 09 10 11 12 13)
+    set(base ${PD_ANALYSIS}/phase8/stage${stage})
+    if(EXISTS "${base}_fingerprints.txt" AND EXISTS "${base}_date.txt" AND EXISTS "${base}_frames.txt")
+        file(READ "${base}_date.txt" date)
+        file(READ "${base}_frames.txt" frames)
+        string(STRIP "${date}" date)
+        string(STRIP "${frames}" frames)
+        add_test(NAME stage${stage}_vs_mame
+                 COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/verify_mission.py
+                         --exe $<TARGET_FILE:mslugx> --roms ${PD_ROMS} --devmode --dips 8000
+                         --inputs ${base}_inputs.txt --reference ${base}_fingerprints.txt
+                         --frames ${frames} --date ${date}
+                         --output ${CMAKE_CURRENT_BINARY_DIR}/stage${stage}_fingerprints_port.txt)
+    endif()
+endforeach()
