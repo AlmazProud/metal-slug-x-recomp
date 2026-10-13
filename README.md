@@ -1,5 +1,13 @@
 # metal-slug-x-recomp
 
+## A word from the author
+
+<!-- Write your own comments here: Markdown works (paragraphs, **bold**, lists, links).
+     Delete the placeholder line below when you write yours. -->
+*The author's notes will go here.*
+
+---
+
 A native Windows port of **Metal Slug X** (Neo Geo MVS, 1999), built by statically recompiling
 the game's 68000 program to C and reimplementing the Neo Geo hardware around it.
 
