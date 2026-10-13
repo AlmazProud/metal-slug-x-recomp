@@ -33,6 +33,21 @@ enum {
 enum { NG_START = 1 << 0, NG_SELECT = 1 << 1, NG_COIN = 1 << 2 };
 
 /* ------------------------------------------------------------------ ROMs */
+enum { NG_FORMAT_DOTEMU = 1, NG_FORMAT_MAME = 2 };
+enum { NG_VERSION_UNKNOWN = 0, NG_VERSION_GOG = 1, NG_VERSION_ARCADE = 2 };
+
+/* What was loaded (roms.c): the recompiled program and the game profile depend on it. */
+typedef struct {
+    char source[1024];       /* folder or zip it was loaded from */
+    char description[160];   /* for the user (English) */
+    char bios[24];           /* MAME's -bios name ("us", "euro", "unibios40"...) */
+    int format;              /* NG_FORMAT_* */
+    int version;             /* NG_VERSION_*: the 68000 program (P1) */
+    int verified;            /* every file has a known hash */
+    uint8_t p1_sha256[32];   /* P1 and BIOS as files (before the byte swap) */
+    uint8_t bios_sha256[32];
+} NgRomInfo;
+
 typedef struct {
     uint8_t *p;              /* P1+P2 as seen by the 68000 (big-endian), 5 MB */
     uint32_t p_size;
@@ -45,11 +60,13 @@ typedef struct {
     uint8_t *z80;            /* M1: sound program, 128 KB */
     uint8_t *adpcm;          /* V1-V3: ADPCM samples, 10 MB */
     uint32_t adpcm_size;
+    NgRomInfo info;
 } NgRoms;
 
-/* Loads and validates (SHA-256) the files of the user's copy. Returns 0 if everything is fine;
+/* Loads the user's copy from `path` (a folder, searched a few levels deep, or a zip): the PC
+ * release's DotEmu files or a MAME set (mslugx + neogeo). Returns 0 if a complete copy was found;
  * otherwise writes the reason into `error`. */
-int ng_roms_load(NgRoms *r, const char *dir, char *error, int error_size);
+int ng_roms_load(NgRoms *r, const char *path, char *error, int error_size);
 void ng_roms_free(NgRoms *r);
 
 /* ------------------------------------------------------------------ machine */
