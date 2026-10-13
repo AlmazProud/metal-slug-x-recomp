@@ -46,7 +46,12 @@ repo\
 
 Docs: `docs/ROM_MAP.md`, `docs/PHASE1_COVERAGE.md`, `docs/PHASE3_RUNTIME.md`,
 `docs/PHASE4_VERIFICATION.md`, `docs/PHASE5_NATIVE.md`, `docs/PHASE6_REMASTER.md`,
-`docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`, `docs/PHASE8_STAGES.md`, `docs/PHASE9_LOADER.md`.
+`docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`, `docs/PHASE8_STAGES.md`, `docs/PHASE9_LOADER.md`,
+`docs/PHASE10_RELEASE.md`.
+
+Published at https://github.com/AlmazProud/metal-slug-x-recomp (MIT). Before every publication:
+`python tools/audit.py history` and `python tools/package_release.py` (it audits the zip). The
+GitHub CLI is in `tools\gh` (on PATH with the environment; login already done by the user).
 
 Build: `cmake -S repo -B repo\build -G Ninja -DCMAKE_BUILD_TYPE=Release` and
 `cmake --build repo\build`. The recompiled program is generated in `build\src\program\` from
@@ -80,7 +85,23 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 7I. English translation | **Closed** (2026-10-12). `ctest`: 6/6. Publishing on GitHub (license, plug-and-play release) comes at the end. |
 | 7B. Debug mode and cheats | **Closed** (2026-10-12). See `docs/PHASE7B_DEBUG.md`. `ctest`: 6/6. |
 | 8. Every stage against MAME | **Closed** (2026-10-12). See `docs/PHASE8_STAGES.md`. `ctest`: 16/16. |
-| 9. Universal loader | **Closed** (2026-10-12), pending approval. See `docs/PHASE9_LOADER.md`. `ctest`: 20/20 (distributable build 18/18). |
+| 9. Universal loader | **Closed** (2026-10-12). See `docs/PHASE9_LOADER.md`. `ctest`: 20/20 (distributable build 18/18). |
+| 10. Publishing on GitHub | **Closed** (2026-10-12), pending approval. See `docs/PHASE10_RELEASE.md`. Release v1.0.0. |
+
+### Phase 10: result
+
+Details in `docs/PHASE10_RELEASE.md`.
+
+- **License and docs:** MIT `LICENSE`, `README.md` in English, version 1.0.0 (`version.h`, also
+  in the executable's properties).
+- **Audits:** `tools/audit.py` checks the history and the release zip: whitelisted text, size,
+  encoded data, and an exhaustive search for runs copied from the ROMs. The whole history is
+  clean.
+- **Packaging:** `tools/package_release.py` builds the release zip from the interpreter-only
+  build.
+- **CI:** GitHub Actions builds the distributable executable with the pinned toolchain
+  (`setup/ci_tools.py`).
+- **GitHub CLI** is in the installer (`versions.json`).
 
 ### Phase 9: result
 
@@ -426,9 +447,9 @@ ROMs: 13 `mslugx_*` files copied from GOG to `roms\`, with `roms\MANIFEST.sha256
 
 ## To do
 
-- [ ] **Next phase** after Phase 9 approval: Phase 10, publishing on GitHub (license, README,
-      history audit, release zip with the distributable build). Open from Phase 8: stage 6
-      (Z80 slices) and stage 2 (3 images).
+- [ ] **After Phase 10:** the user decides what follows. Open from Phase 8: stage 6 (Z80
+      slices) and stage 2 (3 images). Not verified for lack of files: Steam's copy and the
+      arcade P1 (ask users on GitHub to report their hashes, `PD_ROMS_INFO=1`).
 - [ ] **Later, in their own conversations (the user's decision):**
   - **Metal Slug 3 port.** GOG copy at `K:\Metal Slug 3` (GOG id 1370911530), same DotEmu
     layout: `resources\game\mslug3_*`, with a 9 MB 68000 program and 64 MB of tiles.

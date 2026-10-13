@@ -11,7 +11,8 @@ graphics, sound or BIOS. The port reads them at run time from a copy you own.
 
 ## Quick start
 
-1. Download the latest release zip from the Releases page and unzip it anywhere.
+1. Download the latest zip from [Releases](https://github.com/AlmazProud/metal-slug-x-recomp/releases)
+   and unzip it anywhere.
 2. Have a copy of the game. Any of these works:
 
    | Copy | What the port needs |

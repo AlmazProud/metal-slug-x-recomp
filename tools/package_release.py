@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[1]
 ROOT = REPO.parent
 
 README = """metal-slug-x-recomp {version}: native port of Metal Slug X for Windows
-https://github.com/ (see the project page for the source code and documentation)
+https://github.com/AlmazProud/metal-slug-x-recomp
 
 This package contains no part of the game. You need your own copy:
 
