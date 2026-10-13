@@ -1,7 +1,7 @@
 # Lockstep of the recompiled program (the user's P1 + BIOS) against Musashi from reset.
 # Uses the recompiled program from src/ (generated in build/ from the user's copy).
 
-if(NOT TARGET recompiled_program)
+if(NOT PD_HAVE_PROGRAM)
     message(STATUS "Lockstep disabled: the recompiled program is missing")
     return()
 endif()

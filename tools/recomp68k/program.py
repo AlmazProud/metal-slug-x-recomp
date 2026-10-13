@@ -20,6 +20,7 @@ Usage: python program.py --roms DIR --listings L1 [L2...] --coverage J [J...] --
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -57,8 +58,14 @@ class Memory:
             a = bytearray(b)
             a[0::2], a[1::2] = b[1::2], b[0::2]
             return bytes(a)
-        self.p1 = cpu((roms / "mslugx_game_m68k").read_bytes()[:1 << 20])
-        self.bios = cpu((roms / "mslugx_bios_m68k").read_bytes())
+        p1 = (roms / "mslugx_game_m68k").read_bytes()[:1 << 20]
+        bios = (roms / "mslugx_bios_m68k").read_bytes()
+        # SHA-256 of the files the program is generated from: the port only uses the recompiled
+        # program with a copy whose P1 and BIOS have these hashes (otherwise, the interpreter).
+        self.p1_sha256 = hashlib.sha256(p1).hexdigest()
+        self.bios_sha256 = hashlib.sha256(bios).hexdigest()
+        self.p1 = cpu(p1)
+        self.bios = cpu(bios)
 
     def read16(self, d: int) -> int:
         if d + 2 <= len(self.p1):
@@ -214,7 +221,9 @@ def main() -> int:
     decls = "\n".join(f"void program_register_{n:03d}(void);" for n in range(n_files))
     (a.output / "program_registry.c").write_text(
         "/* GENERATED: DO NOT EDIT, DO NOT COMMIT. */\n" + decls +
-        f"\n\nvoid program_register(void)\n{{\n{calls}\n}}\n", encoding="utf-8")
+        f"\n\nconst char program_p1_sha256[] = \"{mem.p1_sha256}\";\n"
+        f"const char program_bios_sha256[] = \"{mem.bios_sha256}\";\n"
+        f"\nvoid program_register(void)\n{{\n{calls}\n}}\n", encoding="utf-8")
     print(f"regions: {len(functions)}  instructions: {len(decoded)}  files: {n_files}  "
           f"unsupported: {unsupported}  (analysis entries: {len(entries)})")
     return 0

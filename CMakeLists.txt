@@ -13,6 +13,8 @@ set(CMAKE_C_EXTENSIONS OFF)
 # Phase 1 analysis (PD_ANALYSIS). None of that goes into the repo.
 set(PD_ROMS "$ENV{PD_ROMS}" CACHE PATH "Folder with the user's ROMs (mslugx_*)")
 set(PD_ANALYSIS "$ENV{PD_ROOT}/analysis" CACHE PATH "Analysis output folder (listing_p1.txt)")
+# Python from PATH (the environment puts ..	oolspython first), not from the registry.
+set(Python3_FIND_REGISTRY NEVER)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 enable_testing()
