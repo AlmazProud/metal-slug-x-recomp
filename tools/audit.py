@@ -36,7 +36,7 @@ LIMIT = 1 << 20
 HEX_RUN = re.compile(rb"[0-9A-Fa-f]{129,}")                 # longer than a SHA-512 in hex
 BASE64_RUN = re.compile(rb"[A-Za-z0-9+/]{200,}={0,2}")
 BYTE_ARRAY = re.compile(rb"(?:0x[0-9A-Fa-f]{2}\s*,\s*){64,}")
-RELEASE_FILES = {"mslug.exe", "SDL3.dll", "LICENSE.txt", "README.txt", "THIRD_PARTY.md",
+RELEASE_FILES = {"mslugx.exe", "SDL3.dll", "LICENSE.txt", "README.txt", "THIRD_PARTY.md",
                  "licenses/SDL3.txt", "licenses/Musashi.txt", "licenses/ymfm.txt",
                  "licenses/chips-z80.txt", "licenses/stb_truetype.txt", "licenses/OFL-BlackOpsOne.txt",
                  "licenses/OFL-ChakraPetch.txt", "game/PUT_YOUR_GAME_HERE.txt"}
@@ -214,7 +214,7 @@ def audit_release(zip_path: Path, pieces) -> list[str]:
             if not n.endswith("/"):
                 data = z.read(n)
                 find_pieces(data, pieces, n, problems)
-                if n.endswith("mslug.exe") and len(data) > 4 * LIMIT:
+                if n.endswith("mslugx.exe") and len(data) > 4 * LIMIT:
                     problems.append(f"{n}: {len(data)} bytes, too big for the interpreter-only build")
     print(f"release: {len(names)} files, ROM search {'on' if pieces else 'skipped'}")
     return problems

@@ -1,12 +1,12 @@
-# Activates the Metal Slug port environment ONLY in the current PowerShell session.
+# Activates the Metal Slug X port environment ONLY in the current PowerShell session.
 # Does not touch the global PATH or the registry.
 #
-#   . "C:\Projecto Decompile\MS1_Port\env.ps1"          (in an open session; note the leading dot)
-#   powershell -NoExit -ExecutionPolicy Bypass -File "C:\Projecto Decompile\MS1_Port\env.ps1"
+#   . "C:\Projecto Decompile\env.ps1"          (in an open session; note the leading dot)
+#   powershell -NoExit -ExecutionPolicy Bypass -File "C:\Projecto Decompile\env.ps1"
 #
 # Works both from the workspace root and from repo\setup (canonical copy).
 # Tools: <root>\tools if it exists, otherwise the shared ..\tools of the parent folder
-# (C:\Projecto Decompile\tools, shared with the Metal Slug X, 3, 4 and 5 ports).
+# (C:\Projecto Decompile\tools, shared with the Metal Slug, 3, 4 and 5 ports).
 
 $__pd = $PSScriptRoot
 if (-not (Test-Path -LiteralPath (Join-Path $__pd 'repo'))) {
@@ -60,4 +60,4 @@ if (-not (Test-Path Function:\__pd_prompt_original)) {
 }
 
 Remove-Variable __pd, __t, __7z, __dirs, __current, __new -ErrorAction SilentlyContinue
-Write-Host "Metal Slug port environment active in this session ($env:PD_ROOT, tools: $env:PD_TOOLS)"
+Write-Host "Metal Slug X port environment active in this session ($env:PD_ROOT, tools: $env:PD_TOOLS)"

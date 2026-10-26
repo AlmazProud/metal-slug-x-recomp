@@ -2,17 +2,13 @@
 and nothing is written to the computer it runs on.
 
 Usage:
-  python tools/make_portable.py --out E:\\ [--build repo/build] [--mslug <root>/roms]
-                                [--mslug4 <root>/../MS4_Port/roms] [--mslug5 <root>/../MS5_Port/roms]
-                                [--mslug3 <root>/../MS3_Port/roms] [--mslugx <root>/../roms]
+  python tools/make_portable.py --out E:\\ [--build repo/build] [--mslugx <root>/roms]
 
-For each game whose executable is built and whose files are found, <out>/Metal Slug/<game>/ gets
-the executable, SDL3.dll, the licenses, a "game" folder with the user's own copy of the game files
-(copied from the given folder: the DotEmu-layout files only, not MAME sets; for Metal Slug 5, the
-decrypted reference files made from the user's MAME set; for Metal Slug 4, GOG's files and the
-system files, or with --mame-set or without GOG's files the MAME set) and an empty "save" folder. With "save"
+If mslugx.exe is built and the files are found, <out>/Metal Slug/mslugx/ gets the executable,
+SDL3.dll, the licenses, a "game" folder with the user's own copy of the game files (the
+DotEmu-layout files from the given folder, not MAME sets) and an empty "save" folder. With "save"
 next to the executable the port runs in portable mode: settings, SRAM, saved games and the title
-logo go there. Games without an executable or files are skipped.
+logo go there. (The tool is shared with the other Metal Slug ports, which add their games.)
 
 The output holds the user's game files: it is for the user only, never published or committed.
 """
@@ -26,7 +22,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 ROOT = REPO.parent
 
-GAMES = {"mslug": "Metal Slug", "mslug4": "Metal Slug 4", "mslug5": "Metal Slug 5", "mslug3": "Metal Slug 3", "mslugx": "Metal Slug X"}
+GAMES = {"mslugx": "Metal Slug X"}
 # Games whose runtime decrypts the MAME set at load: their copy takes the set itself (relative to
 # the given folder) when it is there, instead of the decrypted files.
 MAME_SETS = {"mslug5": ["mslug5.zip", "neogeo/sp-u2.sp1", "neogeo/000-lo.lo", "neogeo/sfix.sfix"],
@@ -116,12 +112,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, required=True, help="destination (a drive or a folder)")
     ap.add_argument("--build", type=Path, default=REPO / "build")
-    ap.add_argument("--mslug", type=Path, default=ROOT / "roms", help="folder with the mslug_* files")
-    ap.add_argument("--mslug4", type=Path, default=ROOT.parent / "MS4_Port" / "roms",
-                    help="folder with gog\\ (GOG's Data\\rom files) and neogeo\\ (the system files)")
-    ap.add_argument("--mslug5", type=Path, default=ROOT.parent / "MS5_Port" / "roms", help="folder with the mslug5_* files")
-    ap.add_argument("--mslug3", type=Path, default=ROOT.parent / "MS3_Port" / "roms", help="folder with the mslug3_* files")
-    ap.add_argument("--mslugx", type=Path, default=ROOT.parent / "roms", help="folder with the mslugx_* files")
+    ap.add_argument("--mslugx", type=Path, default=ROOT / "roms", help="folder with the mslugx_* files")
     ap.add_argument("--only", choices=list(GAMES), help="copy only this game")
     ap.add_argument("--mame-set", action="store_true",
                     help="Metal Slug 4: copy the MAME set (mslug4h and neogeo) instead of GOG's files")

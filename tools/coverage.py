@@ -115,7 +115,7 @@ def tools_dir(root: Path) -> Path:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     root = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[2]))
-    ap.add_argument("--game", default="mslug", help="MAME machine (mslug, mslug4h, mslug5, mslug3, mslugx)")
+    ap.add_argument("--game", default="mslugx", help="MAME machine (mslug, mslug4h, mslug5, mslug3, mslugx)")
     ap.add_argument("--p2-banks", type=int, default=1,
                     help="P2's 1 MB banks: a bank select value outside them shows bank 0, as bus.c's "
                          "p2_bank (Metal Slug: 1, its second MB, never switched; Metal Slug 4: 4, the "

@@ -22,7 +22,7 @@ REPO = Path(__file__).resolve().parents[1]
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("probes", nargs="+")
-    ap.add_argument("--game", default="mslug5")
+    ap.add_argument("--game", default="mslugx")
     ap.add_argument("--frame", type=int, default=2)
     ap.add_argument("--roms", type=Path, default=Path(os.environ.get("PD_ROMS") or ROOT / "roms"))
     ap.add_argument("--work", type=Path, default=ROOT / "analysis" / "phase2" / "bus_probe")

@@ -1,5 +1,5 @@
 @echo off
-rem Single entry point of the Metal Slug port installer.
+rem Single entry point of the Metal Slug X port installer.
 rem Runs setup.ps1 with ExecutionPolicy Bypass ONLY for this process.
 rem Options (passed to setup.ps1):  -CopyRoms  -NoRoms  -VerifyOnly  -Gog "folder"  -Yes
 setlocal

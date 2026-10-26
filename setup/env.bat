@@ -1,7 +1,7 @@
 @echo off
-rem Activates the Metal Slug port environment ONLY in this cmd window.
+rem Activates the Metal Slug X port environment ONLY in this cmd window.
 rem Does not touch the global PATH or the registry.
-rem   call "C:\Projecto Decompile\MS1_Port\env.bat"
+rem   call "C:\Projecto Decompile\env.bat"
 rem Works both from the workspace root and from repo\setup (canonical copy).
 rem Tools: <root>\tools if it exists, otherwise the shared ..\tools (C:\Projecto Decompile\tools).
 
@@ -32,4 +32,4 @@ set "PIP_CACHE_DIR=%PD_TOOLS%\_cache\pip"
 set "PYTHONNOUSERSITE=1"
 set "PYTHONUTF8=1"
 set "GH_CONFIG_DIR=%PD_TOOLS%\_cache\gh"
-echo Metal Slug port environment active in this window (%PD_ROOT%, tools: %PD_TOOLS%)
+echo Metal Slug X port environment active in this window (%PD_ROOT%, tools: %PD_TOOLS%)

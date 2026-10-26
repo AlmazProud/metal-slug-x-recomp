@@ -300,7 +300,7 @@ def main() -> int:
     ap.add_argument("--roms", type=Path, default=root / "roms",
                     help="folder with <game>_game_m68k and _bios_m68k (Metal Slug: the GOG copy's own "
                          "files in roms; Metal Slug 4: tools/make_reference.py --mslug4)")
-    ap.add_argument("--game", default="mslug", help="file prefix (mslug, mslug4, mslug5, mslug3, mslugx)")
+    ap.add_argument("--game", default="mslugx", help="file prefix (mslug, mslug4, mslug5, mslug3, mslugx)")
     ap.add_argument("--coverage", type=Path, nargs="+", default=[root / "analysis" / "coverage.json"],
                     help="one or more coverage JSON files (tools/coverage.py); they are merged")
     ap.add_argument("--report", type=Path, default=repo / "docs" / "PHASE3_COVERAGE.md")

@@ -1,9 +1,9 @@
 # Differential tests of the recompiler against Musashi, on the Metal Slug X program (regression
-# target; PD_MSX_ROMS and its analysis listing in PD_MSX_ANALYSIS).
+# target; PD_ROMS and its analysis listing in PD_ANALYSIS).
 # The test C code is generated here, in the build directory, and is never committed.
 
-if(NOT EXISTS "${PD_MSX_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_MSX_ANALYSIS}/listing_p1.txt")
-    message(STATUS "Differential tests disabled: missing ROMs (${PD_MSX_ROMS}) or listing (${PD_MSX_ANALYSIS})")
+if(NOT EXISTS "${PD_ROMS}/mslugx_game_m68k" OR NOT EXISTS "${PD_ANALYSIS}/listing_p1.txt")
+    message(STATUS "Differential tests disabled: missing ROMs (${PD_ROMS}) or listing (${PD_ANALYSIS})")
     return()
 endif()
 
@@ -15,7 +15,7 @@ file(GLOB RECOMP_PY ${PROJECT_SOURCE_DIR}/tools/recomp68k/*.py)
 add_custom_command(
     OUTPUT ${GEN}
     COMMAND Python3::Interpreter -I ${CMAKE_CURRENT_SOURCE_DIR}/generate_tests.py
-            --roms ${PD_MSX_ROMS} --game mslugx --listing ${PD_MSX_ANALYSIS}/listing_p1.txt --output ${GEN} --cycles ${CYCLES_BIN}
+            --roms ${PD_ROMS} --game mslugx --listing ${PD_ANALYSIS}/listing_p1.txt --output ${GEN} --cycles ${CYCLES_BIN}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/generate_tests.py ${RECOMP_PY} ${CYCLES_BIN}
     COMMENT "Generating differential tests from the user's ROMs"
     VERBATIM)
@@ -27,5 +27,5 @@ target_link_libraries(diferencial PRIVATE musashi)
 set_source_files_properties(${GEN} PROPERTIES COMPILE_OPTIONS "-Wno-unused-variable;-Wno-unused-but-set-variable")
 
 add_test(NAME cpu_differential
-         COMMAND diferencial ${PD_MSX_ROMS}/mslugx_game_m68k ${PD_MSX_ROMS}/mslugx_bios_m68k 64)
+         COMMAND diferencial ${PD_ROMS}/mslugx_game_m68k ${PD_ROMS}/mslugx_bios_m68k 64)
 set_tests_properties(cpu_differential PROPERTIES LABELS mslugx)

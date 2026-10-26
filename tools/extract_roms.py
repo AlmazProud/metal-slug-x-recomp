@@ -42,8 +42,15 @@ def fix_dotemu_to_neogeo(d: bytes) -> bytes:
 
 
 def sprites_dotemu_to_neogeo(d: bytes) -> tuple[bytes, bytes]:
+    """DotEmu sprite block to a pair of C ROMs (odd: planes 0-1, even: planes 2-3)."""
+    r = sprites_dotemu_to_region(d)
+    return r[0::2].tobytes(), r[1::2].tobytes()
+
+
+def sprites_dotemu_to_region(d: bytes) -> np.ndarray:
     """DotEmu sprite block (16x16 tiles, 4bpp, row-major, 8 bytes per row,
-    low nibble = left pixel) to a pair of C ROMs (odd: planes 0-1, even: planes 2-3).
+    low nibble = left pixel) to MAME's sprite region (even bytes: odd C ROM, planes 0-1; odd
+    bytes: even C ROM, planes 2-3). Also used by tools/check_load.py.
 
     Neo Geo format per tile (128 bytes of the interleaved odd C/even C region):
       left half (x 0-7) at 0x40-0x7F, right half (x 8-15) at 0x00-0x3F,
@@ -61,8 +68,7 @@ def sprites_dotemu_to_neogeo(d: bytes) -> tuple[bytes, bytes]:
         for offset, plane in ((0, 0), (1, 2), (2, 1), (3, 3)):
             bits = ((m >> plane) & 1).astype(np.uint16) * weights
             region[:, base + offset: base + 64: 4] = bits.sum(axis=2).astype(np.uint8)
-    r = region.reshape(-1)
-    return r[0::2].tobytes(), r[1::2].tobytes()
+    return region.reshape(-1)
 
 
 # ---------------------------------------------------------------- oracle (MAME)

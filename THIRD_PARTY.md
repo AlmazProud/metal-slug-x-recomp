@@ -3,13 +3,16 @@
 ## Libraries integrated into the port's code
 
 Each library is listed with its version, origin, license and how it is used. They are copied
-unmodified, together with their license file.
+together with their license file, unmodified except where the table says so (ymfm).
 
 | Library | Version | Origin | License | Use |
 |---|---|---|---|---|
 | Musashi | 4.60 (commit `313ebf1`) | github.com/kstenerud/Musashi, copied into `external/musashi/` | MIT | Reference 68000 interpreter (differential tests) and runtime fallback. **No SoftFloat**: `m68kfpu.c` and the `softfloat/` headers are our own substitutes (see `external/musashi/README_PD.md`). Linked into the port. |
 | z80.h (chips) | commit `9e88298` (2026-09-26); tarball SHA256 `fcae3999…a09b8d` | github.com/floooh/chips, `chips/z80.h` copied into `external/chips/` with its `LICENSE` | zlib | Sound Z80, emulated cycle by cycle. Linked into the port. |
-| ymfm | commit `81aec25` (2026-07-27); tarball SHA256 `9bcf001b…f443f` | github.com/aaronsgiles/ymfm, only the YM2610 files (OPN, ADPCM and SSG) in `external/ymfm/` with its `LICENSE` | BSD-3-Clause | YM2610 (FM, SSG, ADPCM-A/B), the same core MAME uses. Written in C++: it is the only C++ code in the port, used through a C bridge (`src/neogeo/ym2610.cpp`). Linked into the port, with the C++ runtime linked statically. |
+| ymfm | commit `81aec25` (2026-07-27); tarball SHA256 `9bcf001b…f443f` | github.com/aaronsgiles/ymfm, only the YM2610 files (OPN, ADPCM and SSG) in `external/ymfm/` with its `LICENSE` | BSD-3-Clause | YM2610 (FM, SSG, ADPCM-A/B), the same core MAME uses. **Modified:** the ADPCM-B channel (`ymfm_adpcm.cpp/.h`, changes marked `PORT CHANGE`) behaves as MAME 0.289's, measured as a black box (`docs/ADPCM_B.md`); `ym2610::ssg_clock` (`ymfm_opn.h`) clocks the SSG alone, for MAME's SSG soft reset (`docs/PHASE3_RECOMP.md`). Written in C++: it is the only C++ code in the port, used through a C bridge (`src/neogeo/ym2610.cpp`). Linked into the port, with the C++ runtime linked statically. |
+| stb_truetype | 1.26 (master of 2026-10-15); SHA256 `ecd30b05…5090aab` | github.com/nothings/stb, `stb_truetype.h` copied into `external/stb/` (its license is at the end of the file) | MIT or public domain | Rasterizes the menu fonts (`src/port/ui_font.c`). Linked into the port. |
+| Black Ops One | Google Fonts (`ofl/blackopsone`); TTF SHA256 `282a825b…145b3` | github.com/google/fonts, as C source in `external/fonts/black_ops_one.c` (`tools/embed_font.py`: the repo only holds text) with `OFL-BlackOpsOne.txt` | SIL OFL 1.1 | Menu titles (stencil). Embedded in the executable. |
+| Chakra Petch | Google Fonts (`ofl/chakrapetch`), Regular, SemiBold and Bold | github.com/google/fonts, as C sources `external/fonts/chakra_petch_*.c` with `OFL-ChakraPetch.txt` | SIL OFL 1.1 | Menu text. Embedded in the executable. |
 | Capstone | 5.0.7 | PyPI (`capstone`), github.com/capstone-engine/capstone | BSD-3-Clause | 68000 instruction decoder in the analysis tools (Phase 1). Not linked into the port. |
 | NumPy | 2.5.4 | PyPI (`numpy`) | BSD-3-Clause | Graphics format conversion in the ROM extractor. Not linked into the port. |
 

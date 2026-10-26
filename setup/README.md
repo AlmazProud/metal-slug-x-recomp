@@ -1,33 +1,29 @@
-# Metal Slug port: portable environment
+# Metal Slug X port: portable environment
 
-The workspace lives in `C:\Projecto Decompile\MS1_Port`. It needs no administrator rights, does
-not modify the global PATH and does not write to the registry. The tools are shared with the
-Metal Slug X, 3, 4 and 5 ports in `C:\Projecto Decompile\tools` (the parent folder); nothing is
-downloaded twice.
+The workspace lives in `C:\Projecto Decompile`. It needs no administrator rights, does not modify
+the global PATH and does not write to the registry. Its `tools\` folder is shared with the Metal
+Slug, 3, 4 and 5 ports (`MS1_Port\`, `MS3_Port\`, `MS4_Port\`, `MS5_Port\` next to `repo\`);
+nothing is downloaded twice.
 
 ```
 Projecto Decompile\
   tools\              portable tools, shared (+ _descargas, _cache, _verificacion)
-  MS1_Port\
-    INSTALL.bat         single entry point of the installer
-    env.ps1 / env.bat   activate the environment ONLY in the current session
-    README.md           this file
-    grabar_partida.bat  records a game in MAME (Phase 3)
-    repo\               port source code (git). The installer lives in repo\setup\
-    roms\               copy of YOUR ROMs (outside the repo, never versioned)
-    analysis\           analysis output (outside the repo)
-    logs\               installation logs
+  INSTALL.bat         single entry point of the installer
+  env.ps1 / env.bat   activate the environment ONLY in the current session
+  README.md           this file
+  grabar_partida.bat  records a game in MAME (coverage and verification)
+  repo\               port source code (git). The installer lives in repo\setup\
+  roms\               copy of YOUR ROMs (outside the repo, never versioned)
+  analysis\           analysis output and MAME references (outside the repo)
+  logs\               installation logs
 ```
-
-If `MS1_Port\tools\` exists, it is used instead of the shared folder (a fully standalone
-workspace).
 
 ## Install, repair or verify
 
 Double-click `INSTALL.bat`, or from a console:
 
 ```
-"C:\Projecto Decompile\MS1_Port\INSTALL.bat"
+"C:\Projecto Decompile\INSTALL.bat"
 ```
 
 - Downloads only from the official sources listed in `repo\setup\versions.json` and verifies
@@ -36,7 +32,7 @@ Double-click `INSTALL.bat`, or from a console:
   reinstalls only what changed version.
 - At the end it runs a verification (versions, an SDL3 "hello world" that opens a window for
   about 2 seconds, and an import with headless Ghidra) and shows an OK/FAIL table.
-- Then it asks whether you want to copy the ROMs (the GOG copy's DotEmu `mslug_*` files) to
+- Then it asks whether you want to copy the ROMs (the GOG copy's DotEmu `mslugx_*` files) to
   `roms\`. The default answer is **No**. The GOG install is only read.
 
 Options:
@@ -46,13 +42,12 @@ Options:
 | `-VerifyOnly` | Installs nothing; only runs the verification. |
 | `-CopyRoms` | Only copies the ROMs (asks for confirmation). |
 | `-NoRoms` | Does not ask about the ROMs at the end. |
-| `-Gog "folder"` | The GOG install of Metal Slug (default `K:\Metal Slug`). |
+| `-Gog "folder"` | The GOG install of Metal Slug X (default `K:\Metal Slug X`). |
 | `-Yes` | Copies the ROMs without asking. |
 
-The files of `resources\game\mslug_*` go to `roms\`, and so do DotEmu's menu extras kept in the
-install's root (`mslug_stage_*`, `mslug_multi_*`, `mslug_intro`). The MAME set `mslug` rebuilt
-from them (Phase 0) goes to `roms\mslug\`, with the BIOS files taken from the same copy in
-`roms\neogeo\`, so MAME finds both with `-rompath roms`. `roms\MANIFEST.sha256` lists the copies.
+The files of `resources\game\mslugx_*` go to `roms\`. The MAME set `mslugx` rebuilt from them
+(`python repo\tools\extract_roms.py`) goes to `roms\mame\mslugx\` and `roms\mame\neogeo\`, so MAME
+finds it with `-rompath roms\mame`. `roms\MANIFEST.sha256` lists the copies.
 
 The log of each run is written to `logs\install_YYYYMMDD_HHMMSS.log`.
 
@@ -61,19 +56,19 @@ The log of each run is written to `logs\install_YYYYMMDD_HHMMSS.log`.
 PowerShell (in an open session; note the leading dot):
 
 ```
-. "C:\Projecto Decompile\MS1_Port\env.ps1"
+. "C:\Projecto Decompile\env.ps1"
 ```
 
 Or open an already activated session:
 
 ```
-powershell -NoExit -ExecutionPolicy Bypass -File "C:\Projecto Decompile\MS1_Port\env.ps1"
+powershell -NoExit -ExecutionPolicy Bypass -File "C:\Projecto Decompile\env.ps1"
 ```
 
 cmd:
 
 ```
-call "C:\Projecto Decompile\MS1_Port\env.bat"
+call "C:\Projecto Decompile\env.bat"
 ```
 
 The environment prepends to the session PATH: python, cmake, ninja, llvm-mingw (clang), SDL3 (bin),
@@ -89,15 +84,9 @@ jdk21, ghidra\support (analyzeHeadless), mame, 7-Zip, imhex, git and gh. It also
    CMake SHA-256 file, Adoptium API, NuGet catalog).
 2. Run `INSTALL.bat` again. Only the tool that changed is reinstalled.
 
-Warning: the tools folder is shared with the Metal Slug X, 3, 4 and 5 ports, so an update affects
-all of them.
-Updating Python reinstalls the whole `tools\python` folder and the packages installed with pip
-are lost. They must be reinstalled from the repo's `tools\requirements.txt`.
-
-## Uninstall
-
-Delete the `C:\Projecto Decompile\MS1_Port` folder. The shared tools stay for the other ports.
-Nothing is left in the registry or in the global PATH.
+Warning: the tools folder is shared with the Metal Slug, 3, 4 and 5 ports, so an update affects
+all of them. Updating Python reinstalls the whole `tools\python` folder and the packages installed
+with pip are lost. They must be reinstalled from the repo's `tools\requirements.txt`.
 
 ## Repository rules
 

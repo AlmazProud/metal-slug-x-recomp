@@ -54,6 +54,8 @@ RUN_ENV = ("PD_DEVMODE", "PD_DEVMODE_COPY", "PD_DIPS", "PD_DIPS_WORD", "PD_BLOOD
 
 # Frames (screen:frame_number()) of the menu steps; checked with screenshots in MAME.
 START = {
+    # Metal Slug X (tools/stage_run.py): coin, START, then A twice through the soldier select.
+    "mslugx": [(600, 605, "coin1"), (700, 705, "start1"), (1000, 1005, "a"), (1300, 1305, "a")],
     "mslug3": [(1800, 1805, "coin1"), (1900, 1905, "start1"), (2200, 2205, "a"), (2450, 2455, "a")],
     # Metal Slug 5: after START the game's "How to play" runs until Soldier Select (about 5800).
     "mslug5": [(2600, 2605, "coin1"), (2800, 2805, "start1"), (6100, 6105, "a"), (6400, 6405, "a")],
@@ -101,7 +103,7 @@ def inp_date(inp: Path) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--game", default="mslug", help="MAME machine (mslug, mslug4h, mslug5, mslug3, mslugx)")
+    ap.add_argument("--game", default="mslugx", help="MAME machine (mslug, mslug4h, mslug5, mslug3, mslugx)")
     ap.add_argument("--script", help="attract, start or a script file (not needed with --replay --name)")
     ap.add_argument("--frames", type=int, default=10000)
     ap.add_argument("--out", type=Path, required=True)

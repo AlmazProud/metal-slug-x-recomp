@@ -1,10 +1,10 @@
 #Requires -Version 5.1
 <#
-  Portable installer for the Metal Slug port (Environment phase).
+  Portable installer for the Metal Slug X port.
 
   - Installs every tool into <root>\tools without administrator rights,
     or into the parent folder's tools\ when <root>\tools does not exist and that one does
-    (C:\Projecto Decompile\tools, shared with the Metal Slug X, 3, 4 and 5 ports): what is
+    (C:\Projecto Decompile\tools, shared with the Metal Slug, 3, 4 and 5 ports): what is
     already installed there is reused, never downloaded again.
     without touching the global PATH or the registry.
   - Downloads only from official sources (versions.json) and verifies every hash.
@@ -15,10 +15,10 @@
     shows an OK/FAIL table.
 
   Parameters:
-    -CopyRoms       Only copies the ROMs (the GOG copy's mslug_* files) to roms\ (asks for confirmation).
+    -CopyRoms       Only copies the ROMs (the GOG copy's mslugx_* files) to roms\ (asks for confirmation).
     -NoRoms         Does not ask about the ROMs at the end.
     -VerifyOnly     Installs nothing; only runs the verification.
-    -Gog <path>     The GOG install of Metal Slug (default: the one in versions.json). Only read.
+    -Gog <path>     The GOG install of Metal Slug X (default: the one in versions.json). Only read.
     -Yes            Copies the ROMs without asking.
 #>
 [CmdletBinding()]
@@ -312,13 +312,11 @@ function Sync-Root {
 
 # ---------------------------------------------------------------- ROMs
 function Copy-Roms {
-    # The GOG copy's DotEmu files (resources\game\mslug_*) go to roms\, where the port's loader and
-    # the Phase 0 tools look for them. DotEmu's menu extras that live in the install's root
-    # (mslug_stage_*, mslug_multi_*, mslug_intro) go along when resources\game has no file of the
-    # same name. The GOG install is only read. The MAME set rebuilt from these files (Phase 0) and
-    # the BIOS files MAME needs (taken from the copy itself) go to roms\mslug\ and roms\neogeo\ later,
-    # so that MAME finds them with -rompath roms. The filter 'mslug_*' leaves out the other games'
-    # mslugx_*, mslug3_*... files.
+    # The GOG copy's DotEmu files (resources\game\mslugx_*) go to roms\, where the port's loader and
+    # the analysis tools look for them. DotEmu's files that live in the install's root go along when
+    # resources\game has no file of the same name. The GOG install is only read. The MAME set rebuilt
+    # from these files (tools/extract_roms.py) goes to roms\mame\mslugx\ and roms\mame\neogeo\, so
+    # that MAME finds it with -rompath roms\mame.
     $source = $Gog
     if (-not $source) { $source = $Cfg.paths.gog }
     $folder = Join-Path $source 'resources\game'
@@ -326,10 +324,10 @@ function Copy-Roms {
         Log "'$folder' was not found. Give the install folder with -Gog ""path""." 'Yellow'
         return
     }
-    $gameFiles = @(Get-ChildItem -LiteralPath $folder -File -Filter 'mslug_*' | Sort-Object Name)
-    if ($gameFiles.Count -eq 0) { Log "No mslug_* files in '$folder'." 'Yellow'; return }
+    $gameFiles = @(Get-ChildItem -LiteralPath $folder -File -Filter 'mslugx_*' | Sort-Object Name)
+    if ($gameFiles.Count -eq 0) { Log "No mslugx_* files in '$folder'." 'Yellow'; return }
     $names = @($gameFiles | ForEach-Object { $_.Name })
-    $extras = @(Get-ChildItem -LiteralPath $source -File -Filter 'mslug_*' | Sort-Object Name |
+    $extras = @(Get-ChildItem -LiteralPath $source -File -Filter 'mslugx_*' | Sort-Object Name |
         Where-Object { $names -notcontains $_.Name })
     $copies = @(foreach ($f in @($gameFiles + $extras)) { [pscustomobject]@{ Source = $f; Name = $f.Name } })
 
@@ -453,7 +451,7 @@ function Test-Environment {
 
 # ================================================================ main
 try {
-    Log "Metal Slug port - installer ($((Get-Date).ToString('s')))" 'Cyan'
+    Log "Metal Slug X port - installer ($((Get-Date).ToString('s')))" 'Cyan'
     Log "Root:  $Root"
     Log "Tools: $Tools"
     Log "Log:   $LogFile"

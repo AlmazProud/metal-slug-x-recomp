@@ -1,6 +1,6 @@
 @echo off
-rem Records a Metal Slug game (MAME set mslug, rebuilt in Phase 0) in MAME 0.289 for Phase 3
-rem (coverage and verification). It runs from the workspace root (MS1_Port, where it is
+rem Records a Metal Slug X game (MAME set mslugx, rebuilt by tools\extract_roms.py in roms\mame) in
+rem MAME 0.289 (coverage and verification). It runs from the workspace root (where it is
 rem grabar_partida.bat); this is the canonical copy.
 rem Usage: grabar_partida.bat [name]   (default name: partida1)
 rem The recording starts with an empty NVRAM, like the scripted runs, so it can be replayed exactly.
@@ -17,8 +17,10 @@ if exist "%OUT%\%NAME%.inp" (
 if exist "%WORK%\nvram" rmdir /s /q "%WORK%\nvram"
 mkdir "%WORK%\nvram" 2>nul
 mkdir "%OUT%\cfg" 2>nul
-pushd "%ROOT%..\tools\mame"
-mame.exe mslug -bios us -rompath "%ROOT%roms" -nvram_directory "%WORK%\nvram" ^
+set MAMEDIR=%ROOT%tools\mame
+if not exist "%MAMEDIR%\mame.exe" set MAMEDIR=%ROOT%..\tools\mame
+pushd "%MAMEDIR%"
+mame.exe mslugx -bios us -rompath "%ROOT%roms\mame" -nvram_directory "%WORK%\nvram" ^
   -cfg_directory "%OUT%\cfg" -input_directory "%OUT%" -record "%NAME%.inp" -skip_gameinfo
 popd
 echo Recording: %OUT%\%NAME%.inp

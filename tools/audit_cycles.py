@@ -34,7 +34,7 @@ def is_dynamic(txt: str) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--roms", type=Path, required=True)
-    ap.add_argument("--game", default="mslug3", help="DotEmu file prefix (mslug3, mslugx)")
+    ap.add_argument("--game", default="mslugx", help="DotEmu file prefix (mslugx, mslug3)")
     ap.add_argument("--cycles", type=Path, required=True)
     ap.add_argument("traces", type=Path, nargs="+")
     a = ap.parse_args()
