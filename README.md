@@ -65,6 +65,9 @@ The game files are recognized by their hashes, not by their names.
   - autofire per player;
   - gamepad rumble driven by the game's sound effects.
 - **Portable mode:** create a `save` folder next to the executable and everything is kept there.
+- **Game modes:** Arcade (the whole game, with a chosen number of continues and a results page)
+  and **Mission mode** (start at any mission you have reached, straight to the soldier select).
+- **Records:** best time and score per mission and the best Arcade score, from clean games only.
 - **Slowdown:** optional removal of the original slowdown (68000 at 2x or 4x speed).
 - **Red blood:** the game's own hidden BLOOD option.
 - **Music and sounds menu:** every track, effect and voice of the game, with names and

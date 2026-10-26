@@ -73,7 +73,7 @@ repo\
 Docs: `docs/ROM_MAP.md`, `docs/PHASE1_COVERAGE.md`, `docs/PHASE3_RUNTIME.md`,
 `docs/PHASE4_VERIFICATION.md`, `docs/PHASE5_NATIVE.md`, `docs/PHASE6_REMASTER.md`,
 `docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`, `docs/PHASE8_STAGES.md`, `docs/PHASE9_LOADER.md`,
-`docs/PHASE10_RELEASE.md`, `docs/PHASE11_SHARED.md`; shared: `docs/QOL_FEATURES.md`,
+`docs/PHASE10_RELEASE.md`, `docs/PHASE11_SHARED.md`, `docs/PHASE12_MISSIONS.md`; shared: `docs/QOL_FEATURES.md`,
 `docs/ADPCM_B.md`.
 
 Published at https://github.com/AlmazProud/metal-slug-x-recomp (MIT). Before every publication:
@@ -114,10 +114,31 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 8. Every stage against MAME | **Closed** (2026-10-12). See `docs/PHASE8_STAGES.md`. `ctest`: 16/16. |
 | 9. Universal loader | **Closed** (2026-10-12). See `docs/PHASE9_LOADER.md`. `ctest`: 20/20 (distributable build 18/18). |
 | 10. Publishing on GitHub | **Closed** (2026-10-12). Public repository. See `docs/PHASE10_RELEASE.md`. Release v1.0.0. |
-| 11. Adopt the shared tree of the Metal Slug ports | **Closed** (2026-10-26), pending approval. See `docs/PHASE11_SHARED.md`. `ctest`: 23/23 (interpreter-only 21/21). Version 2.0.0 (not published). |
-| 12. Profile A: missions, score, records, Mission mode | Planned (approved plan, 2026-10-26). |
+| 11. Adopt the shared tree of the Metal Slug ports | **Closed** (2026-10-26). See `docs/PHASE11_SHARED.md`. `ctest`: 23/23 (interpreter-only 21/21). Version 2.0.0 (not published). |
+| 12. Profile A: missions, score, records, Mission mode | **Closed** (2026-10-26), pending approval. See `docs/PHASE12_MISSIONS.md`. `ctest`: 33/33 (interpreter-only 31/31). |
 | 13. Profile B: bosses, health bar, Boss Rush | Planned (approved plan, 2026-10-26). |
 | 14. Publishing v2.0.0 | Planned. |
+
+### Phase 12: result
+
+Details in `docs/PHASE12_MISSIONS.md`.
+
+- **Addresses:**
+  - mission `0x10C2F5` (0-5; 6 after the final mission);
+  - stage `0x10C2F6`;
+  - stage set / section to start at `0x10C2FC` / `0x10C2FE`, copied at the load to
+    `0x10C2F8` / `0x10C2FA`;
+  - score `0x10C46A` (4 BCD bytes);
+  - PLAY MANUAL, the high byte of `0x10FD8E`.
+- **The stage select:** entries 1-6 are Missions 1-6, 7-12 Missions 1-6 again in other stages, 13
+  the ending.
+- **Starting at a mission:** both the stage set index and the mission are written, with a new
+  shared profile field `start_mission_also` (0 elsewhere).
+- **Against MAME** (`analysis/phase12`): Missions 2-6 started with pokes at frame 704, the "Start
+  mission" option, and the bot finishing Mission 1 are all identical.
+- **Port:** Mission mode's direct start, progress (Mission 2 unlocked) and records (not clean with
+  the dips), checked in the window.
+- **Open:** a clean recorded game, and the game's own time-attack mode (`PINPOINT ATTACK`).
 
 ### Phase 11: result
 
