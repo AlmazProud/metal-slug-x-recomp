@@ -136,6 +136,11 @@ typedef struct {
        player status), so a mission counts as loaded when mission_now equals it with a player in
        the game; until then a one-time start is written again whenever the game clears it. */
     int start_no_section;
+    /* Another byte the start mission is written to with start_mission (0: none). Metal Slug X:
+       its start byte is the stage set index (0x10C2FD, entries 1-6 of the developers' stage
+       select are Missions 1-6) and the mission number (0x10C2F5, mission_now) is only set from it
+       by the stage select, so both are written. */
+    uint32_t start_mission_also;
     /* Mission and Arcade modes (progress.c, window.c): the current mission byte (0-based; the
        game's "next mission" step makes it n + 1) and player 1's score (4 bytes, BCD). */
     uint32_t mission_now;

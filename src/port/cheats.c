@@ -323,6 +323,13 @@ static void spawn_now(int type, int param)
     call_game(game_profile.spawn_routine, d, a, r, len);
 }
 
+/* Writes the start mission, and its copy where the profile has one (start_mission_also). */
+static void write_start(uint8_t *m, int start)
+{
+    m[0] = (uint8_t)start;
+    if (game_profile.start_mission_also) *ram8(game_profile.start_mission_also) = (uint8_t)start;
+}
+
 /* The chosen start mission is loaded: the section byte set to 0xFF by the game, or, without one
    (start_no_section), the current mission is the chosen one with a player in the game. */
 static int start_loaded(const uint8_t *m, int start)
@@ -349,7 +356,7 @@ void cheats_frame(void)
                                                       (uint16_t)game_profile.manual_mask, 0, 0, 0};
     if (quick && ng.frames >= cheats_mission_from) {
         uint8_t *m = ram8(game_profile.start_mission);
-        if (m[0] == 0 && m[1] == 0) m[0] = (uint8_t)start;
+        if (m[0] == 0 && m[1] == 0) write_start(m, start);
         else if (m[0] == start && start_loaded(m, start)) {       /* loaded */
             cheats_start_mission_once = -1;
             cheats_mission_from = 0;
@@ -365,7 +372,7 @@ void cheats_frame(void)
         /* Without a section byte, a one-time start is kept until the mission is loaded. */
         int keep = section >= 0 || (cheats_start_mission_once >= 0 && game_profile.start_no_section);
         if (m[0] == 0 && m[1] == 0) {
-            if (start > 0) m[0] = (uint8_t)start;
+            if (start > 0) write_start(m, start);
             if (section >= 0) m[1] = (uint8_t)section;
             else if (!keep) {
                 cheats_start_mission_once = -1;
