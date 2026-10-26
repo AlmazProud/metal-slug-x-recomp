@@ -234,5 +234,85 @@ foreach(stage 02 03 04 05 07 08 09 10 11 12 13)
     endif()
 endforeach()
 
+# Phase 12 (docs/PHASE12_MISSIONS.md): scripted runs against MAME (tools/mame_run.py, references
+# in PD_ANALYSIS/phase12): phase12/missions/mission2-6 start at Missions 2-6 (PD_POKE of the start
+# stage set and mission bytes right after the new game, in <run>_poke.txt); phase12/complete/
+# mission1 is the bot finishing Mission 1 (development mode and debug dips in <run>_env.txt).
+file(GLOB msx_phase12_runs ${PD_ANALYSIS}/phase12/*/*_fingerprints.txt)
+foreach(fp ${msx_phase12_runs})
+    if(fp MATCHES "_(replay|port)_fingerprints\\.txt$")
+        continue()
+    endif()
+    string(REGEX REPLACE "_fingerprints\\.txt$" "" base "${fp}")
+    get_filename_component(run "${base}" NAME)
+    if(EXISTS "${base}_date.txt" AND EXISTS "${base}_frames.txt")
+        file(READ "${base}_date.txt" date)
+        file(READ "${base}_frames.txt" frames)
+        string(STRIP "${date}" date)
+        string(STRIP "${frames}" frames)
+        set(env)
+        if(EXISTS "${base}_poke.txt")
+            file(READ "${base}_poke.txt" poke)
+            string(STRIP "${poke}" poke)
+            string(REPLACE ";" "\;" poke "${poke}")     # several writes: kept in one variable
+            set(env "PD_POKE=${poke}")
+        endif()
+        if(EXISTS "${base}_env.txt")                  # PD_DEVMODE, PD_DIPS (mame_run.py)
+            file(STRINGS "${base}_env.txt" run_env)
+            list(APPEND env ${run_env})
+        endif()
+        add_test(NAME mslugx_${run}_vs_mame
+                 COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/verify_mission.py
+                         --exe $<TARGET_FILE:mslugx> --roms ${PD_ROMS}
+                         --inputs ${base}_inputs.txt --reference ${fp}
+                         --frames ${frames} --date ${date}
+                         --output ${CMAKE_CURRENT_BINARY_DIR}/mslugx_${run}_fingerprints_port.txt)
+        set_tests_properties(mslugx_${run}_vs_mame PROPERTIES ENVIRONMENT "${env}")
+    endif()
+endforeach()
+# The "Start mission" option (PD_START_MISSION) against the MAME run that starts at Mission 3: the
+# option writes the same bytes at the same frame as the run's PD_POKE, so nothing differs.
+set(m3 ${PD_ANALYSIS}/phase12/missions/mission3)
+if(EXISTS "${m3}_fingerprints.txt" AND EXISTS "${m3}_date.txt")
+    file(READ "${m3}_date.txt" date)
+    file(READ "${m3}_frames.txt" frames)
+    string(STRIP "${date}" date)
+    string(STRIP "${frames}" frames)
+    add_test(NAME mslugx_start_mission_option_vs_mame
+             COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/verify_mission.py
+                     --exe $<TARGET_FILE:mslugx> --roms ${PD_ROMS}
+                     --inputs ${m3}_inputs.txt --reference ${m3}_fingerprints.txt
+                     --frames ${frames} --date ${date}
+                     --output ${CMAKE_CURRENT_BINARY_DIR}/mslugx_start_mission_option_fingerprints_port.txt)
+    set_tests_properties(mslugx_start_mission_option_vs_mame PROPERTIES ENVIRONMENT "PD_START_MISSION=3")
+endif()
+# Mission mode's direct start (cheats.h, cheats_mission_from): the coin right after the fast boot
+# (frame 304), no "How to play" (PLAY MANUAL read as off), Mission 3 written once the new game has
+# cleared the start bytes; its "Mission 3... start!" plays (voice 33) and it is played as Mission 3.
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/mslugx_mission_direct.txt "305 310 coin1\n355 360 start1\n700 705 a\n1000 1005 a\n")
+add_test(NAME mslugx_mission_mode_direct
+         COMMAND mslugx --roms ${PD_ROMS} --headless --frames 2600 --no-audio
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/mslugx_mission_direct.txt --date 2026-10-26-01-00-00-1)
+set_tests_properties(mslugx_mission_mode_direct PROPERTIES ENVIRONMENT "PD_MISSION_ONCE=3"
+    PASS_REGULAR_EXPRESSION "start mission 3 written at frame 357")
+# Progress and records: the bot finishes Mission 1 (frame 6553, 5849 frames) and unlocks Mission 2;
+# with the debug dips on, the mission is not recorded ("not clean").
+set(c1 ${PD_ANALYSIS}/phase12/complete/mission1)
+if(EXISTS "${c1}_inputs.txt" AND EXISTS "${c1}_date.txt")
+    file(READ "${c1}_date.txt" date)
+    string(STRIP "${date}" date)
+    add_test(NAME mslugx_records_reset
+             COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_CURRENT_BINARY_DIR}/mslugx_records_bot.ini
+                     ${CMAKE_CURRENT_BINARY_DIR}/mslugx_progress_bot.ini)
+    set_tests_properties(mslugx_records_reset PROPERTIES FIXTURES_SETUP mslugx_records)
+    add_test(NAME mslugx_records_bot
+             COMMAND mslugx --roms ${PD_ROMS} --headless --no-audio --frames 7000
+                     --inputs ${c1}_inputs.txt --date ${date})
+    set_tests_properties(mslugx_records_bot PROPERTIES FIXTURES_REQUIRED mslugx_records
+        ENVIRONMENT "PD_DEVMODE=1;PD_DIPS=8001;PD_RECORDS=${CMAKE_CURRENT_BINARY_DIR}/mslugx_records_bot.ini;PD_PROGRESS=${CMAKE_CURRENT_BINARY_DIR}/mslugx_progress_bot.ini"
+        PASS_REGULAR_EXPRESSION "mission 2 unlocked at frame 6553
+mission 1 completed at frame 6553: 5849 frames \\(1:38.82\\), score 149600 \\(not clean\\)")
+endif()
+
 get_property(msx_tests DIRECTORY PROPERTY TESTS)
 set_tests_properties(${msx_tests} PROPERTIES LABELS mslugx)
