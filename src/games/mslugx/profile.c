@@ -18,6 +18,11 @@ static const ProfileWindow WINDOWS[] = {
     {0x0C0BAE, 0x0C0BF4},     /* fat check (fat_check_first/last) */
     {0x0C32E4, 0x0C3320},     /* form transitions */
     {0x0C942C, 0x0C9440},     /* lives from the HERO soft dip */
+    /* Phase 12: missions (docs/PHASE12_MISSIONS.md) */
+    {0x016B9A, 0x016BE4},     /* a new game: stage set 0 (0x17F20), PLAY MANUAL read (0x16BD4) */
+    {0x017F20, 0x017F4A},     /* stage set index 0x10C2FC, mission 0x10C2F4 = index mod 6 */
+    {0x018292, 0x0182AC},     /* a mission loads: the stage set copied to 0x10C2F8 */
+    {0x01891E, 0x01893E},     /* the next mission: 0x10C2F4 + 1, loaded below 6 */
 };
 
 /* Vehicles: object types (type*4 in the table at 0x197DC) found by spawning each type of the
@@ -72,7 +77,7 @@ const GameProfile game_profile = {
     .subtitle = "SUPER VEHICLE-001",
     .windows = WINDOWS,
     .n_windows = (int)(sizeof WINDOWS / sizeof WINDOWS[0]),
-    .windows_sha256 = "4c0665fb63e1336e57dc521de523f416e8131aa249a55bcc836388a4a1c6a38f",
+    .windows_sha256 = "14359f220ed55903aab6be8c4598e022cb3854436d7a27addc0f2bf33f44984f",
     .vehicles = VEHICLES,
     .n_vehicles = (int)(sizeof VEHICLES / sizeof VEHICLES[0]),
     .sounds = MSLUGX_SOUNDS,
@@ -174,6 +179,29 @@ const GameProfile game_profile = {
     .logo_max_frames = 3000,
     /* Fast boot: the BIOS boot screen, black, and the game's first image at frame 304. */
     .boot_frames = 304,
+
+    /* Missions (docs/PHASE12_MISSIONS.md). The words 0x10C2F4-0x10C2FE:
+     *   0x10C2F4 the mission (0-5; 0x10C2F5 its byte): a new game clears it (0x16B9E), the
+     *            developers' stage select sets it to the stage set index mod 6 (0x17F44) and
+     *            the game's "next mission" step adds 1 (0x1891E; 6 after the final mission, the
+     *            ending);
+     *   0x10C2F6 the stage (area) being played, 0x10C2F8 / 0x10C2FA the stage set and section
+     *            loaded, copied at the load (0x18292) from
+     *   0x10C2FC / 0x10C2FE the stage set and section to start at: a new game sets 0 / 0
+     *            (0x17F2A); the stage select's entries 1-6 are Missions 1-6 (7-12 Missions 1-6
+     *            again in other stages, 13 the ending).
+     * Starting at mission N writes the stage set index (0x10C2FD) and the mission (0x10C2F5) after
+     * the new game clears them, before the load. */
+    .start_mission = 0x10C2FDu,
+    .start_mission_also = 0x10C2F5u,
+    .missions = 6,
+    .start_no_section = 1,
+    .mission_now = 0x10C2F5u,
+    /* Player 1's score: 4 BCD bytes from 0x10C46A, the HUD's number (19200: 00 01 92 00). */
+    .score_p1 = 0x10C46Au,
+    /* PLAY MANUAL soft dip (option 5, high byte of 0x10FD8E): read by a new game at 0x16BD4. */
+    .manual_word = 0x10FD8Eu,
+    .manual_mask = 0xFF00u,
 
     /* Debug dips: bit = the switch in the developers' "SET DEBUG DIP" menu. */
     .dips = {
