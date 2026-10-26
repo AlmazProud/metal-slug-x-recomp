@@ -47,20 +47,24 @@ The game files are recognized by their hashes, not by their names.
 
 - **Arcade-exact game:** the same game logic as the original board, verified frame by frame
   against MAME (see *How it was verified*).
-- **Modern frontend** with menus in English and Spanish:
-  - start screen;
-  - pause menu;
-  - 9 save-state slots;
-  - settings for video, audio, game and controls.
+- **Modern frontend** with menus in English and Spanish, usable with keyboard, gamepad or mouse:
+  - start screen with **Continue** (the game is saved automatically every minute and on quit);
+  - pause menu and 9 save-state slots;
+  - settings in tabs: Video, Audio, Game, Keyboard, Gamepad and System;
+  - every shortcut configurable, with a picture of your keyboard or gamepad.
 - **Video:**
-  - 4:3 or square pixels;
-  - sharp, smooth or raw pixel filters;
-  - scanlines and fullscreen;
-  - V-sync that keeps audio in step on 60 Hz and high-refresh monitors.
+  - 4:3 or square pixels, integer scaling and high resolutions;
+  - sharp, smooth or raw pixel filters, scanlines and a **CRT effect** (Arcade, TV, Soft,
+    curvature);
+  - fullscreen, and V-sync that keeps audio in step on 60 Hz and high-refresh monitors.
+- **Responsiveness:** **run-ahead** (verified against MAME) and reduced input latency; fast
+  forward (Tab); fast boot past the Neo Geo logo; pause when the window loses focus.
 - **Controls:**
-  - keyboard and gamepad for two players, remappable;
+  - keyboard and gamepad for two players, remappable, with each player's gamepad remembered;
+  - gamepad type (Xbox, PlayStation, Nintendo or arcade stick) and four gamepad profiles;
   - autofire per player;
   - gamepad rumble driven by the game's sound effects.
+- **Portable mode:** create a `save` folder next to the executable and everything is kept there.
 - **Slowdown:** optional removal of the original slowdown (68000 at 2x or 4x speed).
 - **Red blood:** the game's own hidden BLOOD option.
 - **Music and sounds menu:** every track, effect and voice of the game, with names and
@@ -83,18 +87,21 @@ The game files are recognized by their hashes, not by their names.
 | Coin | 5 | 6 | Back / Select |
 | Autofire | B | G | RB / R1 |
 
-| Key | Action |
+| Key (default; all configurable) | Action |
 |---|---|
 | Esc (gamepad: Guide, or Back + Start) | Menu |
 | F5 / F9 | Save / load state |
+| F7 / F8 | Previous / next save slot |
 | P | Pause |
+| Tab | Fast forward (while held) |
 | F11 or Alt+Enter | Fullscreen |
-| F12 | Screenshot |
+| F12 | Screenshot (PNG) |
 | F2 | Board test button (service menu: difficulty, lives...) |
 | F3 | Debug panel |
 | F4 | Developers' menu (with developer mode on, during a mission) |
 
-Settings are saved in `%APPDATA%\ProjectoDecompile\mslugx\mslugx.ini`.
+Settings are saved in `%APPDATA%\ProjectoDecompile\mslugx\mslugx.ini`. Version 2.0 reads the
+settings of 1.x, but not its save states (their format changed).
 
 ## How it works
 
@@ -119,15 +126,15 @@ MAME was used as the reference, never as a source of code.
 - **The comparison:** the port and MAME run the same inputs from the same state. Every frame's
   image, plus the RAM and palette at every vertical blank, must be identical.
 - **Mission 1:** a recorded playthrough of about 12,000 frames.
-- **The rest of the game:** scripted runs of 10 entries of the developers' stage select, 9,000
+- **The rest of the game:** scripted runs of 11 entries of the developers' stage select, 9,000
   frames each.
 
 All of these are identical, both with the recompiled program and with the interpreter alone.
-Two stage-select runs still show small known differences:
-- a rare Z80 synchronization case;
-- one line of a fade on three frames.
+One stage-select run still shows a known difference, a rare Z80 synchronization case.
 
-Details are in `docs/PHASE8_STAGES.md`.
+Details are in `docs/PHASE8_STAGES.md` and `docs/PHASE11_SHARED.md`. The runtime and the frontend
+are shared with the Metal Slug 3, 4 and 5 ports by the same author, each verified against MAME the
+same way.
 
 ## Building from source (Windows)
 
@@ -152,15 +159,16 @@ listings. `CLAUDE.md` and the `docs/` folder describe every phase of the project
 | Path | Contents |
 |---|---|
 | `src/cpu` | dispatcher, interpreter glue, cycle tables |
-| `src/neogeo` | hardware runtime and the copy loader |
-| `src/port` | the SDL3 frontend |
+| `src/neogeo` | hardware runtime and the copy loader (shared with the other Metal Slug ports) |
+| `src/port` | the SDL3 frontend (shared) |
+| `src/games/mslugx` | Metal Slug X's descriptor (hashes only), profile (RAM addresses) and sound names |
 | `tools/` | analysis, recompiler (`recomp68k/`), MAME scripts and comparison tools |
-| `tests/` | instruction-level differential tests and whole-program lockstep tests |
-| `external/` | Musashi, ymfm and the Z80 core (`THIRD_PARTY.md`) |
+| `tests/` | instruction-level differential tests, whole-program lockstep tests, loader tests |
+| `external/` | Musashi, ymfm, the Z80 core, stb_truetype and the menu fonts (`THIRD_PARTY.md`) |
 | `docs/` | per-phase documentation |
 
 ## License
 
 The port's code is MIT licensed (`LICENSE`). Third-party code keeps its own license
-(`THIRD_PARTY.md`): Musashi (MIT), ymfm (BSD-3-Clause), floooh/chips z80.h (zlib) and SDL3
-(zlib).
+(`THIRD_PARTY.md`): Musashi (MIT), ymfm (BSD-3-Clause), floooh/chips z80.h (zlib), SDL3 (zlib),
+stb_truetype (MIT) and the menu fonts Black Ops One and Chakra Petch (SIL Open Font License).

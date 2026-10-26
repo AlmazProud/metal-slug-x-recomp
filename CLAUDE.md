@@ -4,6 +4,21 @@ Native Windows port of Metal Slug X (Neo Geo MVS, 1999) by **progressive static
 recompilation**: the 68000 code is translated to C, the Neo Geo hardware is reimplemented as a
 native runtime, and the recompiled functions are then gradually replaced with readable C.
 
+Since Phase 11 the code is the **shared tree of the Metal Slug ports** (imported from the Metal
+Slug port, `MS1_Port\repo` commit `e4051ca`), with Metal Slug X as its only game:
+
+| Port | Public repository | Local copy |
+|---|---|---|
+| Metal Slug X (this one) | https://github.com/AlmazProud/metal-slug-x-recomp | `C:\Projecto Decompile\repo` |
+| Metal Slug 3 | https://github.com/AlmazProud/metal-slug-3-recomp | `C:\Projecto Decompile\MS3_Port\repo` |
+| Metal Slug 5 | https://github.com/AlmazProud/metal-slug-5-recomp | `C:\Projecto Decompile\MS5_Port\repo` |
+| Metal Slug 4 | https://github.com/AlmazProud/metal-slug-4-recomp | `C:\Projecto Decompile\MS4_Port\repo` |
+| Metal Slug | (not published yet) | `C:\Projecto Decompile\MS1_Port\repo` |
+
+The other ports are **read-only from here**: code is copied from them (MIT, Copyright (c) 2026
+AlmazProud) and adapted. Their `docs/QOL_FEATURES.md`, `BOSS_RUSH.md` and `PHASE4_PROFILE.md` are
+the references for the features that need game data (missions, records, bosses, Boss Rush).
+
 ## Mandatory rules
 
 1. **Bring your own ROM.** The repo never contains ROMs, BIOS, graphics, audio or extracted
@@ -18,6 +33,16 @@ native runtime, and the recompiled functions are then gradually replaced with re
 5. **Language:** the assistant always talks to the user in Spanish. Everything in the
    repository (code, identifiers, comments, docs, commit messages) is written in English.
 6. This file is updated when each phase closes.
+7. **Nothing public** (each push, each release) without the user's explicit OK for that step.
+8. Analysis tools run with `tools\python\python.exe` (the system's `python` is a Store stub).
+   No downloads without asking the user; web searches for official names (bosses, weapons) only
+   with the user's permission.
+9. **The user's saved games:** window tests never use the portable folder or `%APPDATA%`; they
+   use fresh preference folders in the session's scratchpad with `PD_PREF` (trailing slash).
+10. **The GOG install is read-only** (`K:\Metal Slug X`): its files are copied with
+    `INSTALL.bat -CopyRoms`.
+11. A fix that only Metal Slug X needs goes in its profile (`src/games/mslugx/profile.c`) or
+    behind a descriptor option, so the shared code stays identical to the other ports'.
 
 **Way of working:** one phase at a time. Before writing code, present a short plan and wait for
 the OK. When a phase closes, report what works, what is missing, the risks and the next step,
@@ -33,28 +58,30 @@ C:\Projecto Decompile\
   repo\      this repository
   INSTALL.bat, env.ps1, env.bat, README.md   (copies from repo\setup\)
 repo\
-  setup\        installer (setup.ps1, versions.json, env.*, sdl3_test\)
+  setup\        installer (setup.ps1, versions.json, env.*, record_game.bat, ci_tools.py, sdl3_test\)
   src\cpu\      dispatcher, 68000 state, Musashi fallback
-  src\neogeo\   hardware runtime (bus, LSPC, RTC, scheduler, ROMs, sound)
-  src\port\     SDL3 executable (mslugx.exe): frontend, configuration, headless mode
-  tools\        analysis and comparison scripts; recomp68k\ (recompiler), mame\ (MAME Lua
-                scripts), ghidra\ (headless scripts), hooks\ (pre-commit)
-  tests\        differential\ (per instruction) and lockstep\ (whole program)
-  external\     Musashi, ymfm (plus the Z80 core in chips\)
-  docs\         per-phase documentation and ROM map
+  src\neogeo\   Neo Geo runtime (bus, LSPC, RTC, scheduler, ROMs, sound), shared by the ports
+  src\port\     SDL3 frontend (menus, configuration, headless mode), shared
+  src\games\mslugx\  game.c (NgGame descriptor), profile.c (GameProfile), sounds.c (names)
+  tools\        analysis, recompiler (recomp68k\), MAME Lua scripts (mame\), verification,
+                mame_run.py, audit.py, check_commit.py, hooks\ (pre-commit)
+  tests\        differential\ (per instruction), lockstep\ (whole program), loader\
+  external\     Musashi, ymfm, z80.h (chips\), stb_truetype, fonts
+  docs\         per-phase documentation and ROM map; ADPCM_B.md, QOL_FEATURES.md (shared code)
 ```
 
 Docs: `docs/ROM_MAP.md`, `docs/PHASE1_COVERAGE.md`, `docs/PHASE3_RUNTIME.md`,
 `docs/PHASE4_VERIFICATION.md`, `docs/PHASE5_NATIVE.md`, `docs/PHASE6_REMASTER.md`,
 `docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`, `docs/PHASE8_STAGES.md`, `docs/PHASE9_LOADER.md`,
-`docs/PHASE10_RELEASE.md`.
+`docs/PHASE10_RELEASE.md`, `docs/PHASE11_SHARED.md`; shared: `docs/QOL_FEATURES.md`,
+`docs/ADPCM_B.md`.
 
 Published at https://github.com/AlmazProud/metal-slug-x-recomp (MIT). Before every publication:
 `python tools/audit.py history` and `python tools/package_release.py` (it audits the zip). The
 GitHub CLI is in `tools\gh` (on PATH with the environment; login already done by the user).
 
 Build: `cmake -S repo -B repo\build -G Ninja -DCMAKE_BUILD_TYPE=Release` and
-`cmake --build repo\build`. The recompiled program is generated in `build\src\program\` from
+`cmake --build repo\build`. The recompiled program is generated in `build\src\program_mslugx\` from
 `roms\` and `analysis\`. Play: `repo\build\src\mslugx.exe` (finds the user's copy on its own:
 `game\` next to the exe, GOG, Steam, or a dropped folder / zip). Tests: `ctest` in `repo\build`.
 Distributable build (no code derived from the game, interpreter only):
@@ -87,6 +114,26 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 8. Every stage against MAME | **Closed** (2026-10-12). See `docs/PHASE8_STAGES.md`. `ctest`: 16/16. |
 | 9. Universal loader | **Closed** (2026-10-12). See `docs/PHASE9_LOADER.md`. `ctest`: 20/20 (distributable build 18/18). |
 | 10. Publishing on GitHub | **Closed** (2026-10-12). Public repository. See `docs/PHASE10_RELEASE.md`. Release v1.0.0. |
+| 11. Adopt the shared tree of the Metal Slug ports | **Closed** (2026-10-26), pending approval. See `docs/PHASE11_SHARED.md`. `ctest`: 23/23 (interpreter-only 21/21). Version 2.0.0 (not published). |
+| 12. Profile A: missions, score, records, Mission mode | Planned (approved plan, 2026-10-26). |
+| 13. Profile B: bosses, health bar, Boss Rush | Planned (approved plan, 2026-10-26). |
+| 14. Publishing v2.0.0 | Planned. |
+
+### Phase 11: result
+
+Details in `docs/PHASE11_SHARED.md`.
+
+- **Import:** the Metal Slug port's tree (`e4051ca`), unchanged, in one commit (`7e6a79b`),
+  without the other games' code, docs and encryption tools. Then mslugx was made the only
+  product (`39581d0`): CMake, tests, tool defaults, setup, packaging, THIRD_PARTY.md.
+- **New for Metal Slug X:**
+  - remastered menus with mouse, Continue, configurable shortcuts and gamepad pictures;
+  - run-ahead, CRT effect, fast boot and fast forward, portable mode;
+  - the other ports' accuracy fixes.
+  - Mission mode, records, boss bar and Boss Rush need profile data (Phases 12 and 13).
+- **Stage select entry 2 now matches MAME** (the shared MOVEM timing): `stage02_vs_mame`. Entry 6
+  still diverges (Z80 timing, unsolved in every port).
+- **Version 2.0.0:** 1.x save states do not load; the user's `mslugx.ini` is read as before.
 
 ### Phase 10: result
 
@@ -411,6 +458,60 @@ opens the window), and Ghidra headless (imports a PE). Ghidra leaves nothing in 
 
 ROMs: 13 `mslugx_*` files copied from GOG to `roms\`, with `roms\MANIFEST.sha256` verified.
 
+## Lessons from the Metal Slug ports (apply them)
+
+Collected in the Metal Slug, 3, 4 and 5 ports (their `CLAUDE.md`); the essentials:
+
+- **Lua in MAME:** subscriptions and taps in global variables; a fresh nvram folder per run;
+  Windows paths, not `/c/...`; MAME reruns the autoboot script after a soft reset (guard it with a
+  global); write taps on the LSPC registers `0x3C0000-3` never fire: use the debugger trace
+  (`beamx`/`beamy`, `totalcycles`). Big-endian regions compose words big-endian
+  (`dump_region.lua` handles both).
+- **MAME timing already reproduced in the runtime:** watchdog reset, MOVEM video write order, Z80
+  interrupts two T-states early, 68000 commands one cycle into the access, MAME's ADPCM-B, SSG soft
+  reset, an NMI that does not interrupt the YM2610's IRQ acknowledge. If Metal Slug X diverges,
+  suspect these first.
+- **Audio:** Metal Slug 4's and 5's are not exact because of the power-on alignment of 68000, Z80
+  and YM2610 (Metal Slug 5's two fixes broke Metal Slug 3). Measure it in Phase 2 and tell the user
+  what is seen before investing much; a generic fix would serve all five.
+- **MAME's scheduler:** rare ~2-cycle shifts of raster interrupts are a known difference: bound
+  them and ask the user before chasing them. **Known residue:** VBlanks where MAME takes the
+  interrupt one instruction later, listed exactly per run (`*_known_vblank.txt`) after a
+  byte-by-byte check; MAME's boot is not deterministic in some runs (the reference is the replay
+  that matches).
+- **Reaching sections without playing:** the start mission / section bytes poked during the
+  selection (`PD_POKE`), the developers' stage table (names sometimes in half-width katakana:
+  cp932). Metal Slug X has the developers' stage select (docs/PHASE8_STAGES.md).
+- **Finding the engine:** `tools/match_windows.py` with Metal Slug X's profile, then check every
+  address in the listing and in MAME. Assume nothing: identify weapons, forms, vehicles and every
+  boss (middle ones too) in the game; what is not identified is listed by number.
+- **Bosses:** phases (life back to 1), several pieces, life under 1000 or going negative
+  (`boss_min_life`, `boss_life_signed`). The "D kills all" dip can stall a fight: use a mixed bot.
+  **Boss Rush** and **Mission mode:** a RAM write hook (`ng_hook_word`) on the section start bytes,
+  rewritten until loaded. **Records:** only clean games, with the notice of why one was not saved.
+- **Sound:** the catalog taken on a silent frame; the driver modes found by watching `0x320000`
+  (`PD_WATCH_W=320000`) in recorded games; the sound menu uses the game's own silence sequence.
+- **Editing:** bash heredocs break `\n`, `\\` and `\b` in C and Python: write scripts with the
+  Write tool. `.bat` and `.ps1` need CRLF. `python -I` blocks sibling imports.
+- **CMake** only sees the lists and references that exist at configure time: reconfigure after
+  creating them or re-recording a MAME reference; no nested lists in `foreach` (use functions);
+  tests that write progress or records files need a fixture that deletes them first.
+- **Window executable:** GUI subsystem, no stderr (`Start-Process -RedirectStandardOutput`, or
+  debug to a file and remove it before committing). Window tests: `PD_WINDOW_TEST`, `PD_PREF`
+  (fresh folder, `start_screen=0` in its ini to go straight in), `PD_LOAD_STATE`, `PD_FIND_TEST`.
+  **Headless** needs `--roms <folder>` and the full date; RAM dumps (`PD_DUMP_V`) need
+  `--fingerprints`; MAME's `PD_BLOOD` is `word,mask`; the VBlank number is not the frame number.
+- **Deletions:** `rm` with variables is blocked by the harness: use `"${VAR:?}"` or fresh folders.
+- **`gh`:** AlmazProud's session lives in `GH_CONFIG_DIR = C:\Projecto Decompile\tools\_cache\gh`
+  (set by `env.ps1`); PowerShell breaks `--jq` (use `--json` and `ConvertFrom-Json`);
+  `gh release create --target` needs the full SHA; check the SHA-256 of the downloaded release zip.
+- **Packaging:** `tools/package_release.py` refuses a recompiled build and needs `PD_ROMS`; test the
+  unzipped release in an empty folder with the game in `game\`, and a clean clone with only the
+  toolchain and Python on PATH. Portable: `tools/make_portable.py --only <id>`.
+- **Run-ahead:** disable every hook (`ng_before_input_read`, `ng_on_sound_command`,
+  `ng_hook_word`, `ng_on_vblank_ack`), no audio in the frames run ahead, run it after queueing the
+  real audio.
+
 ## Decisions
 
 - **Python from NuGet** instead of the embeddable package: it ships pip and venv without
@@ -447,9 +548,10 @@ ROMs: 13 `mslugx_*` files copied from GOG to `roms\`, with `roms\MANIFEST.sha256
 
 ## To do
 
-- [ ] **After Phase 10:** the user decides what follows. Open from Phase 8: stage 6 (Z80
-      slices) and stage 2 (3 images). Not verified for lack of files: Steam's copy and the
-      arcade P1 (ask users on GitHub to report their hashes, `PD_ROMS_INFO=1`).
+- [ ] **Phases 12-14** (plan approved by the user, 2026-10-26): Metal Slug X's profile for
+      missions / score / records / Mission mode (12), bosses / health bar / Boss Rush (13),
+      then publishing v2.0.0 (14). Open: stage select entry 6 (Z80 timing). Not verified
+      for lack of files: Steam's copy and the arcade P1.
 - [ ] **Later, in their own conversations (the user's decision):**
   - **Metal Slug 3 port.** GOG copy at `K:\Metal Slug 3` (GOG id 1370911530), same DotEmu
     layout: `resources\game\mslug3_*`, with a 9 MB 68000 program and 64 MB of tiles.
