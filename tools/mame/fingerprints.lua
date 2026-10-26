@@ -88,6 +88,21 @@ rtap_e4 = mem:install_read_tap(0x320000, 0x33FFFF, "pd_e4", function(offset, dat
     if mask & 0x00FF ~= 0 then record(4, data & 0x3F) end      -- without the clock's TP and DATA OUT
 end)
 
+-- PD_DUMP_VRAM=1: with PD_DUMP_V, also the LSPC VRAM (the sprite generator's m_videoram save
+-- item, 0x8800 words written big-endian), compared with the port's vram_port_v*.bin.
+local function dump_vram(path)
+    local spr = manager.machine.devices[":spritegen"]
+    local item
+    for name, index in pairs(spr.items) do
+        if name:match("m_videoram$") then item = emu.item(index) end
+    end
+    local words = {}
+    for i = 0, 0x87FF do words[#words + 1] = string.pack(">I2", item:read(i)) end
+    local f = io.open(path, "wb")
+    f:write(table.concat(words))
+    f:close()
+end
+
 local vblanks = 0
 local dump_v = {}
 for n in string.gmatch(os.getenv("PD_DUMP_V") or "", "%d+") do dump_v[tonumber(n)] = true end
@@ -103,7 +118,9 @@ wtap_ack = mem:install_write_tap(0x3C000C, 0x3C000D, "pd_ack", function(offset, 
         local v = io.open(string.format("%s/ram_mame_v%06d.bin", dump_dir, vblanks), "wb")
         v:write(ram)
         v:close()
+        if os.getenv("PD_DUMP_VRAM") then dump_vram(string.format("%s/vram_mame_v%06d.bin", dump_dir, vblanks)) end
     end
+    if pd_after_vblank then pd_after_vblank() end   -- scripted_run.lua's PD_KILL_ENEMIES
 end)
 
 fingerprints_sub = emu.add_machine_frame_notifier(function()

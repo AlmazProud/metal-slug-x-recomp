@@ -1,7 +1,7 @@
 """Compares the port's audio (--wav) with MAME's (-wavwrite), both 16-bit PCM WAV files.
 
 Usage:
-  python compare_audio.py PORT.wav MAME.wav [--max-offset-ms 50]
+  python compare_audio.py PORT.wav MAME.wav [--max-offset-ms 50] [--require-exact]
 
 Finds the offset (in samples) that best aligns both signals and reports, for that offset:
   - Pearson correlation, overall and per second (1.0 = identical up to scale);
@@ -9,6 +9,8 @@ Finds the offset (in samples) that best aligns both signals and reports, for tha
   - how many samples match exactly.
 MAME resamples the YM2610 output (55 555.5 Hz) to the rate requested with -samplerate, so
 bit-exact equality is not expected; a correlation close to 1 means the same content.
+With --require-exact (a test) it returns 1 unless the offset is 0 and every sample MAME wrote
+is equal in the port (the port may run a little longer).
 """
 from __future__ import annotations
 
@@ -33,6 +35,7 @@ def main() -> int:
     ap.add_argument("port", type=Path)
     ap.add_argument("mame", type=Path)
     ap.add_argument("--max-offset-ms", type=float, default=50.0)
+    ap.add_argument("--require-exact", action="store_true")
     a = ap.parse_args()
 
     hz_p, p = read_wav(a.port)
@@ -61,11 +64,13 @@ def main() -> int:
     ps, ms = ps[:k], ms[:k]
     print(f"best offset: {d} samples ({1000 * d / hz_p:+.2f} ms; positive = the port lags behind)")
 
+    all_exact = d == 0 and k == len(m)
     for c, name in enumerate(("left", "right")):
         x, y = ps[:, c], ms[:, c]
         corr = float(np.corrcoef(x, y)[0, 1]) if x.std() and y.std() else float("nan")
         err = float(np.sqrt(np.mean((x - y) ** 2)) / max(np.sqrt(np.mean(y ** 2)), 1e-9))
         exact = int(np.sum(x == y))
+        all_exact = all_exact and exact == k
         print(f"{name} channel: correlation {corr:.5f}  relative error {100 * err:.2f}%  "
               f"exact samples {exact}/{k} ({100 * exact / k:.1f}%)")
 
@@ -80,6 +85,9 @@ def main() -> int:
             rows.append(f"{s:3d}s {np.corrcoef(x, y)[0, 1]:.4f}")
     for i in range(0, len(rows), 5):
         print("   " + "   ".join(rows[i:i + 5]))
+    if a.require_exact:
+        print("IDENTICAL AUDIO" if all_exact else "AUDIO DIFFERS")
+        return 0 if all_exact else 1
     return 0
 
 

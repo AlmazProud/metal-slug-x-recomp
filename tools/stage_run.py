@@ -1,4 +1,4 @@
-"""Scripted MAME runs of each stage for the per-mission verification (Phase 8).
+"""Metal Slug X: scripted MAME runs of each stage for the per-mission verification (Phase 8).
 
 Builds an input script that starts a game, opens the developers' hidden menu (BIOS development
 mode, SELECT held + D twice), picks a stage in its stage select and then plays with a simple bot;
@@ -93,7 +93,7 @@ def main() -> int:
     if work.exists():
         shutil.rmtree(work)
     (work / "nvram").mkdir(parents=True)
-    mame = ROOT / "tools" / "mame" / "mame.exe"
+    mame = Path(os.environ["PD_TOOLS"]) / "mame" / "mame.exe" if os.environ.get("PD_TOOLS") else ROOT / "tools" / "mame" / "mame.exe"
     env = dict(os.environ, PD_RUN_SCRIPT=str(script), PD_DEVMODE="1", PD_DIPS=a.dips,
                PD_FINGERPRINTS_SCRIPT=str(REPO / "tools" / "mame" / "fingerprints.lua"),
                PD_INPUTS_SCRIPT=str(REPO / "tools" / "mame" / "inputs.lua"),

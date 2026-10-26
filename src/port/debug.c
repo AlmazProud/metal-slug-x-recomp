@@ -43,8 +43,8 @@ void debug_enable(int active)
 {
     d.active = active;
     ng_dbg.active = active;
-    ng_dbg.wait_start = PROFILE_WAIT_START;
-    ng_dbg.wait_end = PROFILE_WAIT_END;
+    ng_dbg.wait_start = game_profile.wait_start;
+    ng_dbg.wait_end = game_profile.wait_end;
     if (!active) ng_dbg.hide = 0;
     clear_boxes();
     d.n = 0;
@@ -60,8 +60,7 @@ int debug_enabled(void) { return d.active; }
 
 int debug_key(const SDL_KeyboardEvent *e)
 {
-    if (e->scancode == SDL_SCANCODE_F3) { debug_enable(!d.active); return DEBUG_HANDLED; }
-    if (!d.active) return DEBUG_NONE;
+    if (!d.active) return DEBUG_NONE;              /* the panel's own shortcut is window.c's */
     if (e->scancode == SDL_SCANCODE_F6) return DEBUG_STEP;
     if (e->mod & SDL_KMOD_CTRL) {
         switch (e->scancode) {
@@ -88,7 +87,8 @@ void debug_frame(void)
     int load = 100 - wait * 100 / NG_LINES;
     unsigned i = d.n++ % HISTORY;
     d.load[i] = (uint8_t)(load < 0 ? 0 : load);
-    d.logic[i] = ng.ram[PROFILE_RAM_FRAMES_PER_TICK];
+    /* 0: the game keeps no such byte (Metal Slug clears its count when the cycle starts) */
+    d.logic[i] = game_profile.ram_frames_per_tick ? ng.ram[game_profile.ram_frames_per_tick] : 0;
 }
 
 /* ------------------------------------------------------------------ drawing */

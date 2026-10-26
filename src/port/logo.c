@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dispatcher.h"
 #include "neogeo.h"
 #include "profile.h"
 
@@ -33,16 +34,22 @@ static uint32_t sprite_tile(int s)
 static SDL_Surface *generate(void)
 {
     static uint32_t a[NG_HEIGHT][NG_WIDTH], b[NG_HEIGHT][NG_WIDTH];
-    int wait = -1;
+    int wait = -1, found = 0;
     ng_power_on();
-    for (int f = 0; f < PROFILE_LOGO_MAX_FRAMES; f++) {
+    for (int f = 0; f < (int)game_profile.logo_max_frames && !found; f++) {
         ng_run_frame();
-        if (wait < 0 && sprite_tile(PROFILE_LOGO_TM) == PROFILE_LOGO_TM_TILE) wait = 30;   /* let it finish sliding in */
-        if (wait >= 0 && wait-- == 0) break;
+        if (wait < 0 && sprite_tile(game_profile.logo_tm) == game_profile.logo_tm_tile) wait = 30;   /* let it finish sliding in */
+        if (wait < 0 || wait-- > 0) continue;
+        /* Then the first frame that draws both the logo and the TM (Metal Slug 5's title draws
+           its sprites every other frame). */
+        ng_video_capture_sprites(&a[0][0], game_profile.logo_first, game_profile.logo_last);
+        ng_video_capture_sprites(&b[0][0], game_profile.logo_tm, game_profile.logo_tm);
+        int has_a = 0, has_b = 0;
+        for (int y = 0; y < NG_HEIGHT; y++)
+            for (int x = 0; x < NG_WIDTH; x++) { has_a |= a[y][x] != 0; has_b |= b[y][x] != 0; }
+        found = has_a && has_b;
     }
-    if (wait != -1) return NULL;
-    ng_video_capture_sprites(&a[0][0], PROFILE_LOGO_FIRST, PROFILE_LOGO_LAST);
-    ng_video_capture_sprites(&b[0][0], PROFILE_LOGO_TM, PROFILE_LOGO_TM);
+    if (!found) return NULL;
     int x0 = NG_WIDTH, y0 = NG_HEIGHT, x1 = -1, y1 = -1;
     for (int y = 0; y < NG_HEIGHT; y++)
         for (int x = 0; x < NG_WIDTH; x++) {
@@ -69,11 +76,13 @@ int logo_prepare(SDL_Renderer *r, const char *cache)
         /* The machine goes back exactly to how it was (full state, SRAM included). */
         size_t size;
         uint8_t *state = ng_state_save(&size);
-        int audio = ng_audio_enabled;
+        int audio = ng_audio_enabled, turbo = cpu_turbo;
         void (*hook)(uint8_t) = ng_on_sound_command;
         ng_audio_enabled = 0;
         ng_on_sound_command = NULL;
+        cpu_turbo = 0;                /* at the original speed: with the turbo the title's sprites differ */
         s = generate();
+        cpu_turbo = turbo;
         ng_audio_enabled = audio;
         ng_on_sound_command = hook;
         if (state) { ng_state_load(state, size); free(state); }

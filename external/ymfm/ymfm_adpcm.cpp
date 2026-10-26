@@ -398,6 +398,9 @@ adpcm_b_channel::adpcm_b_channel(adpcm_b_engine &owner, uint32_t addrshift) :
 	m_accumulator(0),
 	m_prev_accum(0),
 	m_adpcm_step(STEP_MIN),
+	m_overflows(0),
+	m_skip(0),
+	m_freeze(0),
 	m_regs(owner.regs()),
 	m_owner(owner)
 {
@@ -419,6 +422,7 @@ void adpcm_b_channel::reset()
 	m_accumulator = 0;
 	m_prev_accum = 0;
 	m_adpcm_step = STEP_MIN;
+	m_overflows = m_skip = m_freeze = 0;     // PORT CHANGE
 }
 
 
@@ -437,6 +441,9 @@ void adpcm_b_channel::save_restore(ymfm_saved_state &state)
 	state.save_restore(m_accumulator);
 	state.save_restore(m_prev_accum);
 	state.save_restore(m_adpcm_step);
+	state.save_restore(m_overflows);              // PORT CHANGE
+	state.save_restore(m_skip);
+	state.save_restore(m_freeze);
 }
 
 
@@ -446,6 +453,14 @@ void adpcm_b_channel::save_restore(ymfm_saved_state &state)
 
 void adpcm_b_channel::clock()
 {
+	// PORT CHANGE: the clock after an end of sample freezes the output on the last value
+	if (m_freeze)
+	{
+		m_freeze = 0;
+		m_prev_accum = m_accumulator;
+		return;
+	}
+
 	// only process if active and not recording (which we don't support)
 	if (!m_regs.execute() || m_regs.record() || (m_status & STATUS_PLAYING) == 0)
 	{
@@ -458,6 +473,35 @@ void adpcm_b_channel::clock()
 	m_position = uint16_t(position);
 	if (position < 0x10000)
 		return;
+
+	// PORT CHANGE: two overflows before the end, the last nibble (low nibble of the end byte)
+	// is decoded over the current state, playback ends (EOS from here) and the next clock
+	// freezes the output on it
+	m_overflows++;
+	if (m_regs.external() && !m_regs.repeat())
+	{
+		uint32_t start = m_regs.start() << address_shift();
+		uint32_t endaddr = ((m_regs.end() + 1) << address_shift()) - 1;
+		if (m_overflows + 2 == (endaddr + 1 - start) * 2)
+		{
+			uint8_t last = m_owner.intf().ymfm_external_read(ACCESS_ADPCM_B, endaddr) & 0x0f;
+			m_prev_accum = m_accumulator;
+			int32_t delta = (2 * bitfield(last, 0, 3) + 1) * m_adpcm_step / 8;
+			if (bitfield(last, 3))
+				delta = -delta;
+			m_accumulator = clamp(m_accumulator + delta, -32768, 32767);
+			m_status = (m_status & ~STATUS_PLAYING) | STATUS_EOS;
+			m_freeze = 1;
+			return;
+		}
+	}
+
+	// PORT CHANGE: the first overflow after a start decodes nothing
+	if (m_skip != 0)
+	{
+		m_skip--;
+		return;
+	}
 
 	// if we're about to process nibble 0, fetch sample
 	if (m_curnibble == 0)
@@ -638,8 +682,14 @@ void adpcm_b_channel::write(uint32_t regnum, uint8_t value)
 		}
 		else
 			m_status &= ~STATUS_EOS;
+		// PORT CHANGE: the reset flag stops playback and freezes the output on the last
+		// decoded value instead of clearing the decoder
 		if (m_regs.resetflag())
-			reset();
+		{
+			m_status = (m_status & ~STATUS_PLAYING) | STATUS_BRDY;
+			m_prev_accum = m_accumulator;
+			m_freeze = 0;
+		}
 		if (m_regs.external())
 			m_dummy_read = 2;
 	}
@@ -712,10 +762,15 @@ void adpcm_b_channel::load_start()
 	m_curaddress = m_regs.external() ? (m_regs.start() << address_shift()) : 0;
 	m_curnibble = 0;
 	m_curbyte = 0;
+	// PORT CHANGE: the output continues from its current value (interpolated towards 0); the
+	// first overflow decodes nothing
+	m_prev_accum = (m_prev_accum * int32_t((m_position ^ 0xffff) + 1) + m_accumulator * int32_t(m_position)) >> 16;
 	m_position = 0;
 	m_accumulator = 0;
-	m_prev_accum = 0;
 	m_adpcm_step = STEP_MIN;
+	m_overflows = 0;
+	m_skip = 1;
+	m_freeze = 0;
 }
 
 

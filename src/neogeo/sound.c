@@ -37,10 +37,26 @@
 #define MASTER_PER_YM 3
 /* Samples: MAME generates the YM2610 stream at exactly 55 555 Hz (the frequency is an integer),
    not at 8 MHz / 144 = 55 555.55 Hz. Since each sample advances the YM state (envelopes,
-   ADPCM), the same cadence is used: sample k ends at ceil((k + 1) * 24e6 / 55 555). */
+   ADPCM), the same cadence is used: sample k ends at ceil((k + 1) * 24e6 / 55 555) +
+   SAMPLE_PHASE. The phase (one Z80 T-state) places the Z80's YM writes on the same side of the
+   sample boundaries as in MAME: measured on Metal Slug 3's attract mode, whose audio is then
+   identical to MAME's -wavwrite sample for sample (a key-on falls within 0.25 us of a boundary). */
 #define SAMPLE_HZ 55555
 #define MASTER_HZ 24000000
+#define SAMPLE_PHASE 6
+#define Z80_RETN_LAST_STEP 1218          /* z80.h decoder steps (see tick_z80) */
+#define Z80_RETI_LAST_STEP 1252
 #define FINE_WINDOW 600                  /* 68000 cycles = 50 us */
+/* MAME's YM2610 SSG is a separate sound device (ymfm's ssg_override) whose stream is brought up
+   to date lazily: when its registers are written and when the sound system updates every stream,
+   every 20 ms from power-on. The soft reset does not update it first, so in effect the SSG is
+   reset at its last update: the time since then is run again by the reset SSG. Here the SSG is
+   clocked inside each output sample (ymfm's 2:9 resampler: 5 SSG clocks in even samples, 4 in
+   odd ones), so after the reset it runs the clocks of the samples since that update, less those
+   of the extra sample the reset adds (MAME's separate SSG does not run it). Measured: the SSG
+   noise generator's phase after Metal Slug 3's first-boot watchdog reset (994 clocks: 999 - 5)
+   and the audio of the user's recording; tools/ymprobe, docs/PHASE3_RECOMP.md. */
+#define SSG_UPDATE_PERIOD (MASTER_HZ / 50)
 #define AUDIO_CAP 65536                  /* stereo samples in the ring buffer */
 
 static struct {
@@ -52,6 +68,7 @@ static struct {
     uint8_t bank[4];
     uint8_t command, pending, nmi_enabled, reply;
     int irq_ym;
+    int int_ack;                         /* inside an INT acknowledge sequence: NMI not sampled */
     int64_t timer[2];                    /* expiry (master), -1 = stopped */
     int64_t busy_end;
     int64_t next_sample;
@@ -59,6 +76,9 @@ static struct {
     int64_t fine_until;                  /* 68000 cycle */
     int16_t audio[AUDIO_CAP][2];
     uint32_t write_pos, read_pos;
+    int64_t ym_samples;                  /* samples the chip has made (ymfm resampler index) */
+    int64_t ssg_update;                  /* last 20 ms update period of MAME's SSG stream */
+    int64_t ssg_clocks;                  /* SSG clocks since the last update of that stream */
 } s;
 
 int ng_audio_enabled;
@@ -87,15 +107,21 @@ static int16_t saturate(double v)
     return (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
 }
 
+static int ssg_clocks_in(int64_t sample_index) { return sample_index & 1 ? 4 : 5; }
+
 static void sample(void)
 {
     int32_t o[3];
+    s.ssg_clocks += ssg_clocks_in(s.ym_samples++);
     ym_generate(o);
     if (!ng_audio_enabled) return;
     /* MAME mix (neogeo_stereo): SSG x0.84 to both channels; FM left/right x0.98. */
     uint32_t i = s.write_pos % AUDIO_CAP;
-    s.audio[i][0] = saturate(0.98 * o[0] + 0.84 * o[2]);
-    s.audio[i][1] = saturate(0.98 * o[1] + 0.84 * o[2]);
+    /* in single precision on samples normalised to +-1, as MAME's sound streams (a double
+       product differs by one unit in about 0.01 % of the samples) */
+    float fm_l = (float)o[0] / 32768.0f, fm_r = (float)o[1] / 32768.0f, ssg = (float)o[2] / 32768.0f;
+    s.audio[i][0] = saturate((fm_l * 0.98f + ssg * 0.84f) * 32768.0f);
+    s.audio[i][1] = saturate((fm_r * 0.98f + ssg * 0.84f) * 32768.0f);
     s.write_pos++;
     if (s.write_pos - s.read_pos > AUDIO_CAP) s.read_pos = s.write_pos - AUDIO_CAP;   /* drop the old data */
 }
@@ -120,11 +146,12 @@ static int z80_trace_ready;
 static uint8_t mem_read(uint16_t a)
 {
     const uint8_t *m1 = ng_roms.z80;
+    const uint32_t m1_mask = ng_roms.z80_size - 1;        /* M1 sizes are powers of two */
     if (a < 0x8000) return m1[a];
-    if (a < 0xC000) return m1[(((uint32_t)s.bank[3] << 14) + (a & 0x3FFF)) & 0x1FFFF];
-    if (a < 0xE000) return m1[(((uint32_t)s.bank[2] << 13) + (a & 0x1FFF)) & 0x1FFFF];
-    if (a < 0xF000) return m1[(((uint32_t)s.bank[1] << 12) + (a & 0x0FFF)) & 0x1FFFF];
-    if (a < 0xF800) return m1[(((uint32_t)s.bank[0] << 11) + (a & 0x07FF)) & 0x1FFFF];
+    if (a < 0xC000) return m1[(((uint32_t)s.bank[3] << 14) + (a & 0x3FFF)) & m1_mask];
+    if (a < 0xE000) return m1[(((uint32_t)s.bank[2] << 13) + (a & 0x1FFF)) & m1_mask];
+    if (a < 0xF000) return m1[(((uint32_t)s.bank[1] << 12) + (a & 0x0FFF)) & m1_mask];
+    if (a < 0xF800) return m1[(((uint32_t)s.bank[0] << 11) + (a & 0x07FF)) & m1_mask];
     return s.ram[a & 0x7FF];
 }
 
@@ -150,6 +177,7 @@ static void port_write(uint16_t p, uint8_t v)
             if (ym_addr[0] == 0x28 && (v & 0xF0)) ng_notes.fm++;               /* FM key on */
             else if (ym_addr[0] >= 0x08 && ym_addr[0] <= 0x0A && (v & 0x1F)) ng_notes.ssg++;
             else if (ym_addr[0] == 0x10 && (v & 0x80)) ng_notes.adpcm_b++;     /* ADPCM-B start */
+            if (ym_addr[0] < 0x10) s.ssg_clocks = 0;           /* SSG register: MAME updates the SSG */
         } else if (ym_addr[1] == 0x00 && !(v & 0x80) && (v & 0x3F)) {
             ng_notes.adpcm_a++;                                                /* ADPCM-A key on */
         }
@@ -183,9 +211,22 @@ static void tick_z80(void)
     if (!z80_trace_ready) z80_trace_start();
     if (z80_trace && z80_opdone(&s.z80) && s.t >= z80_trace_from && s.t <= z80_trace_to)
         fprintf(z80_trace, "C=%lld %04X:\n", (long long)(s.t / MASTER_PER_Z80), s.z80.pc);
+    /* MAME's Z80 runs at least one instruction of an interrupt handler before it takes another
+       interrupt (measured, Metal Slug 5: an NMI that arrives during the YM2610 IRQ's acknowledge
+       is taken after the DI at 0x0038). z80.h would take it at the end of the acknowledge
+       sequence, so the NMI is hidden until that sequence ends, and an NMI edge it latched since
+       the sequence began is forgotten (it is latched again then, and z80.h takes it at the end
+       of the handler's first instruction). An NMI latched before the sequence began would have
+       been taken instead of the IRQ. */
+    if (s.int_ack && z80_opdone(&s.z80)) s.int_ack = 0;
     uint64_t p = s.pins & ~(Z80_NMI | Z80_INT);
-    if (s.pending && s.nmi_enabled) p |= Z80_NMI;
+    if (s.pending && s.nmi_enabled && !s.int_ack) p |= Z80_NMI;
     if (s.irq_ym) p |= Z80_INT;
+    /* z80.h fetches the next instruction (where it accepts interrupts) before RETN/RETI copy IFF2
+       into IFF1, so an interrupt pending when the NMI handler returns waits one more
+       instruction; MAME's Z80 takes it right away (tools/mame/cycles.lua, Metal Slug 3). The copy
+       is done before the tick of that last step (z80.h steps, commit 9e88298). */
+    if (s.z80.step == Z80_RETN_LAST_STEP || s.z80.step == Z80_RETI_LAST_STEP) s.z80.iff1 = s.z80.iff2;
     p = z80_tick(&s.z80, p);
     if (p & Z80_MREQ) {
         uint16_t a = Z80_GET_ADDR(p);
@@ -193,7 +234,12 @@ static void tick_z80(void)
         else if ((p & Z80_WR) && a >= 0xF800) s.ram[a & 0x7FF] = Z80_GET_DATA(p);
     } else if (p & Z80_IORQ) {
         uint16_t a = Z80_GET_ADDR(p);
-        if (p & Z80_M1) { Z80_SET_DATA(p, 0xFF); }        /* INT acknowledge (IM 1) */
+        if (p & Z80_M1) {                                   /* INT acknowledge (IM 1) */
+            Z80_SET_DATA(p, 0xFF);
+            s.int_ack = 1;
+            s.z80.int_bits &= ~Z80_NMI;
+            p &= ~Z80_NMI;
+        }
         else if (p & Z80_RD) { Z80_SET_DATA(p, port_read(a)); }
         else if (p & Z80_WR) port_write(a, Z80_GET_DATA(p));
     }
@@ -214,22 +260,50 @@ static void peripherals_until(int64_t t)
             s.timer[n] = -1;
             ym_timer_expired((uint32_t)n);
         } else {
+            if (next / SSG_UPDATE_PERIOD != s.ssg_update) {   /* MAME's 20 ms stream update */
+                s.ssg_update = next / SSG_UPDATE_PERIOD;
+                s.ssg_clocks = 0;
+            }
             sample();
             s.n_samples++;
-            s.next_sample = ((s.n_samples + 1) * MASTER_HZ + SAMPLE_HZ - 1) / SAMPLE_HZ;
+            s.next_sample = ((s.n_samples + 1) * MASTER_HZ + SAMPLE_HZ - 1) / SAMPLE_HZ + SAMPLE_PHASE;
         }
     }
 }
 
-void ng_sound_until(int64_t cycles_68k)
+/* Interrupt timing. MAME's Z80 takes an interrupt raised at T at the end of the instruction
+ * running at T. z80.h only starts it at the next fetch if the pin was already set during the
+ * T-state before the instruction's last one, and here a pin changed by an event at T is seen from
+ * the next T-state. So the interrupt sources are applied IRQ_LEAD master cycles early: a YM2610
+ * timer that expires at T before the T-state that starts at T - IRQ_LEAD (the samples keep their
+ * own order), and a 68000 command (NMI) likewise. Measured against MAME's trace of the Z80 port
+ * writes (tools/mame/trace_ym.lua, Metal Slug 3 attract mode): with it every write keeps the same
+ * offset; without it, the writes after an interrupt arrive one instruction late now and then. */
+#define IRQ_LEAD (2 * MASTER_PER_Z80)
+
+/* Z80, YM timers and samples up to master cycle `end`. */
+static void run_until(int64_t end)
 {
-    int64_t end = cycles_68k * MASTER_PER_68K;
     while (s.t + MASTER_PER_Z80 <= end) {
+        for (;;) {
+            int n = -1;
+            for (int i = 0; i < 2; i++)
+                if (s.timer[i] >= 0 && s.timer[i] <= s.t + IRQ_LEAD && (n < 0 || s.timer[i] < s.timer[n])) n = i;
+            if (n < 0) break;
+            s.now = s.timer[n];
+            s.timer[n] = -1;
+            ym_timer_expired((uint32_t)n);
+        }
         s.now = s.t;
         tick_z80();
         s.t += MASTER_PER_Z80;
         peripherals_until(s.t);
     }
+}
+
+void ng_sound_until(int64_t cycles_68k)
+{
+    run_until(cycles_68k * MASTER_PER_68K);
 }
 
 int64_t ng_sound_next_event(void)
@@ -241,12 +315,12 @@ int64_t ng_sound_next_event(void)
 }
 
 /* ------------------------------------------------------------------ 68000 side */
-void ng_sound_command(uint8_t v)
+void ng_sound_command(uint8_t v, int64_t when)
 {
     if (ng_trace)
         fprintf(ng_trace, "%.3f f=%llu line=%lld pc=%06X CMD %02X\n", ng_cpu.cycles / 12.0,
                 (unsigned long long)ng.frames, (long long)((ng_cpu.cycles - ng.frame_start) / NG_CYCLES_PER_LINE), ng_cpu.pc, v);
-    ng_sound_until(ng_cpu.cycles);
+    run_until(when * MASTER_PER_68K - IRQ_LEAD + MASTER_PER_Z80 - 1);   /* NMI: see IRQ_LEAD */
     s.command = v;
     s.pending = 1;
     s.fine_until = ng_cpu.cycles + FINE_WINDOW;
@@ -256,7 +330,7 @@ void ng_sound_command(uint8_t v)
 void ng_sound_only_command(uint8_t command)
 {
     ng_cpu.cycles = s.t / MASTER_PER_68K;
-    ng_sound_command(command);
+    ng_sound_command(command, ng_cpu.cycles);
 }
 
 void ng_sound_only_advance(int64_t cycles_68k)
@@ -305,10 +379,40 @@ void ng_sound_init(void)
     memset(&s, 0, sizeof s);
     ng_audio_enabled = active;
     s.pins = z80_init(&s.z80);
+    /* MAME starts the Z80 with its registers at 0 (z80.h: 0xFFFF, "The Undocumented Z80
+       Documented"); Metal Slug 3's driver writes A to port 0x18 before loading it. */
+    s.z80.af = s.z80.bc = s.z80.de = s.z80.hl = s.z80.ix = s.z80.iy = s.z80.sp = s.z80.wz = 0;
+    s.z80.af2 = s.z80.bc2 = s.z80.de2 = s.z80.hl2 = 0;
     /* MAME's initial banks (identity); the real NEO-ZMC starts at 0, but the sound program
        sets them before using them. */
     s.bank[0] = 0x1E; s.bank[1] = 0x0E; s.bank[2] = 0x06; s.bank[3] = 0x02;
     s.timer[0] = s.timer[1] = -1;
-    s.next_sample = (MASTER_HZ + SAMPLE_HZ - 1) / SAMPLE_HZ;
+    s.next_sample = (MASTER_HZ + SAMPLE_HZ - 1) / SAMPLE_HZ + SAMPLE_PHASE;
     ym_reset();
+}
+
+/* As MAME's soft reset (checked with tools/mame/trace_ym.lua after Metal Slug 3's first-boot
+   watchdog reset): the Z80 restarts at 0 with interrupts off (IM 0, I and R cleared) but keeps
+   its other registers and its RAM; the YM2610 is reset; the command latch is acknowledged and the
+   NMI disabled (MAME's machine_reset); the NEO-ZMC banks, the reply, the clocks and the audio
+   stream go on. In MAME's audio the reset chip also produces one sample more than the sample
+   clock accounts for (its envelope and ADPCM-A phase, and the length of the stream, only match
+   the -wavwrite output that way). */
+void ng_sound_reset(void)
+{
+    z80_t z = s.z80;
+    s.pins = z80_reset(&s.z80);
+    s.z80.af = z.af; s.z80.bc = z.bc; s.z80.de = z.de; s.z80.hl = z.hl;
+    s.z80.ix = z.ix; s.z80.iy = z.iy; s.z80.sp = z.sp;
+    s.z80.af2 = z.af2; s.z80.bc2 = z.bc2; s.z80.de2 = z.de2; s.z80.hl2 = z.hl2;
+    s.pending = 0;
+    s.nmi_enabled = 0;
+    s.irq_ym = 0;
+    s.timer[0] = s.timer[1] = -1;
+    s.busy_end = 0;
+    ym_reset();
+    if (s.t / SSG_UPDATE_PERIOD != s.ssg_update) s.ssg_clocks = 0;   /* an update since the last sample */
+    int64_t redo = s.ssg_clocks - ssg_clocks_in(s.ym_samples);       /* see SSG_UPDATE_PERIOD */
+    if (redo > 0) ym_ssg_clock((uint32_t)redo);
+    sample();                            /* MAME's stream emits one more sample (see above) */
 }

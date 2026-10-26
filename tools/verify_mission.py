@@ -36,6 +36,8 @@ def main() -> int:
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--devmode", action="store_true", help="BIOS development mode (Phase 8 runs)")
     ap.add_argument("--dips", help="debug dips forced on, hex (Phase 8 runs)")
+    ap.add_argument("--known-differences", type=Path,
+                    help="VBlanks known to differ from MAME (compare_fingerprints.py KNOWN.txt)")
     a = ap.parse_args()
 
     env = dict(os.environ)
@@ -51,7 +53,8 @@ def main() -> int:
         print(r.stderr)
         return 1
     comparator = Path(__file__).resolve().parent / "compare_fingerprints.py"
-    return subprocess.run([sys.executable, str(comparator), str(a.reference), str(a.output)]).returncode
+    known = [str(a.known_differences)] if a.known_differences else []
+    return subprocess.run([sys.executable, str(comparator), str(a.reference), str(a.output)] + known).returncode
 
 
 if __name__ == "__main__":

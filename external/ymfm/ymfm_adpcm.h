@@ -358,6 +358,11 @@ private:
 	int32_t m_accumulator;          // accumulator
 	int32_t m_prev_accum;           // previous accumulator (for linear interp)
 	int32_t m_adpcm_step;           // next forecast
+	// PORT CHANGE (Metal Slug 3 port): state of the ADPCM-B behaviour MAME 0.289 has, learned
+	// as a black box (docs/ADPCM_B.md in the port's repository)
+	uint32_t m_overflows;           // position overflows since the start
+	uint32_t m_skip;                // overflows still to skip after a start
+	uint32_t m_freeze;              // 1: the next clock freezes the output (end of sample)
 	adpcm_b_registers &m_regs;      // reference to registers
 	adpcm_b_engine &m_owner;        // reference to our owner
 };

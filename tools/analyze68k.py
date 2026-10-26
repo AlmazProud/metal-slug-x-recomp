@@ -1,4 +1,5 @@
-"""Static analysis of the mslugx 68000 code (Phase 1).
+"""Static analysis of a game's 68000 code (--game: mslug, mslug4, mslug5, mslug3 or mslugx; Metal
+Slug X Phase 1, Metal Slug 3, 5, 4 and Metal Slug Phase 3).
 
 Recursive disassembly (Capstone) over the CPU view of P1 and of the BIOS, rooted at:
   - the 68000 vectors of P1 (0x000-0x0FF),
@@ -8,11 +9,15 @@ Recursive disassembly (Capstone) over the CPU view of P1 and of the BIOS, rooted
 
 Produces:
   - <root>/analysis/listing_p1.txt      annotated disassembly (outside the repo: contains the game)
-  - docs/functions_p1.csv               function list (addresses and metrics only)
-  - docs/PHASE1_COVERAGE.md             coverage report
+  - docs/functions_p1.csv               function list (addresses and metrics only; --functions)
+  - docs/PHASE3_COVERAGE.md             coverage report (--report)
+
+On a NEO-SMA cartridge P1 is the fixed area (0x000000-0x0BFFFF) plus the chip's ROM
+(0x0C0000-0x0FFFFF); the report also counts what MAME executed from the P2 window and from RAM
+(both left to the interpreter) and the P2 data reads.
 
 Usage:
-    python tools/analyze68k.py [--coverage analysis/coverage.json]
+    python tools/analyze68k.py [--coverage analysis/coverage.json ...] [--report FILE]
 """
 from __future__ import annotations
 
@@ -54,10 +59,10 @@ def cpu_view(b: bytes) -> bytes:
 
 
 class Memory:
-    def __init__(self, roms: Path) -> None:
-        p = cpu_view((roms / "mslugx_game_m68k").read_bytes())
+    def __init__(self, roms: Path, game: str) -> None:
+        p = cpu_view((roms / f"{game}_game_m68k").read_bytes())
         self.regions = [(0x000000, p[:MB], "p1"),
-                        (0xC00000, cpu_view((roms / "mslugx_bios_m68k").read_bytes()), "bios")]
+                        (0xC00000, cpu_view((roms / f"{game}_bios_m68k").read_bytes()), "bios")]
 
     def region(self, addr: int):
         for base, data, name in self.regions:
@@ -292,14 +297,20 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     root = Path(os.environ.get("PD_ROOT", Path(__file__).resolve().parents[2]))
     repo = Path(__file__).resolve().parents[1]
-    ap.add_argument("--roms", type=Path, default=root / "roms")
+    ap.add_argument("--roms", type=Path, default=root / "roms",
+                    help="folder with <game>_game_m68k and _bios_m68k (Metal Slug: the GOG copy's own "
+                         "files in roms; Metal Slug 4: tools/make_reference.py --mslug4)")
+    ap.add_argument("--game", default="mslug", help="file prefix (mslug, mslug4, mslug5, mslug3, mslugx)")
     ap.add_argument("--coverage", type=Path, nargs="+", default=[root / "analysis" / "coverage.json"],
                     help="one or more coverage JSON files (tools/coverage.py); they are merged")
+    ap.add_argument("--report", type=Path, default=repo / "docs" / "PHASE3_COVERAGE.md")
+    ap.add_argument("--functions", type=Path, default=repo / "docs" / "functions_p1.csv")
     a = ap.parse_args()
 
-    mem = Memory(a.roms)
+    mem = Memory(a.roms, a.game)
     p1 = mem.regions[0][1]
-    cov = {"pcs": {}, "indirectos": [], "lecturas_p1": [], "instrucciones_trazadas": 0}
+    cov = {"pcs": {}, "indirectos": [], "lecturas_p1": [], "lecturas_p2": [], "instrucciones_trazadas": 0}
+    bulk_readers: dict[str, dict[str, int]] = defaultdict(dict)
     for path in a.coverage:
         if not path.exists():
             continue
@@ -308,6 +319,10 @@ def main() -> int:
             cov["pcs"][region] = sorted(set(cov["pcs"].get(region, [])) | set(pcs))
         cov["indirectos"] = sorted({tuple(x) for x in cov["indirectos"]} | {tuple(x) for x in part["indirectos"]})
         cov["lecturas_p1"] = sorted(set(cov["lecturas_p1"]) | set(part.get("lecturas_p1", [])))
+        cov["lecturas_p2"] = sorted(set(cov["lecturas_p2"]) | set(part.get("lecturas_p2", [])))
+        for key, pcs in part.get("lectores_masivos", {}).items():
+            for pc, n in pcs.items():
+                bulk_readers[key][pc] = max(n, bulk_readers[key].get(pc, 0))
         cov["instrucciones_trazadas"] += part.get("instrucciones_trazadas", 0)
     dyn_p1 = set(cov["pcs"].get("p1", []))
     dyn_bios = set(cov["pcs"].get("bios", []))
@@ -441,7 +456,7 @@ roots (vectors and header) and its auto-analysis (`tools/ghidra/`).
             mark = "*" if addr in dyn_bios else " "
             f.write(f"{addr:06X}{mark} {i.mnemonic:<8} {i.op_str}\n")
 
-    with (repo / "docs" / "functions_p1.csv").open("w", newline="", encoding="utf-8") as f:
+    with a.functions.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["start", "end", "code_bytes", "instructions", "calls", "reasons"])
         for fn in funcs:
@@ -460,8 +475,15 @@ roots (vectors and header) and its auto-analysis (`tools/ghidra/`).
             bios_txt += f"\n| `{t:06X}` | 0 | {n} |"
     regions = ", ".join(f"{k}: {len(v)}" for k, v in sorted(cov["pcs"].items()))
     not_covered = sorted(p for p in dyn_p1 if p not in an.ins)
+    p2_exec = sum(len(v) for k, v in cov["pcs"].items() if k.startswith("p2_"))
+    p2_banks = sorted(k for k in cov["pcs"] if k.startswith("p2_"))
+    ram_exec = len(cov["pcs"].get("ram", []))
+    chip_exec = sum(1 for x in dyn_p1 if x >= 0xC0000)
+    bulk_txt = "; ".join(f"{k}: " + ", ".join(f"`{pc}` ({n:,} words)" for pc, n in v.items())
+                         for k, v in sorted(bulk_readers.items()) if v) or "none"
+    banked_indirect = Counter(b for _, _, b in cov["indirectos"])
 
-    report = f"""# Phase 1: 68000 analysis coverage report
+    report = f"""# 68000 analysis coverage report ({a.game})
 
 Generated by `tools/analyze68k.py` (Capstone {capstone.__version__}) from the user's ROMs
 and the dynamic coverage from MAME (`tools/coverage.py`,
@@ -490,6 +512,21 @@ and the dynamic coverage from MAME (`tools/coverage.py`,
 - Addresses executed in MAME that the static analysis does not reach: {len(not_covered)}
   (must be 0; otherwise there is a decoding bug).
 - Invalid start addresses (do not decode): {len([x for x in an.invalid if x < MB])}.
+
+## Where the 68000 runs (MAME)
+
+| Region | Distinct instruction addresses executed |
+|---|---:|
+| P1 `0x000000`-`0x0BFFFF` | {len(dyn_p1) - chip_exec:,} |
+| P1 `0x0C0000`-`0x0FFFFF` (on NEO-SMA: the chip's ROM) | {chip_exec:,} |
+| BIOS | {len(dyn_bios):,} |
+| P2 window `0x200000`-`0x2FFFFF` (any bank) | {p2_exec:,} |
+| RAM | {ram_exec:,} |
+
+- P2 window regions with executed code: {', '.join(p2_banks) or 'none'}.
+- P2 data words read (P2 offsets, without bulk readers): {len(cov['lecturas_p2']):,}.
+- Indirect jumps observed, by active bank (P2 offset or bank number): {len(banked_indirect)} banks.
+- Bulk readers left out of the data reads (last reader of 32 768 words or more): {bulk_txt}.
 
 ## Precision: code that MAME proved to be data
 
@@ -532,7 +569,7 @@ so they should be 0 here. The purely static validation does not use this informa
 |---|---:|---:|
 {bios_txt}
 """
-    (repo / "docs" / "PHASE1_COVERAGE.md").write_text(report, encoding="utf-8")
+    a.report.write_text(report, encoding="utf-8")
     print(report)
     print(f"Listing: {listing}")
     return 0

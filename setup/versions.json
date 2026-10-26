@@ -2,7 +2,7 @@
   "schema": 1,
   "note": "To update a tool, change version, url and hash (taken from the official source given in 'hash_source') and run INSTALL.bat again. Only what changed is reinstalled.",
   "paths": {
-    "gog": "K:\\Metal Slug X"
+    "gog": "K:\\Metal Slug"
   },
   "min_free_space_gb": 10,
   "tools": [

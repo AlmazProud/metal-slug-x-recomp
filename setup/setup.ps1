@@ -1,8 +1,11 @@
 #Requires -Version 5.1
 <#
-  Portable installer for Projecto Decompile (Environment phase).
+  Portable installer for the Metal Slug port (Environment phase).
 
   - Installs every tool into <root>\tools without administrator rights,
+    or into the parent folder's tools\ when <root>\tools does not exist and that one does
+    (C:\Projecto Decompile\tools, shared with the Metal Slug X, 3, 4 and 5 ports): what is
+    already installed there is reused, never downloaded again.
     without touching the global PATH or the registry.
   - Downloads only from official sources (versions.json) and verifies every hash.
     If a hash does not match, it stops.
@@ -12,17 +15,19 @@
     shows an OK/FAIL table.
 
   Parameters:
-    -CopyRoms       Only copies the ROMs from GOG to roms\ (always asks for confirmation).
+    -CopyRoms       Only copies the ROMs (the GOG copy's mslug_* files) to roms\ (asks for confirmation).
     -NoRoms         Does not ask about the ROMs at the end.
     -VerifyOnly     Installs nothing; only runs the verification.
-    -Gog <path>     Path of the GOG installation (default: the one in versions.json).
+    -Gog <path>     The GOG install of Metal Slug (default: the one in versions.json). Only read.
+    -Yes            Copies the ROMs without asking.
 #>
 [CmdletBinding()]
 param(
     [switch]$CopyRoms,
     [switch]$NoRoms,
     [switch]$VerifyOnly,
-    [string]$Gog
+    [string]$Gog,
+    [switch]$Yes
 )
 
 Set-StrictMode -Version 2
@@ -35,6 +40,8 @@ $SetupDir  = $PSScriptRoot
 $Repo      = Split-Path $SetupDir -Parent
 $Root      = Split-Path $Repo -Parent
 $Tools     = Join-Path $Root 'tools'
+$Shared    = Join-Path (Split-Path $Root -Parent) 'tools'
+if (-not (Test-Path -LiteralPath $Tools) -and (Test-Path -LiteralPath $Shared)) { $Tools = $Shared }
 # On-disk names kept as-is so existing download caches stay valid.
 $Downloads = Join-Path $Tools '_descargas'
 $Verif     = Join-Path $Tools '_verificacion'
@@ -305,31 +312,49 @@ function Sync-Root {
 
 # ---------------------------------------------------------------- ROMs
 function Copy-Roms {
+    # The GOG copy's DotEmu files (resources\game\mslug_*) go to roms\, where the port's loader and
+    # the Phase 0 tools look for them. DotEmu's menu extras that live in the install's root
+    # (mslug_stage_*, mslug_multi_*, mslug_intro) go along when resources\game has no file of the
+    # same name. The GOG install is only read. The MAME set rebuilt from these files (Phase 0) and
+    # the BIOS files MAME needs (taken from the copy itself) go to roms\mslug\ and roms\neogeo\ later,
+    # so that MAME finds them with -rompath roms. The filter 'mslug_*' leaves out the other games'
+    # mslugx_*, mslug3_*... files.
     $source = $Gog
     if (-not $source) { $source = $Cfg.paths.gog }
     $folder = Join-Path $source 'resources\game'
-    if (-not (Test-Path -LiteralPath $folder)) {
-        Log "'$folder' was not found. Give the path with -Gog ""path""." 'Yellow'
+    if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
+        Log "'$folder' was not found. Give the install folder with -Gog ""path""." 'Yellow'
         return
     }
-    $files = @(Get-ChildItem -LiteralPath $folder -File -Filter 'mslugx_*' | Sort-Object Name)
-    if ($files.Count -eq 0) { Log "No mslugx_* files in '$folder'." 'Yellow'; return }
+    $gameFiles = @(Get-ChildItem -LiteralPath $folder -File -Filter 'mslug_*' | Sort-Object Name)
+    if ($gameFiles.Count -eq 0) { Log "No mslug_* files in '$folder'." 'Yellow'; return }
+    $names = @($gameFiles | ForEach-Object { $_.Name })
+    $extras = @(Get-ChildItem -LiteralPath $source -File -Filter 'mslug_*' | Sort-Object Name |
+        Where-Object { $names -notcontains $_.Name })
+    $copies = @(foreach ($f in @($gameFiles + $extras)) { [pscustomobject]@{ Source = $f; Name = $f.Name } })
 
     Write-Host ''
-    Write-Host "Files to copy from: $folder" -ForegroundColor Cyan
-    $files | Format-Table @{ n = 'File'; e = { $_.Name } }, @{ n = 'Bytes'; e = { $_.Length }; a = 'Right' } -AutoSize | Out-String | Write-Host
+    Write-Host "Files to copy:" -ForegroundColor Cyan
+    $copies | Format-Table @{ n = 'File'; e = { $_.Source.FullName } }, @{ n = 'As'; e = { $_.Name } },
+        @{ n = 'Bytes'; e = { $_.Source.Length }; a = 'Right' } -AutoSize | Out-String | Write-Host
     Write-Host "Destination: $Roms  (outside the repository; never versioned)"
-    $resp = Read-Host 'Copy these files? [y/N]'
-    if ($resp -notmatch '^[yY]') { Log 'ROMs: nothing copied (answer: no).' 'Yellow'; return }
+    if (-not $Yes) {
+        $resp = Read-Host 'Copy these files? [y/N]'
+        if ($resp -notmatch '^[yY]') { Log 'ROMs: nothing copied (answer: no).' 'Yellow'; return }
+    }
 
     if (-not (Test-Path -LiteralPath $Roms)) { New-Item -ItemType Directory -Path $Roms | Out-Null }
     $manifest = New-Object System.Collections.Generic.List[string]
-    foreach ($a in $files) {
-        Copy-Item -LiteralPath $a.FullName -Destination (Join-Path $Roms $a.Name) -Force
-        $manifest.Add(('{0} *{1}' -f (Get-FileHashLower (Join-Path $Roms $a.Name) 'SHA256'), $a.Name))
+    foreach ($c in $copies) {
+        $dst = Join-Path $Roms $c.Name
+        Copy-Item -LiteralPath $c.Source.FullName -Destination $dst -Force
+        if ((Get-FileHashLower $dst 'SHA256') -ne (Get-FileHashLower $c.Source.FullName 'SHA256')) {
+            Fail "The copy of $($c.Source.FullName) differs from the source."
+        }
+        $manifest.Add(('{0} *{1}' -f (Get-FileHashLower $dst 'SHA256'), ($c.Name -replace '\\', '/')))
     }
     Set-Content -LiteralPath (Join-Path $Roms 'MANIFEST.sha256') -Value $manifest -Encoding ASCII
-    Log "ROMs: $($files.Count) files copied to $Roms and MANIFEST.sha256 generated." 'Green'
+    Log "ROMs: $($copies.Count) files copied to $Roms and MANIFEST.sha256 generated." 'Green'
 }
 
 # ---------------------------------------------------------------- repository
@@ -428,8 +453,9 @@ function Test-Environment {
 
 # ================================================================ main
 try {
-    Log "Projecto Decompile - installer ($((Get-Date).ToString('s')))" 'Cyan'
+    Log "Metal Slug port - installer ($((Get-Date).ToString('s')))" 'Cyan'
     Log "Root:  $Root"
+    Log "Tools: $Tools"
     Log "Log:   $LogFile"
 
     if ($CopyRoms) { Copy-Roms; exit 0 }

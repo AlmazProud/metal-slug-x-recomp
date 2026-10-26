@@ -1,7 +1,7 @@
 @echo off
-rem Single entry point of the Projecto Decompile installer.
+rem Single entry point of the Metal Slug port installer.
 rem Runs setup.ps1 with ExecutionPolicy Bypass ONLY for this process.
-rem Options (passed to setup.ps1):  -CopyRoms  -NoRoms  -VerifyOnly  -Gog "path"
+rem Options (passed to setup.ps1):  -CopyRoms  -NoRoms  -VerifyOnly  -Gog "folder"  -Yes
 setlocal
 set "PD_SETUP=%~dp0setup.ps1"
 if not exist "%PD_SETUP%" set "PD_SETUP=%~dp0repo\setup\setup.ps1"

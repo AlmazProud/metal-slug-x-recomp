@@ -14,7 +14,7 @@ c->pc.
 The output is derived from the game program: it is written to the build directory and is
 never committed.
 
-Usage: python program.py --roms DIR --listings L1 [L2...] --coverage J [J...] --cycles BIN
+Usage: python program.py --roms DIR [--game ID] --listings L1 [L2...] --coverage J [J...] --cycles BIN
                          --output DIR [--files N] [--no-per-instruction-points]
 """
 from __future__ import annotations
@@ -53,13 +53,13 @@ RE_CALL_DYN = re.compile(r"PD_CALL_DYN\((\w+), 0x([0-9A-F]+)u\);")
 
 
 class Memory:
-    def __init__(self, roms: Path):
+    def __init__(self, roms: Path, game: str):
         def cpu(b):
             a = bytearray(b)
             a[0::2], a[1::2] = b[1::2], b[0::2]
             return bytes(a)
-        p1 = (roms / "mslugx_game_m68k").read_bytes()[:1 << 20]
-        bios = (roms / "mslugx_bios_m68k").read_bytes()
+        p1 = (roms / f"{game}_game_m68k").read_bytes()[:1 << 20]
+        bios = (roms / f"{game}_bios_m68k").read_bytes()
         # SHA-256 of the files the program is generated from: the port only uses the recompiled
         # program with a copy whose P1 and BIOS have these hashes (otherwise, the interpreter).
         self.p1_sha256 = hashlib.sha256(p1).hexdigest()
@@ -107,6 +107,7 @@ def successors(i) -> list[int]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--roms", type=Path, required=True)
+    ap.add_argument("--game", default="mslug3", help="DotEmu file prefix (mslug3, mslugx)")
     ap.add_argument("--listings", type=Path, nargs="+", required=True)
     ap.add_argument("--coverage", type=Path, nargs="*", default=[])
     ap.add_argument("--cycles", type=Path, required=True)
@@ -118,7 +119,7 @@ def main() -> int:
     a = ap.parse_args()
     per_instruction = not a.no_per_instruction_points
     generator.load_cycles(a.cycles)
-    mem = Memory(a.roms)
+    mem = Memory(a.roms, a.game)
 
     instr, entries = read_listings(a.listings)
     for path in a.coverage:

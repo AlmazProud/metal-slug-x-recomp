@@ -1,4 +1,4 @@
-/* Metal Slug X, native port: command-line options and startup.
+/* Native port (Metal Slug X / Metal Slug 3, see ng_game): command-line options and startup.
  *
  * Usage:
  *   mslugx [GAME | --roms GAME] [--scale N] [--turbo N] [--empty-sram] [--no-audio]
@@ -54,11 +54,11 @@ extern const char program_p1_sha256[], program_bios_sha256[];
 static void usage(void)
 {
     fprintf(stderr,
-            "Usage: mslugx [GAME | --roms GAME] [--scale N] [--turbo N] [--empty-sram] [--no-audio]\n"
+            "Usage: %s [GAME | --roms GAME] [--scale N] [--turbo N] [--empty-sram] [--no-audio]\n"
             "              [--date YYYY-MM-DD-hh-mm-ss-D]\n"
-            "       mslugx --headless --frames N [--screenshots a,b,c --output FOLDER] [--script FILE]\n"
+            "       %s --headless --frames N [--screenshots a,b,c --output FOLDER] [--script FILE]\n"
             "              [--inputs FILE] [--fingerprints FILE] [--wav FILE] [--trace FILE]\n"
-            "              [--trace-io FILE FROM_US TO_US]\n");
+            "              [--trace-io FILE FROM_US TO_US]\n", ng_game->id, ng_game->id);
 }
 
 static int parse_options(int argc, char **argv, Options *o)
@@ -100,7 +100,7 @@ static int parse_options(int argc, char **argv, Options *o)
             o->has_date = 1;
             i++;
         } else if (!strcmp(a, "--version")) {
-            printf("metal-slug-x-recomp %s\n", PORT_VERSION);
+            printf("%s %s\n", ng_game->project, PORT_VERSION);
             exit(0);
         } else if (a[0] != '-' && !o->roms) o->roms = a;      /* path dropped on the executable */
         else return -1;
@@ -136,7 +136,9 @@ void machine_start(const Options *o)
 }
 
 /* PD_COMPARE_ROMS=OTHER (headless): loads another copy and checks that the runtime sees exactly
-   the same data (for example a MAME set against the PC release files). */
+   the same data (for example a MAME set against the PC release files). PD_COMPARE_KNOWN=a,b: parts
+   known to differ (fix_bios: the PC release's system fix differs from MAME's sfix.sfix in 28 bytes,
+   docs/ROM_MAP.md); they must differ, the rest must be identical. */
 static int compare_roms(const char *other)
 {
     NgRoms b;
@@ -146,18 +148,51 @@ static int compare_roms(const char *other)
     const NgRoms *a = &ng_roms;
     struct { const char *name; const uint8_t *x, *y; uint32_t n; } parts[] = {
         {"p", a->p, b.p, a->p_size}, {"bios", a->bios, b.bios, 131072},
-        {"fix_game", a->fix_game, b.fix_game, 131072}, {"fix_bios", a->fix_bios, b.fix_bios, 131072},
+        {"fix_game", a->fix_game, b.fix_game, a->fix_game_size}, {"fix_bios", a->fix_bios, b.fix_bios, 131072},
         {"tiles", a->tiles, b.tiles, a->n_tiles * 128}, {"zoom", a->zoom, b.zoom, 131072},
-        {"z80", a->z80, b.z80, 131072}, {"adpcm", a->adpcm, b.adpcm, a->adpcm_size},
+        {"z80", a->z80, b.z80, a->z80_size}, {"adpcm", a->adpcm, b.adpcm, a->adpcm_size},
     };
-    int differ = a->p_size != b.p_size || a->n_tiles != b.n_tiles || a->adpcm_size != b.adpcm_size;
+    int differ = a->p_size != b.p_size || a->n_tiles != b.n_tiles || a->adpcm_size != b.adpcm_size ||
+                 a->fix_game_size != b.fix_game_size || a->z80_size != b.z80_size;
+    const char *known = getenv("PD_COMPARE_KNOWN") ? getenv("PD_COMPARE_KNOWN") : "";
     for (size_t i = 0; i < sizeof parts / sizeof parts[0] && !differ; i++) {
         int d = memcmp(parts[i].x, parts[i].y, parts[i].n) != 0;
-        printf("%-9s %s\n", parts[i].name, d ? "DIFFERENT" : "identical");
-        differ |= d;
+        int expected = 0;                            /* the name as a whole comma-separated item */
+        for (const char *k = known; *k; k += strcspn(k, ",") + (k[strcspn(k, ",")] == ',')) {
+            size_t n = strcspn(k, ",");
+            if (n == strlen(parts[i].name) && !strncmp(k, parts[i].name, n)) expected = 1;
+        }
+        printf("%-9s %s%s\n", parts[i].name, d ? "DIFFERENT" : "identical", expected ? " (known difference)" : "");
+        if (d != expected) differ = 1;
     }
     ng_roms_free(&b);
     return differ;
+}
+
+/* PD_DUMP_ROMS=folder (headless): writes what the runtime loaded, part by part (p.bin in the
+   68000's byte order, bios, fix_game, fix_bios, tiles, zoom, z80, adpcm), for tools that compare
+   it with MAME's regions (tools/check_load.py). The folder must exist. */
+static int dump_roms(const char *folder)
+{
+    const NgRoms *a = &ng_roms;
+    struct { const char *name; const uint8_t *x; uint32_t n; } parts[] = {
+        {"p", a->p, a->p_size}, {"bios", a->bios, 131072}, {"fix_game", a->fix_game, a->fix_game_size},
+        {"fix_bios", a->fix_bios, 131072}, {"tiles", a->tiles, a->n_tiles * 128}, {"zoom", a->zoom, 131072},
+        {"z80", a->z80, a->z80_size}, {"adpcm", a->adpcm, a->adpcm_size},
+    };
+    for (size_t i = 0; i < sizeof parts / sizeof parts[0]; i++) {
+        char path[1200];
+        snprintf(path, sizeof path, "%s/%s.bin", folder, parts[i].name);
+        FILE *f = fopen(path, "wb");
+        if (!f || fwrite(parts[i].x, 1, parts[i].n, f) != parts[i].n) {
+            fprintf(stderr, "could not write %s\n", path);
+            if (f) fclose(f);
+            return 1;
+        }
+        fclose(f);
+        printf("%s %u bytes\n", path, parts[i].n);
+    }
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -168,6 +203,12 @@ int main(int argc, char **argv)
 
     char folder[1024], error[1200];
     const char *base = SDL_GetBasePath();
+    if (getenv("PD_FIND_PLACES")) {            /* tests: where the window would look (find_game.c) */
+        static char places[16][1024];
+        int n = game_places(base ? base : "", places, 16);
+        for (int i = 0; i < n; i++) printf("place: %s\n", places[i]);
+        return 0;
+    }
     if (o.roms) snprintf(folder, sizeof folder, "%s", o.roms);
     else {
         snprintf(folder, sizeof folder, "%sgame", base ? base : "");
@@ -183,6 +224,7 @@ int main(int argc, char **argv)
         printf("%s\n%s\nprofile %s\n", ng_roms.info.description, machine_recompiled() ? "recompiled" : "interpreter",
                profile_supported() ? "supported" : "not supported");
     if (getenv("PD_COMPARE_ROMS")) return compare_roms(getenv("PD_COMPARE_ROMS"));
+    if (getenv("PD_DUMP_ROMS")) return dump_roms(getenv("PD_DUMP_ROMS"));
     cpu_turbo = o.turbo > 0 ? o.turbo : 0;
     if (headless_prepare(&o) != 0) return 1;
     machine_start(&o);

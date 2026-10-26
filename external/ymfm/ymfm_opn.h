@@ -656,6 +656,11 @@ public:
 	// constructor
 	ym2610(ymfm_interface &intf, uint8_t channel_mask = 0x36);
 
+	// PORT CHANGE (Metal Slug 3 port): clock only the SSG engine, without output. MAME's SSG is a
+	// separate device whose soft reset takes effect at its last stream update, so after the
+	// chip's reset the port advances the SSG by the time since then (src/neogeo/sound.c).
+	void ssg_clock(uint32_t count) { while (count--) m_ssg.clock(); }
+
 	// configuration
 	void ssg_override(ssg_override &intf) { m_ssg.override(intf); }
 	void set_fidelity(opn_fidelity fidelity) { m_fidelity = fidelity; update_prescale(); }

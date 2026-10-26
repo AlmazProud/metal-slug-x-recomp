@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ---------------------------------------------------------------------------
-This license covers the port's own code and documentation only. Metal Slug X
-and all of its code, graphics, sound and music are the property of SNK
-CORPORATION. This project contains none of them and is not affiliated with or
-endorsed by SNK. Third-party libraries keep their own licenses (THIRD_PARTY.md).
+This license covers the port's own code and documentation only. Metal Slug
+(and Metal Slug X, 3, 4 and 5, built only as regression targets) and all of
+their code, graphics, sound and music are the property of SNK CORPORATION. This project contains none of them and is not affiliated with
+or endorsed by SNK. Third-party libraries keep their own licenses (THIRD_PARTY.md).

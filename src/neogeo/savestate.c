@@ -10,7 +10,7 @@
 #include <string.h>
 
 #define MAGIC "PDNGEST"
-#define VERSION 1u
+#define VERSION 5u
 
 void ng_state_block(NgState *e, void *p, size_t n)
 {

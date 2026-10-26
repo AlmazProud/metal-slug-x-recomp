@@ -9,13 +9,14 @@ void ref_reset(void)
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     m68k_pulse_reset();
     m68k_execute(1);
-    /* The 68000 reset does not define D0-D7/A0-A6/USP; Musashi keeps the previous values. Both
-     * sides of the test start from zero. */
+    /* The 68000 reset does not define D0-D7/A0-A6/USP or the condition codes; Musashi keeps the
+     * previous values (a fresh Musashi reads as Z set). Both sides of the test start from zero. */
     for (int i = 0; i < 8; i++) {
         m68k_set_reg(M68K_REG_D0 + i, 0);
         if (i < 7) m68k_set_reg(M68K_REG_A0 + i, 0);
     }
     m68k_set_reg(M68K_REG_USP, 0);
+    m68k_set_reg(M68K_REG_SR, m68k_get_reg(NULL, M68K_REG_SR) & ~0x1Fu);
 }
 
 

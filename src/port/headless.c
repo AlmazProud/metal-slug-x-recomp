@@ -2,9 +2,26 @@
  *
  * BMP screenshots, input script, inputs recorded in MAME (per frame or timed), fingerprints
  * per frame and per VBlank, per-instruction traces and WAV of the generated audio.
+ *
+ * PD_SPAWN_POKES=file: the RAM bytes each spawn cheat changed, as PD_POKE entries (cheats.h).
+ *
+ * PD_WATCH_W=hex: logs every write to that work RAM word (frame, PC, value, byte mask) to stdout;
+ * with PD_INTERPRETER=1 the PC is the instruction's (research: who writes a variable).
+ *
+ * PD_POKE="frame,address,value[;...]" (hex address and value): writes a work RAM byte when that
+ * frame ends, as tools/mame/scripted_run.lua does in MAME's frame notifier. Used for Metal Slug 3's
+ * mission runs: the start mission (0x10ED7A) written during the soldier select, the path of the
+ * game's own memory card continue (docs/PHASE4_PROFILE.md).
+ *
+ * Metal Slug's Boss Rush (docs/BOSS_RUSH.md, stage 3): PD_FFWD=mission,folder runs the
+ * fast-forward through a mission and writes its bosses' states (research: PD_FFWD_KILL,
+ * PD_FFWD_BOT); PD_BOSSRUSH with PD_BOSSRUSH_DIR keeps the states there (made first if missing);
+ * PD_BOSSRUSH_KILL=n defeats each boss n frames after it loads (tests, with a built-in bot);
+ * PD_BOSSRUSH_FROM=n starts at the n-th boss; PD_LOAD_STATE=file starts from a saved state.
  */
 #include <SDL3/SDL.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,9 +29,15 @@
 #include "dispatcher.h"
 #include "neogeo.h"
 #include "cheats.h"
+#include "progress.h"
+#include "records.h"
+#include "bossbar.h"
+#include "bossrush.h"
 #include "profile.h"
 #include "port.h"
 #include "sounds.h"
+#include "runahead.h"
+#include "fastfwd.h"
 
 /* ------------------------------------------------------------------ input script */
 typedef struct { unsigned long long from, to; uint8_t joy, sys[2], test; } Span;
@@ -96,7 +119,7 @@ static void cheats_test(void)
             else if (!strcmp(kind, "spawntype")) ok = cheats_spawn_type(value);
             else if (!strcmp(kind, "devmenu")) cheats_dev_menu();
             else if (!strcmp(kind, "poke"))       /* research: player object byte, value = off*256+v */
-                ng.ram[((player ? PROFILE_PLAYER2_OBJECT : PROFILE_PLAYER1_OBJECT) + (value >> 8)) & 0xFFFF] = (uint8_t)value;
+                ng.ram[((player ? game_profile.player2_object : game_profile.player1_object) + (value >> 8)) & 0xFFFF] = (uint8_t)value;
             if (!ok) fprintf(stderr, "PD_CHEAT: %s not applied at frame %llu (not in game)\n", kind, frame);
         }
         e += used;
@@ -206,6 +229,101 @@ static int inputs_load(const char *path)
     return 0;
 }
 
+/* ------------------------------------------------------------------ RAM writes (PD_POKE) */
+typedef struct { unsigned long long frame; uint32_t addr; uint8_t value; } Poke;
+static Poke pokes[2048];                /* Metal Slug: stage jumps, lives and bombs over long runs */
+static int n_pokes = -1;
+
+static void pokes_apply(void)
+{
+    if (n_pokes < 0) {
+        n_pokes = 0;
+        const char *e = getenv("PD_POKE");
+        for (const char *q = e; q && *q && n_pokes < 2048;) {
+            unsigned long long f;
+            unsigned a, v;
+            int used;
+            if (sscanf(q, "%llu,%x,%x%n", &f, &a, &v, &used) != 3) break;
+            pokes[n_pokes++] = (Poke){f, a, (uint8_t)v};
+            q += used;
+            if (*q == ';') q++;
+        }
+    }
+    for (int i = 0; i < n_pokes; i++)
+        if (pokes[i].frame + 1 == ng.frames && pokes[i].addr >= 0x100000 && pokes[i].addr < 0x110000)
+            ng.ram[pokes[i].addr & 0xFFFF] = pokes[i].value;
+}
+
+/* PD_KILL_ENEMIES=maxlife[,from]: from that frame on, at every VBlank acknowledge (after its
+   fingerprint, the instant tools/mame/scripted_run.lua uses too: a frame's end can fall in the
+   middle of an object's creation, at different points in MAME and here), every object in the list
+   but the players and the vehicle whose life word is 1..maxlife gets the game's own death mark
+   (the damage routine's: life 0 and its dead bit). Metal Slug's fast-forward study; needs the
+   profile's object fields. */
+static void kill_enemies(void)
+{
+    static int max = -1;
+    static unsigned long long from;
+    if (max < 0) {
+        max = 0;
+        if (getenv("PD_KILL_ENEMIES")) sscanf(getenv("PD_KILL_ENEMIES"), "%d,%llu", &max, &from);
+    }
+    if (max && ng.frames >= from) ffwd_kill(max, 0, 0);
+}
+
+/* PD_FFWD=m,folder: Boss Rush's fast-forward (fastfwd.h) through mission m (1-based): each of the
+   profile's bosses in it found is printed and its state written to folder/boss<n>.st (n: its
+   place in the profile's Boss Rush, 1-based; PD_LOAD_STATE loads it). */
+static int fast_forward(const char *spec)
+{
+    int m = 0, first = -1, count = 0;
+    char dir[1000] = "";
+    if (sscanf(spec, "%d,%999[^\n]", &m, dir) == 2)
+        for (int i = 0; i < game_profile.n_rush_states; i++)
+            if (game_profile.rush_states[i].mission == m - 1) { if (first < 0) first = i; count++; }
+    if (first < 0) {
+        fprintf(stderr, "PD_FFWD: m,folder (m: a mission with Boss Rush bosses)\n");
+        return 2;
+    }
+    if (getenv("PD_FFWD_KILL")) ffwd_kill_max = atoi(getenv("PD_FFWD_KILL"));
+    /* PD_FFWD_BOT=right,left,jump,grenade,seed (research): the mission's bots changed */
+    static ProfileRushState bots[16];
+    const ProfileRushState *from = &game_profile.rush_states[first];
+    if (getenv("PD_FFWD_BOT") && count <= 16) {
+        int v[5];
+        if (sscanf(getenv("PD_FFWD_BOT"), "%d,%d,%d,%d,%d", &v[0], &v[1], &v[2], &v[3], &v[4]) == 5)
+            for (int i = 0; i < count; i++) {
+                bots[i] = from[i];
+                bots[i].right = (uint8_t)v[0]; bots[i].left = (uint8_t)v[1];
+                bots[i].jump = (uint8_t)v[2]; bots[i].grenade = (uint8_t)v[3]; bots[i].seed = (uint32_t)v[4];
+            }
+        from = bots;
+    }
+    ffwd_begin(from, count);
+    uint64_t t0 = SDL_GetTicksNS();
+    int st, found = 0;
+    do {
+        st = ffwd_run(100);
+        for (; found < ffwd_found(); found++) {
+            const ProfileRushState *r = &game_profile.rush_states[first + found];
+            size_t size;
+            FfCarry c;
+            const uint8_t *d = ffwd_state(found, &size, &c);
+            char path[1100];
+            snprintf(path, sizeof path, "%s/boss%d.st", dir, first + found + 1);
+            FILE *f = fopen(path, "wb");
+            if (f) { fwrite(d, 1, size, f); fclose(f); }
+            printf("ffwd %d (%s): boss at frame %llu, state %zu bytes; new game: lives %u bombs %u weapon %u\n",
+                   first + found + 1, game_profile.bosses[r->boss].name ? game_profile.bosses[r->boss].name : "boss",
+                   (unsigned long long)ng.frames, size, c.lives, c.bombs, c.weapon);
+        }
+    } while (st == FF_RUNNING);
+    if (st != FF_DONE) printf("ffwd %d: failed at frame %llu\n", first + found + 1, (unsigned long long)ng.frames);
+    printf("ffwd: %.1f s\n", (double)(SDL_GetTicksNS() - t0) / 1e9);
+    ffwd_end();
+    return st == FF_DONE ? 0 : 1;
+}
+
 /* A frame's inputs hold until another frame changes them. */
 static void inputs_apply(void)
 {
@@ -282,13 +400,26 @@ static void fingerprint_vblank(void)
             if (end == p) break;
             if (v == n_vblanks) {
                 char path[1200];
-                snprintf(path, sizeof path, "%s/ram_port_v%06llu.bin", getenv("PD_DUMP_DIR") ? getenv("PD_DUMP_DIR") : ".", v);
+                const char *dir = getenv("PD_DUMP_DIR") ? getenv("PD_DUMP_DIR") : ".";
+                snprintf(path, sizeof path, "%s/ram_port_v%06llu.bin", dir, v);
                 FILE *f = fopen(path, "wb");
                 if (f) { fwrite(ng.ram, 1, sizeof ng.ram, f); fclose(f); }
+                /* PD_DUMP_VRAM: also the LSPC VRAM (big-endian words), as fingerprints.lua does */
+                snprintf(path, sizeof path, "%s/vram_port_v%06llu.bin", dir, v);
+                if (getenv("PD_DUMP_VRAM") && (f = fopen(path, "wb"))) {
+                    for (size_t i = 0; i < sizeof ng.vram / 2; i++) { fputc(ng.vram[i] >> 8, f); fputc(ng.vram[i] & 0xFF, f); }
+                    fclose(f);
+                }
             }
             p = *end == ',' ? end + 1 : end;
         }
     }
+}
+
+static void vblank_hook(void)
+{
+    if (fingerprint_file) fingerprint_vblank();
+    kill_enemies();
 }
 
 static void fingerprint(FILE *f, unsigned long long label)
@@ -355,7 +486,7 @@ static void count_end_frame(void)
     count_frame = 0;
 }
 
-/* PD_WATCH_PC=hex[,first_frame]: logs every execution of that address (frame, return address,
+/* PD_WATCH_PC=hex[,first_frame]: logs every execution of that address (frame, cycle, return address,
    D0-D7, A0-A6) to stdout, all through the interpreter (research). */
 static uint32_t watch_pc;
 static unsigned long long watch_from;
@@ -364,7 +495,7 @@ static void watch_instr(const Cpu68k *c)
 {
     if (c->pc != watch_pc || ng.frames < watch_from) return;
     uint32_t sp = c->a[7];
-    printf("W f=%llu ret=%06X", (unsigned long long)ng.frames, bus_r32(sp));
+    printf("W f=%llu c=%lld ret=%06X", (unsigned long long)ng.frames, (long long)c->cycles, bus_r32(sp));
     for (int i = 0; i < 8; i++) printf(" D%d=%08X", i, c->d[i]);
     for (int i = 0; i < 7; i++) printf(" A%d=%08X", i, c->a[i]);
     printf(" [A0]=");
@@ -536,21 +667,31 @@ static int sound_catalog(const Options *o)
     return 0;
 }
 
-/* Audio energy over n frames of the sound menu (mean of |sample|). */
+/* Audio energy over n frames of the sound menu: the mean of |sample - the samples' mean| (Metal
+   Slug 5's mixer leaves a constant level, which is not sound). */
 static double sounds_energy(int n)
 {
     int16_t b[4096 * 2];
+    int16_t *all = NULL;
     double sum = 0;
-    long count = 0;
+    long count = 0, cap = 0;
     for (int i = 0; i < n; i++) {
         sounds_frame();
         uint32_t k;
         while ((k = ng_audio_read(b, 4096)) > 0) {
-            for (uint32_t j = 0; j < 2 * k; j++) sum += b[j] < 0 ? -b[j] : b[j];
-            count += (long)(2 * k);
+            if (count + 2 * (long)k > cap) {
+                cap = (count + 2 * (long)k) * 2;
+                int16_t *p = realloc(all, (size_t)cap * sizeof *all);
+                if (!p) { free(all); return 0; }
+                all = p;
+            }
+            for (uint32_t j = 0; j < 2 * k; j++) { sum += b[j]; all[count++] = b[j]; }
         }
     }
-    return count ? sum / count : 0;
+    double mean = count ? sum / count : 0, dev = 0;
+    for (long j = 0; j < count; j++) dev += fabs(all[j] - mean);
+    free(all);
+    return count ? dev / count : 0;
 }
 
 static int test_sounds(const Options *o)
@@ -564,7 +705,10 @@ static int test_sounds(const Options *o)
     ng_state_load(before, size);
 
     sounds_show();
-    double silence = sounds_energy(10);              /* after 03 03 06: the game goes quiet */
+    /* The silence commands go one per frame: the game goes quiet once they are sent (Metal Slug
+       4's driver only stops the music when its whole sequence has arrived). */
+    sounds_energy(game_profile.n_sound_stop ? game_profile.n_sound_stop : 3);
+    double silence = sounds_energy(10);
     sounds_navigate(1);                               /* Music: second entry (Mission 1) */
     sounds_navigate(4);
     double music = sounds_energy(300);
@@ -597,29 +741,147 @@ int headless_prepare(const Options *o)
 
 int headless_run(const Options *o)
 {
-    if (o->blood)
-        ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){1, PROFILE_BLOOD_WORD, PROFILE_BLOOD_MASK, 0x0001, 0, 0};
+    if (o->blood || getenv("PD_BLOOD"))           /* PD_BLOOD: the MAME runs' variable (mame_run.py) */
+        ng_forced_read[NG_FORCED_BLOOD] = (NgForcedRead){1, game_profile.blood_word, game_profile.blood_mask,
+                                                         (uint16_t)(game_profile.blood_mask & 0x0101), 0, 0};
     /* Debug mode (cheats.h): PD_DIPS=hex forces debug dips, PD_DEVMODE the developer mode. */
     if (getenv("PD_DIPS")) cheats_dips = (uint16_t)strtoul(getenv("PD_DIPS"), NULL, 16);
     if (getenv("PD_DEVMODE")) cheats_devmode = 1;
+    if (getenv("PD_START_MISSION")) cheats_start_mission = atoi(getenv("PD_START_MISSION")) - 1;   /* 1 = normal */
+    /* PD_MISSION_ONCE=n: Mission mode's start (window.c fe_mission_start), mission n (1 = first);
+       with the PLAY MANUAL known, its direct start from the end of the boot (the script brings
+       the coin and START) */
+    if (getenv("PD_MISSION_ONCE")) {
+        cheats_start_mission_once = atoi(getenv("PD_MISSION_ONCE")) - 1;
+        if (game_profile.manual_word) cheats_mission_from = game_profile.boot_frames;
+    }
+    /* PD_BOSSRUSH=1: Boss Rush from the first new game (bossrush.c); its steps are printed. Saved
+       states (Metal Slug): in PD_BOSSRUSH_DIR (default: PD_PREF's bossrush folder), made first if
+       missing. */
+    if (getenv("PD_BOSSRUSH")) {
+        char d[1100];
+        if (getenv("PD_BOSSRUSH_DIR")) snprintf(d, sizeof d, "%s", getenv("PD_BOSSRUSH_DIR"));
+        else snprintf(d, sizeof d, "%sbossrush/", getenv("PD_PREF") ? getenv("PD_PREF") : "");
+        bossrush_set_dir(d);
+        if (bossrush_needs_prepare()) {
+            Uint64 t = SDL_GetTicksNS();
+            int r, shown = -1;
+            bossrush_prepare_begin();
+            while ((r = bossrush_prepare_step(100)) == 0)
+                if (bossrush_prepare_boss() != shown) {
+                    shown = bossrush_prepare_boss();
+                    printf("bossrush: preparing boss %d/%d\n", shown + 1, bossrush_total());
+                }
+            printf("bossrush: %s in %.1f s\n", r > 0 ? "prepared" : "preparation failed", (double)(SDL_GetTicksNS() - t) / 1e9);
+            if (r < 0) return 1;
+        }
+        if (getenv("PD_BOSSRUSH_FROM")) bossrush_first = atoi(getenv("PD_BOSSRUSH_FROM")) - 1;   /* tests: 1-based */
+        if (!bossrush_start()) { fprintf(stderr, "PD_BOSSRUSH: not started\n"); return 1; }
+    }
     cheats_apply();
+    if (getenv("PD_FFWD")) return fast_forward(getenv("PD_FFWD"));
+    /* PD_LOAD_STATE=file: start from a saved state (PD_SAVE_STATE, PD_FFWD) instead of power-on. */
+    if (getenv("PD_LOAD_STATE")) {
+        size_t size;
+        void *d = SDL_LoadFile(getenv("PD_LOAD_STATE"), &size);
+        int bad = !d || ng_state_load(d, size) != 0;
+        SDL_free(d);
+        if (bad) { fprintf(stderr, "PD_LOAD_STATE: %s is not a state of this version\n", getenv("PD_LOAD_STATE")); return 2; }
+    }
     if (o->script && script_load(o->script) != 0) return 2;
     if (o->inputs && inputs_load(o->inputs) != 0) return 2;
     instr_trace_init();
+    /* PD_PROGRESS=file: mission mode progress kept there (progress.c), unlocks printed. */
+    const char *progress_file = getenv("PD_PROGRESS");
+    if (progress_file) progress_load(progress_file);
+    /* PD_RECORDS=file: records kept there (records.c), completed missions printed. */
+    const char *records_file = getenv("PD_RECORDS");
+    if (records_file) records_load(records_file);
+    if (getenv("PD_SPAWN_POKES")) cheats_spawn_log = fopen(getenv("PD_SPAWN_POKES"), "w");
+    if (getenv("PD_WATCH_W")) ng_watch_write = (uint32_t)strtoul(getenv("PD_WATCH_W"), NULL, 16) & 0xFFFFFE;
     if (getenv("PD_TRACE_READS")) {
         ng_trace_reads = fopen(getenv("PD_TRACE_READS"), "w");
         if (!ng_trace_io) { ng_trace_from = 0; ng_trace_to = INT64_MAX; }
     }
     FILE *fingerprints = o->fingerprints ? fopen(o->fingerprints, "w") : NULL;
-    if (fingerprints) { fingerprint_file = fingerprints; ng_on_vblank_ack = fingerprint_vblank; }
+    if (fingerprints) fingerprint_file = fingerprints;
+    if (fingerprints || getenv("PD_KILL_ENEMIES")) ng_on_vblank_ack = vblank_hook;
     Uint64 t0 = SDL_GetTicksNS();
     for (long n = 0; n < o->frames; n++) {
         if (o->inputs) inputs_apply();
         else script_apply();
+        /* PD_BOSSRUSH_KILL (tests): without a script, player 1 plays a plain bot (mostly right,
+           firing, jumping) that reaches each boss and walks out of each mission */
+        if (!o->script && !o->inputs && getenv("PD_BOSSRUSH_KILL")) {
+            uint64_t k = ng.frames % 240;
+            ng.joy[0] = (uint8_t)((k < 200 ? NG_RIGHT : k >= 215 && k <= 235 ? NG_LEFT : 0) | (k % 6 <= 2 ? NG_A : 0) |
+                                  ((k >= 40 && k <= 47) || (k >= 130 && k <= 137) ? NG_B : 0));
+        }
         cheats_test();
         cheats_input(&ng.joy[0], &ng.system[0]);
         ng_run_frame();
+        pokes_apply();
+        int once = cheats_start_mission_once;
         cheats_frame();
+        if (once >= 0 && cheats_start_mission_once < 0)       /* PD_MISSION_ONCE: the mission written */
+            printf("start mission %d written at frame %llu\n", once + 1, (unsigned long long)ng.frames - 1);
+        if (progress_file) {
+            int m = progress_frame();
+            if (m) printf("mission %d unlocked at frame %llu\n", m, (unsigned long long)ng.frames - 1);
+            if (progress_take_completed()) printf("game completed at frame %llu\n", (unsigned long long)ng.frames - 1);
+        }
+        /* PD_SAVE_STATE=frame,file: the machine's state when that frame ends (window checks load
+           it with PD_LOAD_STATE). */
+        if (getenv("PD_SAVE_STATE")) {
+            unsigned long long at;
+            char path[1024];
+            if (sscanf(getenv("PD_SAVE_STATE"), "%llu,%1023[^\n]", &at, path) == 2 && ng.frames - 1 == at) {
+                size_t size;
+                uint8_t *st = ng_state_save(&size);
+                FILE *sf = st ? fopen(path, "wb") : NULL;
+                if (sf) { fwrite(st, 1, size, sf); fclose(sf); }
+                free(st);
+            }
+        }
+        if (getenv("PD_BOSSRUSH")) {
+            /* PD_BOSSRUSH_KILL=n (saved states, tests): each boss dies n frames after the last
+               step, and player 1 keeps 9 lives */
+            static uint64_t since;
+            if (getenv("PD_BOSSRUSH_KILL") && bossrush_active()) {
+                if (++since >= (uint64_t)atoi(getenv("PD_BOSSRUSH_KILL"))) bossrush_test_defeat();
+                if (since % 300 == 0) cheats_set_lives(0, 9);
+            }
+            int r = bossrush_frame();
+            if (r) since = 0;
+            if (r) printf("bossrush %llu: %s, %d/%d bosses defeated\n", (unsigned long long)ng.frames - 1,
+                          r == BR_CLEARED ? "cleared" : "next boss", bossrush_defeated(), bossrush_total());
+            if (r == BR_NEXT && game_profile.n_rush_states) {          /* saved states: the values carried */
+                FfCarry c;
+                ffwd_carry_read(&c);
+                printf("bossrush: mission %d, score %02X%02X%02X%02X, lives %u, bombs %u, weapon %u\n",
+                       ng.ram[game_profile.mission_now & 0xFFFF] + 1, c.score[0], c.score[1], c.score[2], c.score[3],
+                       c.lives, c.bombs, c.weapon);
+            }
+        }
+        /* PD_BOSSBAR=1: the health bar's changes (bossbar.c), printed with their frame. */
+        if (getenv("PD_BOSSBAR")) {
+            static char last[96];
+            bossbar_frame();
+            const char *s = bossbar_describe();
+            if (strcmp(s, last)) {
+                printf("bossbar %llu: %s\n", (unsigned long long)ng.frames - 1, s[0] ? s : "hidden");
+                snprintf(last, sizeof last, "%s", s);
+            }
+        }
+        RecordEvent rec;
+        if (records_file && records_frame(&rec)) {
+            char t[32];
+            records_time_text(rec.frames, t, sizeof t);
+            printf("mission %d completed at frame %llu: %u frames (%s), score %u%s%s%s\n", rec.mission,
+                   (unsigned long long)ng.frames - 1, (unsigned)rec.frames, t, (unsigned)rec.score,
+                   rec.clean ? "" : rec.turbo ? " (not clean: slowdown off)" : " (not clean)", rec.new_time ? ", new best time" : "",
+                   rec.new_score ? ", new best score" : "");
+        }
         count_end_frame();
         dump_sprites();
         capture_sprites();
@@ -640,6 +902,9 @@ int headless_run(const Options *o)
             snprintf(path, sizeof path, "%s/port_%06llu.bmp", o->output ? o->output : ".", label);
             if (save_bmp(path) != 0) fprintf(stderr, "Could not write %s\n", path);
         }
+        /* PD_RUNAHEAD=n: run-ahead after every frame, as the window does (the real frames must not
+           change: mslug3_start_runahead_vs_mame) */
+        if (getenv("PD_RUNAHEAD")) runahead_frames(atoi(getenv("PD_RUNAHEAD")));
     }
     double s = (double)(SDL_GetTicksNS() - t0) / 1e9;
     printf("frames: %llu in %.2f s (%.0f frames/s)  recompiled steps: %llu  interpreted: %llu\n",

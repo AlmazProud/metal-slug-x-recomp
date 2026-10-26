@@ -188,6 +188,19 @@ static inline uint8_t sprite_pixel(uint32_t code, int row, int col)
     return (col & 1) ? (*t >> 4) : (*t & 0x0F);
 }
 
+/* Tile numbers wrap at the number of tiles rounded up to a power of two (at most 0x80000). */
+static inline uint32_t tile_mask(void)
+{
+    static uint32_t for_tiles, mask;
+    if (for_tiles != ng_roms.n_tiles) {
+        uint32_t m = 1;
+        while (m < ng_roms.n_tiles && m < 0x80000u) m <<= 1;
+        for_tiles = ng_roms.n_tiles;
+        mask = m - 1;
+    }
+    return mask;
+}
+
 static void draw_list(uint32_t *buf, const uint32_t *pens, int line, const uint16_t *list, int last);
 
 static void draw_sprites(uint32_t *buf, const uint32_t *pens, int line)
@@ -246,7 +259,10 @@ static void draw_list(uint32_t *buf, const uint32_t *pens, int line, const uint1
             else if (attr & 0x04) code = (code & ~3u) | (ng.anim_counter & 3);
         }
         if (attr & 0x02) tile_row ^= 0x0F;            /* vertical flip */
-        code &= 0x7FFFF;                              /* 64 MB addressable */
+        /* The tile number wraps at the sprite ROM's size rounded up to a power of two (Metal Slug's
+           16 MB: the BIOS boot shows sprites with tile numbers past the end, drawn as MAME does,
+           docs/PHASE2_HARDWARE.md); between the end and that size, transparent. 64 MB at most. */
+        code &= tile_mask();
         if (code >= ng_roms.n_tiles) continue;        /* outside the ROM: transparent */
 
         if (ng_dbg.active) {                          /* sprite box (debug mode) */
@@ -278,13 +294,32 @@ static void draw_list(uint32_t *buf, const uint32_t *pens, int line, const uint1
 }
 
 /* ------------------------------------------------------------------ fix layer */
+/* NG_FIX_BANK_ROWS: bank of the tile row `row`. The game keeps a list of (0x0200, 0xFFnn) word
+ * pairs at VRAM 0x7500/0x7580 + 2k; walking the rows from the top, each marker found sets the
+ * bank (nn & 3, inverted) of its row and the following ones. Rows are counted from the first
+ * visible one (row 2). */
+static uint32_t fix_row_bank(int row)
+{
+    int bank = 0, y = 0, target = (row - 2) & 31;
+    for (int k = 0; y <= target; k += 2) {
+        if (ng.vram[0x7500 + k] == 0x0200 && (ng.vram[0x7580 + k] & 0xFF00) == 0xFF00) {
+            bank = ng.vram[0x7580 + k] & 3;
+            if (y++ == target) break;
+        }
+        y++;
+    }
+    return (uint32_t)(bank ^ 3) << 12;
+}
+
 static void draw_fix(uint32_t *buf, const uint32_t *pens, int line)
 {
     const uint8_t *gfx = ng.cart_fix ? ng_roms.fix_game : ng_roms.fix_bios;
+    uint32_t tiles = ng.cart_fix ? ng_roms.fix_game_size / 32 : 0x1000;
     int row = line >> 3, sub = line & 7;
+    uint32_t bank = ng.cart_fix && tiles > 0x1000 && ng_game->fix_bank == NG_FIX_BANK_ROWS ? fix_row_bank(row) : 0;
     for (int col = 0; col < 40; col++) {
         uint16_t v = ng.vram[0x7000 | (col << 5) | (row & 0x1F)];
-        uint32_t code = v & 0x0FFF;
+        uint32_t code = ((v & 0x0FFF) + bank) & (tiles - 1);
         const uint32_t *p = pens + ((v >> 12) << 4);
         const uint8_t *t = gfx + code * 32 + sub * 4;
         for (int k = 0; k < 4; k++) {

@@ -37,7 +37,8 @@ def capstone_name(i) -> str:
 
 
 def main() -> int:
-    raw = (ROOT / "roms" / "mslugx_game_m68k").read_bytes()[:1 << 20]
+    game = sys.argv[1] if len(sys.argv) > 1 else "mslug3"          # DotEmu prefix
+    raw = (ROOT / "roms" / f"{game}_game_m68k").read_bytes()[:1 << 20]
     cpu = bytearray(len(raw))
     cpu[0::2], cpu[1::2] = raw[1::2], raw[0::2]
     read16 = lambda a: int.from_bytes(cpu[a:a + 2], "big") if a + 2 <= len(cpu) else 0  # noqa: E731

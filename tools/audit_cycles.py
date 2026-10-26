@@ -34,6 +34,7 @@ def is_dynamic(txt: str) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--roms", type=Path, required=True)
+    ap.add_argument("--game", default="mslug3", help="DotEmu file prefix (mslug3, mslugx)")
     ap.add_argument("--cycles", type=Path, required=True)
     ap.add_argument("traces", type=Path, nargs="+")
     a = ap.parse_args()
@@ -43,7 +44,7 @@ def main() -> int:
         d[0::2], d[1::2] = d[1::2], d[0::2]
         return bytes(d)
 
-    p, bios = view("mslugx_game_m68k"), view("mslugx_bios_m68k")
+    p, bios = view(f"{a.game}_game_m68k"), view(f"{a.game}_bios_m68k")
     table = a.cycles.read_bytes()
 
     def opcode(pc: int) -> int | None:

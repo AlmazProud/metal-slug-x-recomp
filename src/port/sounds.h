@@ -5,18 +5,13 @@
 #include <SDL3/SDL.h>
 #include <stdint.h>
 
-/* Metal Slug X sound driver: a mode command (00 music, 10 effects, 11 voices) stays active and
- * the next command is interpreted in that mode. 03 resets the driver. */
+#include "profile.h"
+
+/* Metal Slug sound driver (Metal Slug X; to be checked for each game): a mode command (00 music,
+ * 10 effects, 11 voices) stays active and the next command is interpreted in that mode. 03 resets
+ * the driver. The built-in names are the game profile's (game_profile.sounds). */
 enum { MODE_MUSIC = 0x00, MODE_EFFECTS = 0x10, MODE_VOICES = 0x11 };
 
-typedef struct {
-    uint8_t mode, command;
-    uint16_t tenths;                    /* duration; 0xFFFF = looping */
-    const char *name;
-} Sound;
-
-extern const Sound PROFILE_SOUNDS[];    /* profile_sounds.c (generated) */
-extern const int PROFILE_SOUND_COUNT;
 
 /* ------------------------------------------------------------------ sound menu */
 /* window: for typing names; path: the user's sound names and rumble file (sounds.ini). */

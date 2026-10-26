@@ -41,6 +41,8 @@ void ym_reset(void)
 	chip.reset();
 }
 
+void ym_ssg_clock(uint32_t count) { chip.ssg_clock(count); }
+
 uint8_t ym_read(uint32_t offset) { return chip.read(offset & 3); }
 void ym_write(uint32_t offset, uint8_t data) { chip.write(offset & 3, data); }
 void ym_timer_expired(uint32_t n) { iface.expired(n); }

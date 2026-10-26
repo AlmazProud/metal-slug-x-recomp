@@ -21,6 +21,18 @@
  *     instruction and is synchronised with the E clock (period 10, MAME m68000.cpp vpa_sync);
  *     then 35 more cycles follow. Total = 10 + E wait + 35 (48 to 58 cycles, not the nominal 44).
  *
+ * Watchdog reset (Metal Slug 3's first boot ends with one): MAME's timing afterwards shifts
+ * against the 68000 in a way the hardware would not.
+ *   - The 68000 restarts from the expiry, not from the end of the instruction that crossed
+ *     it, and its cycle count (the E clock phase) starts over 2 cycles before the expiry: the
+ *     first instruction starts 32 cycles after it and is counted as cycle 34.
+ *   - The line starts (drawing and sprite lists; also the beam position MAME reports) come
+ *     1 cycle earlier relative to the 68000, while the VBlank IRQ and the vertical counter
+ *     the game reads do not move (ng.video_offset).
+ * Measured, not derived: cycle traces (tools/mame/cycles.lua), the beam position in MAME's
+ * debugger trace (beamx/beamy) and the attract mode's 10 616 VBlanks and 10 002 images,
+ * identical to MAME only with both.
+ *
  * Frame phase: at power-on the beam is at the start of VBlank (vpos 240), as in MAME; the I/O
  * trace confirms it (tools/mame/trace_io.lua): with the origin at vpos 0 all the writes
  * synchronised with VBlank arrived 24 lines (1536 us) earlier than in MAME. That is why the
@@ -58,10 +70,11 @@ static int64_t irq_since[4];               /* cycle at which each level was rais
 static int vblank_done, reload_done;
 int ng_reset_cycles = 34;              /* MAME: the first instruction starts at cycle 34 */
 
-/* Cycles of the entry to an interrupt that starts at the end of the instruction at s. */
+/* Cycles of the entry to an interrupt that starts at the end of the instruction at s. The E
+   clock phase counts from the last 68000 reset (MAME restarts the cycle count). */
 static int irq_entry_cycles(int64_t s)
 {
-    int64_t t = s + 10;                         /* acknowledge cycle (IACK) */
+    int64_t t = s + 10 - ng.eclock_origin;      /* acknowledge cycle (IACK) */
     int m = (int)(t % 10);
     int wait = m < 7 ? 10 - m : 20 - m;         /* up to the next usable E clock edge */
     return 10 + wait + 35;
@@ -76,6 +89,7 @@ static void reset_cpu(void)
 {
     Cpu68k *c = &ng_cpu;
     int64_t cycles = c->cycles;
+    ng.eclock_origin = cycles;
     memset(c, 0, sizeof *c);
     c->cycles = cycles;
     c->s = 1;
@@ -92,10 +106,12 @@ static void watchdog_reset(void)
     ng.watchdog_resets++;
     fprintf(stderr, "watchdog: machine reset (frame %llu, PC %06X)\n",
             (unsigned long long)ng.frames, ng_cpu.pc);
+    ng_cpu.cycles = ng.watchdog - 2;     /* MAME's restart point (see the top of the file) */
     ng_bus_init();
-    ng_sound_init();             /* the watchdog reset affects the whole machine */
+    ng_sound_reset();            /* the watchdog reset affects the whole machine */
     ng.irq2_control = 0;
     ng.irq2_when = -1;
+    ng.video_offset = -1;
     reset_cpu();
 }
 
@@ -119,7 +135,7 @@ void ng_power_on(void)
 /* Next scheduled event (absolute cycle). */
 static int64_t next_event(void)
 {
-    int64_t t = ng.frame_start + (int64_t)ng.line * NG_CYCLES_PER_LINE;
+    int64_t t = ng.frame_start + ng.video_offset + (int64_t)ng.line * NG_CYCLES_PER_LINE;
     if (!vblank_done && ng.frame_start + T_VBLANK < t) t = ng.frame_start + T_VBLANK;
     if (!reload_done && ng.frame_start + T_RELOAD < t) t = ng.frame_start + T_RELOAD;
     if (ng.irq2_when >= 0 && ng.irq2_when < t) t = ng.irq2_when;
@@ -165,7 +181,7 @@ static int process_event(int64_t now)
     }
     /* line start (if it is not yet time for the line, the event was a YM2610 timer, already
        handled by ng_sound_until) */
-    if (ng.frame_start + (int64_t)ng.line * NG_CYCLES_PER_LINE > now) return 0;
+    if (ng.frame_start + ng.video_offset + (int64_t)ng.line * NG_CYCLES_PER_LINE > now) return 0;
     if (ng.line == NG_LINES) {
         ng.frame_start += NG_CYCLES_PER_FRAME;
         ng.line = 0;

@@ -9,8 +9,12 @@ history: every file of every commit (all branches) must be text of an allowed ki
   literals (encoded data).
 release: the zip may only hold the expected files, and its executable must have been built
   without the recompiled program.
-Both: no run of varied bytes copied from the user's ROM files (--roms or PD_ROMS; skipped if
-  absent) may appear in any file. The search is exhaustive (RomIndex): it catches about 95 % of
+Both: no run of varied bytes copied from the user's ROM files may appear in any file. The folders
+  searched are --roms (repeatable) or, by default, PD_ROMS plus the ROM folders of the other Metal
+  Slug workspaces next to this one (Metal Slug X, 3, 4 and 5: their code is built here as
+  regression targets); --own searches PD_ROMS only. Every file under each folder and every member
+  of its zips is read, so the GOG copy, the BIOS, the MAME set rebuilt from GOG and any region
+  dumped from MAME are all searched. The search is exhaustive (RomIndex): it catches about 95 % of
   32-byte copies and practically every longer one.
 
 Exit code 0 = clean. This script contains no ROM data; it reads the user's copy to compare.
@@ -32,9 +36,46 @@ LIMIT = 1 << 20
 HEX_RUN = re.compile(rb"[0-9A-Fa-f]{129,}")                 # longer than a SHA-512 in hex
 BASE64_RUN = re.compile(rb"[A-Za-z0-9+/]{200,}={0,2}")
 BYTE_ARRAY = re.compile(rb"(?:0x[0-9A-Fa-f]{2}\s*,\s*){64,}")
-RELEASE_FILES = {"mslugx.exe", "SDL3.dll", "LICENSE.txt", "README.txt", "THIRD_PARTY.md",
+RELEASE_FILES = {"mslug.exe", "SDL3.dll", "LICENSE.txt", "README.txt", "THIRD_PARTY.md",
                  "licenses/SDL3.txt", "licenses/Musashi.txt", "licenses/ymfm.txt",
-                 "licenses/chips-z80.txt", "game/PUT_YOUR_GAME_HERE.txt"}
+                 "licenses/chips-z80.txt", "licenses/stb_truetype.txt", "licenses/OFL-BlackOpsOne.txt",
+                 "licenses/OFL-ChakraPetch.txt", "game/PUT_YOUR_GAME_HERE.txt"}
+# Byte arrays allowed outside external/, one by one, each with its reason (checked by the ROM
+# search like every other file):
+BYTE_ARRAY_OK = {
+    # The CMC42 sprite encryption's key tables (the cipher's parameters, learned from MAME as a
+    # black box with synthetic patterns, the Metal Slug 3 port's docs/PHASE5_LOADER.md): no game
+    # data. They let the Metal Slug 3 regression target load MAME's encrypted set; kept by the
+    # user's decision in that port (Phase 6). They arrive with the import (Phase 1).
+    "src/games/mslug3/cmc_tables.h",
+    # Metal Slug 5's decryption key tables (NEO-PVC, PCM2, CMC50 and the M1's, learned from MAME as
+    # a black box with synthetic patterns, the Metal Slug 5 port's docs/PHASE5_LOADER.md): no game
+    # data. They let the Metal Slug 5 regression target load MAME's encrypted set; kept by the
+    # user's decision in that port (Phase 5, 2026-10-18). They arrive with the import (Phase 1).
+    "src/games/mslug5/crypt_tables.h",
+    # Metal Slug 4's decryption key tables (PCM2, CMC50 and the M1's, learned from MAME as a black
+    # box with synthetic patterns, the Metal Slug 4 port's docs/PHASE5_LOADER.md): no game data.
+    # They let the Metal Slug 4 regression target load MAME's encrypted set; authorized by the user
+    # in that port (Phase 5, 2026-10-24). They arrive with the import (Phase 1).
+    "src/games/mslug4/crypt_tables.h",
+}
+# The other workspaces' ROM folders, relative to this workspace's parent (C:\Projecto Decompile).
+OTHER_ROMS = ["roms", "MS3_Port/roms", "MS4_Port/roms", "MS5_Port/roms"]
+
+
+def rom_files(roms: Path):
+    """(name, bytes) of every file under the ROM folder, subfolders included (the BIOS in
+    neogeo/, MAME's decrypted regions), and of every member of the zips there (the MAME set)."""
+    for f in sorted(p for p in roms.rglob("*") if p.is_file()):
+        if f.name.upper().startswith("MANIFEST"):
+            continue
+        if zipfile.is_zipfile(f):
+            with zipfile.ZipFile(f) as z:
+                for n in sorted(z.namelist()):
+                    if not n.endswith("/"):
+                        yield f"{f.name}/{n}", z.read(n)
+        else:
+            yield str(f.relative_to(roms)), f.read_bytes()
 
 
 class RomIndex:
@@ -46,15 +87,13 @@ class RomIndex:
 
     MIX = 0x9E3779B97F4A7C15
 
-    def __init__(self, roms: Path | None):
+    def __init__(self, folders: list[Path]):
         import numpy as np
         self.np = np
         self.keys = None
-        if not roms or not roms.is_dir():
-            return
         parts = []
-        for f in sorted(p for p in roms.iterdir() if p.is_file() and not p.name.upper().startswith("MANIFEST")):
-            d = np.frombuffer(f.read_bytes(), np.uint8)
+        for _, data in (r for roms in folders if roms.is_dir() for r in rom_files(roms)):
+            d = np.frombuffer(data, np.uint8)
             blocks = d[:len(d) // 8 * 8].reshape(-1, 8)
             if len(blocks) < 2:
                 continue
@@ -78,7 +117,7 @@ class RomIndex:
                     kinds = 1 + (dv[:, 1:] != dv[:, :-1]).sum(axis=1)
                     keep &= kinds > 2 if width == 2 else kinds > 1
             w = np.ascontiguousarray(blocks).view("<u8").ravel()
-            parts.append(self.mix(w[:-1], w[1:])[keep])
+            parts.append(np.unique(self.mix(w[:-1], w[1:])[keep]))   # unique per file: less memory
         self.keys = np.unique(np.concatenate(parts)) if parts else None
 
     def fmix(self, x):
@@ -150,8 +189,8 @@ def audit_history(pieces) -> list[str]:
         if b"\0" in data:
             problems.append(f"{path}: binary content (NUL bytes)")
         for rx, what in ((HEX_RUN, "hex"), (BASE64_RUN, "base64"), (BYTE_ARRAY, "byte array")):
-            if rx is BYTE_ARRAY and path.startswith("external/"):
-                continue                # upstream libraries' own opcode / cycle tables
+            if rx is BYTE_ARRAY and (path.startswith("external/") or path in BYTE_ARRAY_OK):
+                continue                # upstream libraries' own tables; BYTE_ARRAY_OK
             m = rx.search(data)
             if m:
                 problems.append(f"{path}: long {what} run at offset {m.start()}")
@@ -175,7 +214,7 @@ def audit_release(zip_path: Path, pieces) -> list[str]:
             if not n.endswith("/"):
                 data = z.read(n)
                 find_pieces(data, pieces, n, problems)
-                if n.endswith("mslugx.exe") and len(data) > 4 * LIMIT:
+                if n.endswith("mslug.exe") and len(data) > 4 * LIMIT:
                     problems.append(f"{n}: {len(data)} bytes, too big for the interpreter-only build")
     print(f"release: {len(names)} files, ROM search {'on' if pieces else 'skipped'}")
     return problems
@@ -185,9 +224,20 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("what", choices=["history", "release"])
     ap.add_argument("zip", nargs="?", type=Path)
-    ap.add_argument("--roms", type=Path, default=Path(os.environ["PD_ROMS"]) if os.environ.get("PD_ROMS") else None)
+    ap.add_argument("--roms", type=Path, action="append", help="ROM folder to search (repeatable)")
+    ap.add_argument("--own", action="store_true", help="search PD_ROMS only, not the other workspaces")
     a = ap.parse_args()
-    pieces = RomIndex(a.roms)
+    folders = a.roms or []
+    if not folders:
+        if os.environ.get("PD_ROMS"):
+            folders.append(Path(os.environ["PD_ROMS"]))
+        if not a.own:
+            parent = REPO.parents[1]
+            folders += [parent / r for r in OTHER_ROMS]
+    folders = [f for f in folders if f.is_dir()]
+    for f in folders:
+        print(f"ROM folder: {f}")
+    pieces = RomIndex(folders)
     if not pieces:
         print("warning: no ROM folder (--roms / PD_ROMS): the byte search is skipped")
     if a.what == "history":

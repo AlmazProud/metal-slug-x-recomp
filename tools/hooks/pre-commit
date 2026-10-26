@@ -1,6 +1,8 @@
 #!/bin/sh
 # Enforces rule 1: see tools/check_commit.py
+# Python: the workspace's tools\ or, if absent, the shared ..\tools (C:\Projecto Decompile\tools).
 top="$(git rev-parse --show-toplevel)"
 py="$top/../tools/python/python.exe"
+[ -x "$py" ] || py="$top/../../tools/python/python.exe"
 [ -x "$py" ] || py=python
 exec "$py" -I "$top/tools/check_commit.py"

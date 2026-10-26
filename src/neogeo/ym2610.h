@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 void ym_reset(void);
+void ym_ssg_clock(uint32_t count);                 /* SSG engine only, no output (PORT CHANGE) */
 uint8_t ym_read(uint32_t offset);                 /* offset 0-3 (Z80 ports 4-7) */
 void ym_write(uint32_t offset, uint8_t data);
 void ym_generate(int32_t output[3]);               /* one sample: FM left, FM right, SSG */

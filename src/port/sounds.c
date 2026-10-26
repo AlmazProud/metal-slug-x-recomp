@@ -11,7 +11,7 @@
  *
  * Rumble: the game does not report explosions, but it does send a sound command for each one.
  * The driver mode is tracked and the sound's rumble is requested: the user's choice or, if none,
- * the one from the table of identified effects (docs/PHASE6_REMASTER.md). Within a frame the
+ * the one from the game profile's table of identified effects (game_profile.rumble). Within a frame the
  * strongest wins, and a stronger one in progress is not cut short.
  */
 #include "sounds.h"
@@ -30,15 +30,48 @@ static const char *const VIB_NAME[VIB_COUNT] = {"off", "light", "medium", "stron
 /* Old (Spanish) names, still accepted when loading. */
 static const char *const VIB_NAME_OLD[VIB_COUNT] = {"no", "leve", "media", "fuerte"};
 
+/* The driver's modes and silence commands: the game profile's, or Metal Slug X and 3's. */
+#define MAX_MODES 4
+static const SoundMode CLASSIC_MODES[3] = {{MODE_MUSIC, SOUND_MUSIC}, {MODE_EFFECTS, SOUND_EFFECTS}, {MODE_VOICES, SOUND_VOICES}};
+static const uint8_t CLASSIC_STOP[3] = {0x03, 0x03, 0x06};
+
+static const SoundMode *modes(int *n)
+{
+    if (game_profile.n_sound_modes) {
+        *n = game_profile.n_sound_modes > MAX_MODES ? MAX_MODES : game_profile.n_sound_modes;
+        return game_profile.sound_modes;
+    }
+    *n = 3;
+    return CLASSIC_MODES;
+}
+
+static const uint8_t *stop_commands(int *n)
+{
+    if (game_profile.n_sound_stop) { *n = game_profile.n_sound_stop; return game_profile.sound_stop; }
+    *n = 3;
+    return CLASSIC_STOP;
+}
+
 static int mode_index(uint8_t mode)
 {
-    return mode == MODE_MUSIC ? 0 : mode == MODE_EFFECTS ? 1 : mode == MODE_VOICES ? 2 : -1;
+    int n;
+    const SoundMode *s = modes(&n);
+    for (int i = 0; i < n; i++)
+        if (s[i].mode == mode) return i;
+    return -1;
+}
+
+/* The menu tab of a mode (SOUND_*), -1 if it is not a driver mode. */
+static int mode_category(uint8_t mode)
+{
+    int n, i = mode_index(mode);
+    return i < 0 ? -1 : modes(&n)[i].category;
 }
 
 static struct {
     char path[1100];
-    char *name[3][256];                /* user names (NULL = the profile's) */
-    int8_t vib[3][256];                  /* user VIB_* (VIB_AUTO = the table's) */
+    char *name[MAX_MODES][256];        /* user names (NULL = the profile's) */
+    int8_t vib[MAX_MODES][256];          /* user VIB_* (VIB_AUTO = the table's) */
 } u;
 
 /* Our own copies: SDL_strdup allocates with the SDL3.dll allocator, and freeing them with free()
@@ -55,16 +88,18 @@ static void user_save(void)
 {
     FILE *f = fopen(u.path, "w");
     if (!f) return;
-    static const uint8_t MODE[3] = {MODE_MUSIC, MODE_EFFECTS, MODE_VOICES};
-    fprintf(f, "; Metal Slug X sound names and rumble (written by the sound menu).\n"
-               "; Key: mode (00 music, 10 effects, 11 voices) and command, in hexadecimal.\n\n[names]\n");
-    for (int m = 0; m < 3; m++)
+    int n;
+    const SoundMode *s = modes(&n);
+    fprintf(f, "; %s sound names and rumble (written by the sound menu).\n"
+               "; Key: the sound driver's mode and command, in hexadecimal.\n\n[names]\n",
+            ng_game->title);
+    for (int m = 0; m < n; m++)
         for (int c = 0; c < 256; c++)
-            if (u.name[m][c]) fprintf(f, "%02X%02X=%s\n", MODE[m], c, u.name[m][c]);
+            if (u.name[m][c]) fprintf(f, "%02X%02X=%s\n", s[m].mode, c, u.name[m][c]);
     fprintf(f, "\n; rumble: off, light, medium or strong\n[rumble]\n");
-    for (int m = 0; m < 3; m++)
+    for (int m = 0; m < n; m++)
         for (int c = 0; c < 256; c++)
-            if (u.vib[m][c] != VIB_AUTO) fprintf(f, "%02X%02X=%s\n", MODE[m], c, VIB_NAME[u.vib[m][c]]);
+            if (u.vib[m][c] != VIB_AUTO) fprintf(f, "%02X%02X=%s\n", s[m].mode, c, VIB_NAME[u.vib[m][c]]);
     fclose(f);
 }
 
@@ -97,8 +132,8 @@ static void user_load(void)
 
 static const Sound *profile_sound(uint8_t mode, uint8_t cmd)
 {
-    for (int i = 0; i < PROFILE_SOUND_COUNT; i++)
-        if (PROFILE_SOUNDS[i].mode == mode && PROFILE_SOUNDS[i].command == cmd) return &PROFILE_SOUNDS[i];
+    for (int i = 0; i < (*game_profile.n_sounds); i++)
+        if (game_profile.sounds[i].mode == mode && game_profile.sounds[i].command == cmd) return &game_profile.sounds[i];
     return NULL;
 }
 
@@ -126,7 +161,8 @@ static const char *sound_name(uint8_t mode, uint8_t cmd)
     if (m >= 0 && u.name[m][cmd]) return u.name[m][cmd];
     const Sound *s = profile_sound(mode, cmd);
     if (s) return builtin_name(s->name);
-    snprintf(b, sizeof b, "%s %02X", T(mode == MODE_MUSIC ? "Track" : mode == MODE_VOICES ? "Voice" : "Effect"), cmd);
+    int cat = mode_category(mode);
+    snprintf(b, sizeof b, "%s %02X", T(cat == SOUND_MUSIC ? "Track" : cat == SOUND_VOICES ? "Voice" : "Effect"), cmd);
     return b;
 }
 
@@ -134,42 +170,25 @@ static const char *sound_name(uint8_t mode, uint8_t cmd)
 typedef struct { uint16_t low, high, ms; } Rumble;
 static const Rumble LEVEL[VIB_COUNT] = {{0, 0, 0}, {0x2000, 0x4000, 45}, {0x9000, 0x7000, 150}, {0xE000, 0x9800, 320}};
 
-/* Effects (mode 10) identified in Mission 1. Low = big motor (thumps), high = small motor
-   (buzz). */
-static const struct { uint8_t command; Rumble v; } TABLE[] = {
-    {0x22, {0xFFFF, 0xA000, 380}},               /* big explosion */
-    {0xF2, {0xE000, 0x9000, 300}},               /* armor hit */
-    {0x25, {0xC000, 0x8000, 260}},               /* explosion */
-    {0x21, {0xC000, 0x8000, 260}},               /* explosion */
-    {0xA3, {0xB000, 0x7000, 240}},               /* explosion */
-    {0xF5, {0xA000, 0x6000, 200}},               /* grenade or mortar explosion */
-    {0x84, {0x9000, 0x7000, 140}},               /* Slug cannon */
-    {0x8C, {0x2800, 0x5000, 45}},                /* Slug vulcan */
-    {0x8D, {0x2000, 0x4000, 40}},                /* burst */
-    {0xF7, {0x1800, 0x3000, 35}},                /* pistol */
-    /* tuned by the user (Phase 8) */
-    {0x27, {0xE000, 0x9800, 320}},               /* grenade explosion */
-    {0x2F, {0xE000, 0x9800, 320}},               /* explosion */
-    {0xF8, {0xE000, 0x9800, 320}},               /* laser */
-    {0xF4, {0x9000, 0x7000, 150}},               /* (medium) */
-    {0x48, {0x2000, 0x4000, 45}},                /* rope cut */
-};
 
 static const Rumble *rumble_of(uint8_t mode, uint8_t cmd)
 {
-    int m = mode_index(mode);
-    if (m < 0 || mode == MODE_MUSIC) return NULL;
+    int m = mode_index(mode), cat = mode_category(mode);
+    if (m < 0 || cat == SOUND_MUSIC) return NULL;
     if (u.vib[m][cmd] != VIB_AUTO) return u.vib[m][cmd] ? &LEVEL[u.vib[m][cmd]] : NULL;
-    if (mode != MODE_EFFECTS) return NULL;
-    for (size_t i = 0; i < sizeof TABLE / sizeof TABLE[0]; i++)
-        if (TABLE[i].command == cmd) return &TABLE[i].v;
+    if (cat != SOUND_EFFECTS) return NULL;
+    static Rumble r;                             /* the game profile's table (identified effects) */
+    for (int i = 0; i < game_profile.n_rumble; i++)
+        if (game_profile.rumble[i].command == cmd) {
+            r = (Rumble){game_profile.rumble[i].low, game_profile.rumble[i].high, game_profile.rumble[i].ms};
+            return &r;
+        }
     return NULL;
 }
 
 /* ------------------------------------------------------------------ menu */
 enum { CAT_MUSIC, CAT_EFFECTS, CAT_VOICES, CAT_RECENT, CAT_COUNT };
 static const char *const CATEGORY[CAT_COUNT] = {"Music", "Effects", "Voices", "Recent"};
-static const uint8_t CAT_MODE[3] = {MODE_MUSIC, MODE_EFFECTS, MODE_VOICES};
 #define RECENT_MAX 16
 
 typedef struct { uint8_t mode, cmd; } SoundKey;
@@ -181,7 +200,7 @@ static struct {
     SoundKey current;
     uint8_t *state;
     size_t size;
-    uint8_t queue[8];
+    uint8_t queue[16];
     int queue_len;
     Uint64 since;                                /* playback start (ns) */
     uint8_t rumble_mode;                         /* driver mode the rumble was tracking */
@@ -213,8 +232,8 @@ static int list_sounds(int cat, SoundKey *out, int max)
         return m.recent_count;
     }
     int n = 0;
-    for (int i = 0; i < PROFILE_SOUND_COUNT && n < max; i++)
-        if (PROFILE_SOUNDS[i].mode == CAT_MODE[cat]) out[n++] = (SoundKey){PROFILE_SOUNDS[i].mode, PROFILE_SOUNDS[i].command};
+    for (int i = 0; i < (*game_profile.n_sounds) && n < max; i++)
+        if (mode_category(game_profile.sounds[i].mode) == cat) out[n++] = (SoundKey){game_profile.sounds[i].mode, game_profile.sounds[i].command};
     return n;
 }
 
@@ -230,14 +249,22 @@ static int selected(SoundKey *c)
 
 static void enqueue(const uint8_t *c, int n)
 {
+    if (n > (int)sizeof m.queue) n = (int)sizeof m.queue;
     memcpy(m.queue, c, (size_t)n);
     m.queue_len = n;
 }
 
+/* The silence commands, then the mode and the command, one frame apart. */
 static void play(SoundKey c)
 {
-    uint8_t s[5] = {0x03, 0x03, 0x06, c.mode, c.cmd};
-    enqueue(s, 5);
+    int n;
+    const uint8_t *stop = stop_commands(&n);
+    uint8_t s[sizeof m.queue];
+    if (n > (int)sizeof s - 2) n = (int)sizeof s - 2;
+    memcpy(s, stop, (size_t)n);
+    s[n] = c.mode;
+    s[n + 1] = c.cmd;
+    enqueue(s, n + 2);
     m.playing = 1;
     m.current = c;
     m.since = SDL_GetTicksNS();
@@ -245,8 +272,9 @@ static void play(SoundKey c)
 
 static void stop(void)
 {
-    uint8_t c[3] = {0x03, 0x03, 0x06};
-    enqueue(c, 3);
+    int n;
+    const uint8_t *c = stop_commands(&n);
+    enqueue(c, n);
     m.playing = 0;
 }
 
@@ -305,7 +333,7 @@ static void cycle_rumble(void)
 {
     SoundKey c;
     int i;
-    if (!selected(&c) || (i = mode_index(c.mode)) < 0 || c.mode == MODE_MUSIC) return;
+    if (!selected(&c) || (i = mode_index(c.mode)) < 0 || mode_category(c.mode) == SOUND_MUSIC) return;
     int v = u.vib[i][c.cmd] + 1;                 /* auto -> off -> light -> medium -> strong -> auto */
     u.vib[i][c.cmd] = (int8_t)(v >= VIB_COUNT ? VIB_AUTO : v);
     user_save();
@@ -319,8 +347,8 @@ void sounds_navigate(int t)
     switch (t) {
     case 0: if (n) *s = (*s + n - 1) % n; break;
     case 1: if (n) *s = (*s + 1) % n; break;
-    case 2: m.category = (m.category + CAT_COUNT - 1) % CAT_COUNT; break;
-    case 3: m.category = (m.category + 1) % CAT_COUNT; break;
+    case 2: case 9: m.category = (m.category + CAT_COUNT - 1) % CAT_COUNT; break;
+    case 3: case 10: m.category = (m.category + 1) % CAT_COUNT; break;
     case 4: if (selected(&c)) play(c); break;
     case 6: stop(); break;
     case 7: rename_sound(); break;
@@ -431,7 +459,7 @@ void sounds_draw(SDL_Renderer *r, int w, int h)
             else snprintf(b, sizeof b, "%d.%ds", s->tenths / 10, s->tenths % 10);
             font_text(r, x0 + 356 - font_width(b, 1), y, 1, ink, b);
         }
-        if (with_rumble && c.mode != MODE_MUSIC) {
+        if (with_rumble && mode_category(c.mode) != SOUND_MUSIC) {
             int i = mode_index(c.mode), v = i >= 0 ? u.vib[i][c.cmd] : VIB_AUTO;
             const char *t = v != VIB_AUTO ? T(VIB_NAME[v]) : rumble_of(c.mode, c.cmd) ? "auto" : "-";
             font_text(r, x0 + 372, y, 1, v != VIB_AUTO ? INK_GOLD : INK_GRAY, t);
@@ -466,10 +494,14 @@ static struct {
 
 static uint8_t *driver_mode(void) { return &v.mode; }
 
+/* The game's commands: a mode command selects the driver mode, the first silence command ends it.
+   With the profile's own modes, any other command below 0x20 is a control command that ends it
+   too (Metal Slug 5: every sound is a mode and a command). */
 static void on_command(uint8_t c)
 {
-    if (c == MODE_MUSIC || c == MODE_EFFECTS || c == MODE_VOICES) { v.mode = c; return; }
-    if (c == 0x03) { v.mode = 0xFF; return; }
+    int n;
+    if (mode_index(c) >= 0) { v.mode = c; return; }
+    if (c == stop_commands(&n)[0] || (game_profile.n_sound_modes && c < 0x20)) { v.mode = 0xFF; return; }
     if (m.is_open || v.mode == 0xFF || c < 0x20) return;
     add_recent(v.mode, c);
     const Rumble *p = rumble_of(v.mode, c);

@@ -3,7 +3,7 @@
 #include <winver.h>
 #include "version.h"
 
-1 24 "mslugx.manifest"
+1 24 "port.manifest"
 
 1 VERSIONINFO
 FILEVERSION PORT_VERSION_MAJOR, PORT_VERSION_MINOR, PORT_VERSION_PATCH, 0
