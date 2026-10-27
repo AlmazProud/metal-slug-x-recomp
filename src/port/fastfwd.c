@@ -28,6 +28,10 @@ static uint8_t dead_mask(void) { return game_profile.object_dead_mask ? game_pro
 
 void ffwd_kill(int max_life, uint32_t keep_lo, uint32_t keep_hi)
 {
+    if (game_profile.kill_flag) {             /* the game's own kill-everything request */
+        ng.ram[game_profile.kill_flag & 0xFFFF] = 0xFF;
+        return;
+    }
     if (!game_profile.object_list) return;
     uint32_t head = game_profile.object_list, a = head;
     for (int n = 0; n < 400; n++) {
@@ -124,6 +128,9 @@ int ffwd_boss_present(const ProfileRushState *r)
         if (a == head || a < 0x100000 || a >= 0x10F000) break;
         uint32_t code = l32(a);
         int v = life_of(a);
+        /* With the game's kill request (kill_flag) the boss may die in the frame it appears: its
+           object being there is enough (the state kept is from before it appeared). */
+        if (game_profile.kill_flag && code >= b->code_lo && code <= b->code_hi) return 1;
         if (code >= b->code_lo && code <= b->code_hi && v >= min && v < 0x7000 &&
             !(ng.ram[(a + game_profile.object_dead) & 0xFFFF] & dead_mask()))
             return 1;
@@ -135,6 +142,7 @@ int ffwd_boss_present(const ProfileRushState *r)
    only the target is fought. Not the unnamed ones: Mission 2's boats killed this way hang the game. */
 static void kill_other_bosses(const ProfileBoss *keep)
 {
+    if (game_profile.kill_flag) return;       /* ffwd_kill's request kills them too */
     uint32_t head = game_profile.object_list, a = head;
     for (int n = 0; n < 400; n++) {
         a = l32(a + 8);
@@ -195,7 +203,7 @@ void ffwd_begin(const ProfileRushState *r, int count)
     /* Mission mode's direct start (cheats.h). Not the invincibility switch: with it a fall is
        undone without the HUD's respawn, which then stops updating (and a mission never ends). */
     cheats_start_mission_once = r->mission;
-    cheats_start_section_once = -1;
+    cheats_start_section_once = r->section ? r->section : -1;   /* Metal Slug X's Mission 2 */
     cheats_mission_from = start + game_profile.boot_frames;
     cheats_devmode = 0;
     cheats_dips = 0;

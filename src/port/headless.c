@@ -416,10 +416,58 @@ static void fingerprint_vblank(void)
     }
 }
 
+/* PD_TRACE_LIFE=min (research: finding bosses): at every VBlank acknowledge, each object of the
+   profile's list whose life (1..0x6FFF) reaches min is printed once per object and routine
+   ("life f=frame m=mission obj=address rt=routine life=life parent=address"). */
+static void trace_life(void)
+{
+    static int min = -1, n;
+    static uint32_t seen[512][2];
+    if (min < 0) min = getenv("PD_TRACE_LIFE") ? atoi(getenv("PD_TRACE_LIFE")) : 0;
+    if (!min || !game_profile.object_list) return;
+    uint32_t head = game_profile.object_list, a = head;
+    for (int k = 0; k < 400; k++) {
+        a = (uint32_t)ng.ram[(a + 8) & 0xFFFF] << 24 | (uint32_t)ng.ram[(a + 9) & 0xFFFF] << 16 |
+            (uint32_t)ng.ram[(a + 10) & 0xFFFF] << 8 | ng.ram[(a + 11) & 0xFFFF];
+        if (a == head || a < 0x100000 || a >= 0x10F000) break;
+        uint32_t rt = (uint32_t)ng.ram[a & 0xFFFF] << 24 | (uint32_t)ng.ram[(a + 1) & 0xFFFF] << 16 |
+                      (uint32_t)ng.ram[(a + 2) & 0xFFFF] << 8 | ng.ram[(a + 3) & 0xFFFF];
+        int life = ng.ram[(a + game_profile.object_life) & 0xFFFF] << 8 | ng.ram[(a + game_profile.object_life + 1) & 0xFFFF];
+        if (life < min || life >= 0x7000) continue;
+        int known = 0;
+        for (int i = 0; i < n && !known; i++) known = seen[i][0] == a && seen[i][1] == rt;
+        if (known) continue;
+        if (n < 512) { seen[n][0] = a; seen[n][1] = rt; n++; }
+        uint32_t parent = (uint32_t)ng.ram[(a + 12) & 0xFFFF] << 24 | (uint32_t)ng.ram[(a + 13) & 0xFFFF] << 16 |
+                          (uint32_t)ng.ram[(a + 14) & 0xFFFF] << 8 | ng.ram[(a + 15) & 0xFFFF];
+        printf("life f=%llu m=%d obj=%06X rt=%06X life=%d parent=%06X\n", (unsigned long long)ng.frames,
+               game_profile.mission_now ? ng.ram[game_profile.mission_now & 0xFFFF] + 1 : 0, (unsigned)a,
+               (unsigned)rt, life, (unsigned)parent);
+    }
+}
+
+/* PD_KILL_FLAG=address,from[,until] (hex address): from that frame on (and before `until`), 0xFF
+   written to that byte at every VBlank acknowledge, as tools/mame/scripted_run.lua does. Metal
+   Slug X: the game's kill-everything request 0x1067E3 (docs/BOSS_RUSH.md), for boss runs against
+   MAME. */
+static void kill_flag(void)
+{
+    static int init;
+    static unsigned addr;
+    static unsigned long long from, until = ~0ull;
+    if (!init) {
+        init = 1;
+        if (!getenv("PD_KILL_FLAG") || sscanf(getenv("PD_KILL_FLAG"), "%x,%llu,%llu", &addr, &from, &until) < 2) addr = 0;
+    }
+    if (addr && ng.frames >= from && ng.frames < until) ng.ram[addr & 0xFFFF] = 0xFF;
+}
+
 static void vblank_hook(void)
 {
     if (fingerprint_file) fingerprint_vblank();
     kill_enemies();
+    kill_flag();
+    trace_life();
 }
 
 static void fingerprint(FILE *f, unsigned long long label)
@@ -754,6 +802,8 @@ int headless_run(const Options *o)
     if (getenv("PD_MISSION_ONCE")) {
         cheats_start_mission_once = atoi(getenv("PD_MISSION_ONCE")) - 1;
         if (game_profile.manual_word) cheats_mission_from = game_profile.boot_frames;
+        /* PD_SECTION_ONCE=s (research): with it, at section s (the Boss Rush fast-forward's start) */
+        if (getenv("PD_SECTION_ONCE")) cheats_start_section_once = atoi(getenv("PD_SECTION_ONCE"));
     }
     /* PD_BOSSRUSH=1: Boss Rush from the first new game (bossrush.c); its steps are printed. Saved
        states (Metal Slug): in PD_BOSSRUSH_DIR (default: PD_PREF's bossrush folder), made first if
@@ -805,7 +855,7 @@ int headless_run(const Options *o)
     }
     FILE *fingerprints = o->fingerprints ? fopen(o->fingerprints, "w") : NULL;
     if (fingerprints) fingerprint_file = fingerprints;
-    if (fingerprints || getenv("PD_KILL_ENEMIES")) ng_on_vblank_ack = vblank_hook;
+    if (fingerprints || getenv("PD_KILL_ENEMIES") || getenv("PD_KILL_FLAG") || getenv("PD_TRACE_LIFE")) ng_on_vblank_ack = vblank_hook;
     Uint64 t0 = SDL_GetTicksNS();
     for (long n = 0; n < o->frames; n++) {
         if (o->inputs) inputs_apply();

@@ -27,7 +27,7 @@ replayed with --replay --name NAME and no --script: the missing <name>_script.tx
 inputs), _date.txt and _frames.txt (MAME's playback length) are written from the recording.
 
 PD_POKE (RAM writes at given frames, tools/mame/scripted_run.lua) is kept in <out>/<name>_poke.txt,
-and PD_DEVMODE, PD_DEVMODE_COPY, PD_DIPS, PD_BLOOD and PD_KILL_ENEMIES (developer mode, debug dips,
+and PD_DEVMODE, PD_DEVMODE_COPY, PD_DIPS, PD_BLOOD, PD_KILL_ENEMIES and PD_KILL_FLAG (developer mode, debug dips,
 red blood, Metal Slug's enemy kills) in <name>_env.txt (KEY=VALUE lines); both are applied again
 on --replay, and the port's tests read the same files.
 
@@ -50,7 +50,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 REPO = Path(__file__).resolve().parents[1]
 FPS = 59.1856
-RUN_ENV = ("PD_DEVMODE", "PD_DEVMODE_COPY", "PD_DIPS", "PD_DIPS_WORD", "PD_BLOOD", "PD_KILL_ENEMIES")   # kept per run in <name>_env.txt
+RUN_ENV = ("PD_DEVMODE", "PD_DEVMODE_COPY", "PD_DIPS", "PD_DIPS_WORD", "PD_BLOOD", "PD_KILL_ENEMIES", "PD_KILL_FLAG")   # kept per run in <name>_env.txt
 
 # Frames (screen:frame_number()) of the menu steps; checked with screenshots in MAME.
 START = {

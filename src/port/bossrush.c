@@ -372,7 +372,12 @@ void bossrush_test_defeat(void)
 {
     if (!active || !states_mode()) return;
     const ProfileBoss *b = &game_profile.bosses[game_profile.rush_states[seg].boss];
-    if (!game_profile.damage_routine) { ffwd_kill_range(b->code_lo, b->code_hi); return; }
+    if (!game_profile.damage_routine) {
+        /* Metal Slug X: the game's kill request too (its bosses' guns die by it, not by the mark) */
+        if (game_profile.kill_flag) ffwd_kill(0, 0, 0);
+        ffwd_kill_range(b->code_lo, b->code_hi);
+        return;
+    }
     if (ng_cpu.pc < game_profile.wait_start || ng_cpu.pc >= game_profile.wait_end) return;
     uint32_t head = game_profile.object_list, a = head;
     for (int n = 0; n < 400; n++) {

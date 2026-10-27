@@ -21,6 +21,9 @@ typedef struct {
     uint8_t boss, mission, final;
     uint8_t right, left, jump, grenade;
     uint32_t seed, max_frames;
+    /* The section the fast-forward starts the mission at (0: its start; Metal Slug X: the last
+       section of Mission 2, whose pyramid no bot gets through), written at start_section_at. */
+    uint8_t section;
 } ProfileRushState;
 /* A boss's code (its object's routine, +0, is between code_lo and code_hi), its full life, its
    name (shown on the health bar; NULL: "BOSS") and the mission it is a boss in (1-based, read at
@@ -141,6 +144,9 @@ typedef struct {
        select are Missions 1-6) and the mission number (0x10C2F5, mission_now) is only set from it
        by the stage select, so both are written. */
     uint32_t start_mission_also;
+    /* The byte the start section is written to (0: the byte after start_mission). Metal Slug X:
+       0x10C2FF, the low byte of the section word 0x10C2FE. */
+    uint32_t start_section_at;
     /* Mission and Arcade modes (progress.c, window.c): the current mission byte (0-based; the
        game's "next mission" step makes it n + 1) and player 1's score (4 bytes, BCD). */
     uint32_t mission_now;
@@ -227,6 +233,11 @@ typedef struct {
     uint32_t object_list;
     uint16_t object_life, object_dead;
     uint8_t object_dead_mask;           /* the dead bit in that byte (0: bit 7; Metal Slug: bit 0) */
+    /* A byte the game reads to kill every enemy (0: none). Metal Slug X: its kill-everything request
+       0x1067E3, copied every frame to 0x1067E2, which each enemy's hit check (0x4BAC) reads, as the
+       debug "D kills all" switch does: the fast-forward (ffwd_kill) sets it instead of marking
+       objects (marking objects whose +0x4E is not a life breaks the game there). */
+    uint32_t kill_flag;
     /* The game's damage routine (A1 the object, D0 the damage, A6 the attacker: its +0x68 is the
        player who scores, negative for none); Boss Rush's tests defeat a boss with it. 0: none. */
     uint32_t damage_routine;

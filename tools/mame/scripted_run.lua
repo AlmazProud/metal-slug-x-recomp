@@ -105,7 +105,17 @@ script_frame_sub = emu.add_machine_frame_notifier(function()
     end
 end)
 -- (in _G: the autoboot script has its own globals, the scripts it runs with dofile do not)
-_G.pd_after_vblank = function() kill_enemies(scr:frame_number()) end
+-- PD_KILL_FLAG="address,from[,until]" (hex address): from that frame on (and before `until`), 0xFF
+-- is written to that byte on every VBlank acknowledge, as the port's headless PD_KILL_FLAG does.
+-- Metal Slug X: its kill-everything request 0x1067E3, which every enemy's hit check obeys
+-- (docs/BOSS_RUSH.md).
+local flag_addr, flag_from, flag_until = string.match(os.getenv("PD_KILL_FLAG") or "", "(%x+),(%d+),?(%d*)")
+flag_addr, flag_from = tonumber(flag_addr or "", 16), tonumber(flag_from)
+flag_until = tonumber(flag_until) or math.huge
+local function kill_flag(f)
+    if flag_addr and f + 1 >= flag_from and f + 1 < flag_until then mem:write_u8(flag_addr, 0xFF) end
+end
+_G.pd_after_vblank = function() kill_enemies(scr:frame_number()); kill_flag(scr:frame_number()) end
 
 script_select_tap = mem:install_read_tap(0x380000, 0x380001, "pd_select", function(offset, data, mask)
     if select_held and (mask & 0xFF00) ~= 0 then return data & ~0x0200 end

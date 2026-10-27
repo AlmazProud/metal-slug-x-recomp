@@ -330,6 +330,13 @@ static void write_start(uint8_t *m, int start)
     if (game_profile.start_mission_also) *ram8(game_profile.start_mission_also) = (uint8_t)start;
 }
 
+/* Writes the start section: the byte after the start mission, or the profile's start_section_at. */
+static void write_section(uint8_t *m, int section)
+{
+    if (game_profile.start_section_at) *ram8(game_profile.start_section_at) = (uint8_t)section;
+    else m[1] = (uint8_t)section;
+}
+
 /* The chosen start mission is loaded: the section byte set to 0xFF by the game, or, without one
    (start_no_section), the current mission is the chosen one with a player in the game. */
 static int start_loaded(const uint8_t *m, int start)
@@ -356,9 +363,13 @@ void cheats_frame(void)
                                                       (uint16_t)game_profile.manual_mask, 0, 0, 0};
     if (quick && ng.frames >= cheats_mission_from) {
         uint8_t *m = ram8(game_profile.start_mission);
-        if (m[0] == 0 && m[1] == 0) write_start(m, start);
-        else if (m[0] == start && start_loaded(m, start)) {       /* loaded */
+        if (m[0] == 0 && m[1] == 0) {
+            write_start(m, start);
+            /* a section at its own byte (Metal Slug X: the Boss Rush fast-forward's) */
+            if (game_profile.start_section_at && cheats_start_section_once >= 0) write_section(m, cheats_start_section_once);
+        } else if (m[0] == start && start_loaded(m, start)) {       /* loaded */
             cheats_start_mission_once = -1;
+            cheats_start_section_once = -1;
             cheats_mission_from = 0;
             ng_forced_read[NG_FORCED_MANUAL].active = 0;
         }
@@ -373,7 +384,7 @@ void cheats_frame(void)
         int keep = section >= 0 || (cheats_start_mission_once >= 0 && game_profile.start_no_section);
         if (m[0] == 0 && m[1] == 0) {
             if (start > 0) write_start(m, start);
-            if (section >= 0) m[1] = (uint8_t)section;
+            if (section >= 0) write_section(m, section);
             else if (!keep) {
                 cheats_start_mission_once = -1;
                 cheats_start_section_once = -1;
