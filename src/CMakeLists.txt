@@ -299,11 +299,11 @@ function(pd_msx_bossbar run expect)
             ENVIRONMENT "PD_BOSSBAR=1;PD_POKE=${poke};${run_env}" PASS_REGULAR_EXPRESSION "${expect}")
     endif()
 endfunction()
-pd_msx_bossbar(mission1 "bossbar 9631: boss 103CA4 4990/5000.*boss 103CA4 0/5000 dead")
-pd_msx_bossbar(mission2 "bossbar 4029: boss 103514 3490/3500.*boss 103514 2020/3500")
-pd_msx_bossbar(mission3 "bossbar 28529: boss 102F94 5490/5500.*boss 102F94 808/5500")
-pd_msx_bossbar(mission4 "bossbar 12974: boss 102AC4 400/500.*boss 1021D4 280/500")
-pd_msx_bossbar(mission5 "bossbar 16462: boss 104C74 4900/5000.*boss 104C74 4300/5000")
+pd_msx_bossbar(mission1 "bossbar 9631: IRON NOKANA MK II 103CA4 4990/5000.*IRON NOKANA MK II 103CA4 0/5000 dead")
+pd_msx_bossbar(mission2 "bossbar 4029: AESHI NERO 103514 3490/3500.*AESHI NERO 103514 2020/3500")
+pd_msx_bossbar(mission3 "bossbar 28529: DRAGON NOSUKE 102F94 5490/5500.*DRAGON NOSUKE 102F94 808/5500")
+pd_msx_bossbar(mission4 "bossbar 12974: BIG SHIEE 102AC4 400/500.*BIG SHIEE 1021D4 280/500")
+pd_msx_bossbar(mission5 "bossbar 16462: HOZMI 104C74 4900/5000.*HOZMI 104C74 4300/5000")
 # Boss Rush (docs/BOSS_RUSH.md): the six bosses' states made from an empty folder by the
 # fast-forward (the game's kill request, lives given back; Mission 2 from its last section), then
 # the whole run with the built-in bot and each boss defeated 900 frames after it loads

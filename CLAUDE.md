@@ -601,7 +601,7 @@ Collected in the Metal Slug, 3, 4 and 5 ports (their `CLAUDE.md`); the essential
 ## To do
 
 - [ ] **Phase 14** (plan approved by the user, 2026-10-26): publishing v2.0.0. Open from Phase
-      13: boss names (web search with the user's OK), Mission 5's middle boss. Open: stage select entry 6 (Z80 timing). Not verified
+      13: Mission 5's middle boss (the boss names were added, 2026-10-26). Open: stage select entry 6 (Z80 timing). Not verified
       for lack of files: Steam's copy and the arcade P1.
 - [ ] **Later, in their own conversations (the user's decision):**
   - **Metal Slug 3 port.** GOG copy at `K:\Metal Slug 3` (GOG id 1370911530), same DotEmu

@@ -47,11 +47,12 @@ with a hit record whose life goes down are the boss.
 | 3 | `0x04A380`-`0x04ACDC` | 5500 | to its death routines (`0x04AA3A`-`0x04ACDC`) |
 | 4 | `0x0235E8`-`0x0241CC` | 500 each | seven guns, children of the main object (`0x022872`) |
 | 5 | `0x0A0C9A`-`0x0A0EE2` | 5000 | the kill request does not kill it; shots do |
-| 6 | `0x0415BA`-`0x0417FE` | 6500 | |
+| 6 | `0x0415BA`-`0x0417FE` | 6500 | the Martians' mothership |
 
 - **Middle bosses:** one was seen in Mission 5 (`0x0D3E22`, 1400). It is not in the profile.
-- **Names:** none yet. Official names need a web search, which needs the user's permission. The
-  bar shows "BOSS".
+- **Names** (a web search with the user's permission, from the Metal Slug Wiki and NamuWiki): Iron
+  Nokana MK II, Aeshi Nero, Dragon Nosuke, Big Shiee, Hozmi and Rugname. The bar shows them in
+  capitals, as the other ports do.
 - **`boss_min_life`** is 300, because Mission 4's guns have 500.
 - Six profile windows cover the bosses' code, and one covers the list's root.
 
@@ -93,6 +94,6 @@ So Boss Rush loads states, as the Metal Slug port does.
 
 ## Not yet
 
-- Boss names (with the user's permission for a web search), and Mission 5's middle boss.
+- Mission 5's middle boss.
 - Mission 6's boss bar is not in a test (the bar runs' bot does not reach its fight in the MAME
   recording); Boss Rush covers that boss.

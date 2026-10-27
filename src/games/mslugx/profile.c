@@ -85,12 +85,12 @@ static const SoundRumble RUMBLE[] = {
    name. Mission 1's tank has a body (5000) and a cannon (700); Mission 4's boss is its seven
    guns, 500 each. */
 static const ProfileBoss BOSSES[] = {
-    {0x0D5A92u, 0x0D67E6u, 5000, NULL, 0},                 /* Mission 1: the tank (body and cannon) */
-    {0x026354u, 0x026FCEu, 3500, NULL, 0},                 /* Mission 2 (to its death routines) */
-    {0x04A380u, 0x04ACDCu, 5500, NULL, 0},                 /* Mission 3 (to its death routines) */
-    {0x0235E8u, 0x0241CCu, 0, NULL, 0},                    /* Mission 4: the guns (500 each) */
-    {0x0A0C9Au, 0x0A0EE2u, 5000, NULL, 0},                 /* Mission 5 */
-    {0x0415BAu, 0x0417FEu, 6500, NULL, 0},                 /* Mission 6 */
+    {0x0D5A92u, 0x0D67E6u, 5000, "IRON NOKANA MK II", 0},  /* Mission 1: the tank (body and cannon) */
+    {0x026354u, 0x026FCEu, 3500, "AESHI NERO", 0},         /* Mission 2 (to its death routines) */
+    {0x04A380u, 0x04ACDCu, 5500, "DRAGON NOSUKE", 0},      /* Mission 3 (to its death routines) */
+    {0x0235E8u, 0x0241CCu, 0, "BIG SHIEE", 0},             /* Mission 4: the guns (500 each) */
+    {0x0A0C9Au, 0x0A0EE2u, 5000, "HOZMI", 0},              /* Mission 5 */
+    {0x0415BAu, 0x0417FEu, 6500, "RUGNAME", 0},            /* Mission 6: the Martians' mothership */
 };
 
 /* Boss Rush from saved states (fastfwd.h): each mission's boss, from a state the fast-forward saves
