@@ -117,7 +117,7 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 11. Adopt the shared tree of the Metal Slug ports | **Closed** (2026-10-26). See `docs/PHASE11_SHARED.md`. `ctest`: 23/23 (interpreter-only 21/21). Version 2.0.0 (not published). |
 | 12. Profile A: missions, score, records, Mission mode | **Closed** (2026-10-26). See `docs/PHASE12_MISSIONS.md`. `ctest`: 33/33 (interpreter-only 31/31). |
 | 13. Profile B: bosses, health bar, Boss Rush | **Closed** (2026-10-26), approved. Boss names from a web search. See `docs/BOSS_RUSH.md`. `ctest`: 53/53 (interpreter-only 51/51). |
-| 14. Publishing v2.0.0 | In progress (2026-10-26). Local steps done: `ctest` 53/53 (interpreter-only 51/51), history audit clean (927 files), release zip clean (13 files, 2.8 MB) and tested unzipped with the MAME set in `game\`. Push and release wait for the user's OK. |
+| 14. Publishing v2.0.0 | **Closed** (2026-10-26). `ctest` 53/53 (interpreter-only 51/51), history audit and zip clean, CI green. Release v2.0.0 with the zip (SHA-256 checked after download) and four screenshots (window tests with fresh `PD_PREF`; boss fights from `PD_SAVE_STATE` of the bar runs). |
 
 ### Phase 13: result
 
@@ -600,9 +600,8 @@ Collected in the Metal Slug, 3, 4 and 5 ports (their `CLAUDE.md`); the essential
 
 ## To do
 
-- [ ] **Phase 14** (plan approved by the user, 2026-10-26): publishing v2.0.0. Open from Phase
-      13: Mission 5's middle boss (the boss names were added, 2026-10-26). Open: stage select entry 6 (Z80 timing). Not verified
-      for lack of files: Steam's copy and the arcade P1.
+- [ ] **Open:** Mission 5's middle boss; stage select entry 6 (Z80 timing). Not verified for lack
+      of files: Steam's copy and the arcade P1.
 - [ ] **Later, in their own conversations (the user's decision):**
   - **Metal Slug 3 port.** GOG copy at `K:\Metal Slug 3` (GOG id 1370911530), same DotEmu
     layout: `resources\game\mslug3_*`, with a 9 MB 68000 program and 64 MB of tiles.
