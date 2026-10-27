@@ -23,6 +23,17 @@ static const ProfileWindow WINDOWS[] = {
     {0x017F20, 0x017F4A},     /* stage set index 0x10C2FC, mission 0x10C2F4 = index mod 6 */
     {0x018292, 0x0182AC},     /* a mission loads: the stage set copied to 0x10C2F8 */
     {0x01891E, 0x01893E},     /* the next mission: 0x10C2F4 + 1, loaded below 6 */
+    /* Phase 13: bosses (docs/BOSS_RUSH.md) */
+    {0x0040BC, 0x00411C},     /* object allocation: the list's links (object_list) */
+    {0x0046D0, 0x0046DA},     /* the kill-everything request copied each frame (kill_flag) */
+    {0x004BAC, 0x004BFE},     /* an enemy's kill check: life 0x4E, dead bit 7 of 0x5F */
+    {0x016D92, 0x016DB0},     /* the object list's root 0x1010A4 */
+    {0x0D5A92, 0x0D5AB2},     /* the bosses' code (BOSSES): Mission 1 */
+    {0x026354, 0x026374},     /* Mission 2 */
+    {0x04A380, 0x04A3A0},     /* Mission 3 */
+    {0x0235E8, 0x023608},     /* Mission 4 */
+    {0x0A0C9A, 0x0A0CBA},     /* Mission 5 */
+    {0x0415BA, 0x0415DA},     /* Mission 6 */
 };
 
 /* Vehicles: object types (type*4 in the table at 0x197DC) found by spawning each type of the
@@ -69,6 +80,31 @@ static const SoundRumble RUMBLE[] = {
     {0x48, 0x2000, 0x4000, 45},                  /* rope cut */
 };
 
+/* Bosses (docs/BOSS_RUSH.md): the objects that take the damage, found by fighting each boss from a
+   state saved shortly before it (life +0x4E going down, a hit record at +0x50); NULL: no official
+   name. Mission 1's tank has a body (5000) and a cannon (700); Mission 4's boss is its seven
+   guns, 500 each. */
+static const ProfileBoss BOSSES[] = {
+    {0x0D5A92u, 0x0D67E6u, 5000, NULL, 0},                 /* Mission 1: the tank (body and cannon) */
+    {0x026354u, 0x026FCEu, 3500, NULL, 0},                 /* Mission 2 (to its death routines) */
+    {0x04A380u, 0x04ACDCu, 5500, NULL, 0},                 /* Mission 3 (to its death routines) */
+    {0x0235E8u, 0x0241CCu, 0, NULL, 0},                    /* Mission 4: the guns (500 each) */
+    {0x0A0C9Au, 0x0A0EE2u, 5000, NULL, 0},                 /* Mission 5 */
+    {0x0415BAu, 0x0417FEu, 6500, NULL, 0},                 /* Mission 6 */
+};
+
+/* Boss Rush from saved states (fastfwd.h): each mission's boss, from a state the fast-forward saves
+   shortly before it appears: its index in BOSSES, its mission (0-based), the mission ends with it,
+   the bot (percentages of segments going right / left, jumping, throwing a grenade; seed; frames). */
+static const ProfileRushState RUSH_STATES[] = {
+    {0, 0, 1, 60, 15, 40, 10, 1, 20000, 0},
+    {1, 1, 1, 60, 15, 40, 10, 1, 20000, 12},       /* from the last section: the pyramid stops every bot */
+    {2, 2, 1, 60, 15, 40, 10, 1, 40000, 0},
+    {3, 3, 1, 60, 15, 40, 10, 1, 30000, 0},
+    {4, 4, 1, 60, 15, 40, 10, 1, 30000, 0},
+    {5, 5, 1, 60, 15, 40, 10, 1, 40000, 0},
+};
+
 extern const Sound MSLUGX_SOUNDS[];       /* sounds.c (generated) */
 extern const int MSLUGX_SOUND_COUNT;
 
@@ -77,7 +113,7 @@ const GameProfile game_profile = {
     .subtitle = "SUPER VEHICLE-001",
     .windows = WINDOWS,
     .n_windows = (int)(sizeof WINDOWS / sizeof WINDOWS[0]),
-    .windows_sha256 = "14359f220ed55903aab6be8c4598e022cb3854436d7a27addc0f2bf33f44984f",
+    .windows_sha256 = "dbcfe7f3d333ac91fedf823f17513c8fa553e6193532f0418c86303aefb9c67c",
     .vehicles = VEHICLES,
     .n_vehicles = (int)(sizeof VEHICLES / sizeof VEHICLES[0]),
     .sounds = MSLUGX_SOUNDS,
@@ -194,11 +230,27 @@ const GameProfile game_profile = {
      * the new game clears them, before the load. */
     .start_mission = 0x10C2FDu,
     .start_mission_also = 0x10C2F5u,
+    .start_section_at = 0x10C2FFu,          /* the section word's low byte */
     .missions = 6,
     .start_no_section = 1,
     .mission_now = 0x10C2F5u,
     /* Player 1's score: 4 BCD bytes from 0x10C46A, the HUD's number (19200: 00 01 92 00). */
     .score_p1 = 0x10C46Au,
+    /* Objects (docs/BOSS_RUSH.md): a circular list from 0x1010A4 (allocation 0x40BC: +4 previous,
+     * +8 next, +0xC parent, +0x10 depth, +0 the routine), life word +0x4E, dead: bit 7 of +0x5F
+     * (set when the life goes below 0, e.g. 0xA1214). */
+    .object_list = 0x1010A4u,
+    .object_life = 0x4E,
+    .object_dead = 0x5F,
+    /* The game's kill-everything request (0x1067E3 = -$181D(a5), set by 0x4BFE, copied each frame
+     * to 0x1067E2 at 0x46D4): every enemy's hit check (0x4BAC, from 0x4C24) then gives itself the
+     * death mark (life 0, bit 7 of +0x5F, state 6 at +0x5A), as the debug "D kills all" switch. */
+    .kill_flag = 0x1067E3u,
+    .boss_min_life = 300,                  /* Mission 4's guns have 500 */
+    .bosses = BOSSES,
+    .n_bosses = (int)(sizeof BOSSES / sizeof BOSSES[0]),
+    .rush_states = RUSH_STATES,
+    .n_rush_states = (int)(sizeof RUSH_STATES / sizeof RUSH_STATES[0]),
     /* PLAY MANUAL soft dip (option 5, high byte of 0x10FD8E): read by a new game at 0x16BD4. */
     .manual_word = 0x10FD8Eu,
     .manual_mask = 0xFF00u,
