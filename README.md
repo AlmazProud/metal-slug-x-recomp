@@ -134,11 +134,14 @@ MAME was used as the reference, never as a source of code.
 - **Mission 1:** a recorded playthrough of about 12,000 frames.
 - **The rest of the game:** scripted runs of 11 entries of the developers' stage select, 9,000
   frames each.
+- **Missions and bosses:** games started at each mission, and a bot playing every mission from
+  its start to its boss and its end, about 254,000 frames in all: the whole game.
 
 All of these are identical, both with the recompiled program and with the interpreter alone.
 One stage-select run still shows a known difference, a rare Z80 synchronization case.
 
-Details are in `docs/PHASE8_STAGES.md` and `docs/PHASE11_SHARED.md`. The runtime and the frontend
+Details are in `docs/PHASE8_STAGES.md`, `docs/PHASE11_SHARED.md`, `docs/PHASE12_MISSIONS.md` and
+`docs/BOSS_RUSH.md`. The runtime and the frontend
 are shared with the Metal Slug 3, 4 and 5 ports by the same author, each verified against MAME the
 same way.
 

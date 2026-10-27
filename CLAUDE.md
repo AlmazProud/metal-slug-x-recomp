@@ -116,8 +116,8 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 10. Publishing on GitHub | **Closed** (2026-10-12). Public repository. See `docs/PHASE10_RELEASE.md`. Release v1.0.0. |
 | 11. Adopt the shared tree of the Metal Slug ports | **Closed** (2026-10-26). See `docs/PHASE11_SHARED.md`. `ctest`: 23/23 (interpreter-only 21/21). Version 2.0.0 (not published). |
 | 12. Profile A: missions, score, records, Mission mode | **Closed** (2026-10-26). See `docs/PHASE12_MISSIONS.md`. `ctest`: 33/33 (interpreter-only 31/31). |
-| 13. Profile B: bosses, health bar, Boss Rush | **Closed** (2026-10-26), pending approval. See `docs/BOSS_RUSH.md`. `ctest`: 53/53 (interpreter-only 51/51). |
-| 14. Publishing v2.0.0 | Planned. |
+| 13. Profile B: bosses, health bar, Boss Rush | **Closed** (2026-10-26), approved. Boss names from a web search. See `docs/BOSS_RUSH.md`. `ctest`: 53/53 (interpreter-only 51/51). |
+| 14. Publishing v2.0.0 | In progress (2026-10-26). Local steps done: `ctest` 53/53 (interpreter-only 51/51), history audit clean (927 files), release zip clean (13 files, 2.8 MB) and tested unzipped with the MAME set in `game\`. Push and release wait for the user's OK. |
 
 ### Phase 13: result
 
