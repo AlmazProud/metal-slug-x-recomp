@@ -79,8 +79,8 @@ them, was right; the references were re-recorded at 704.
 ## Tests
 
 `ctest`: 33/33 in the personal build, 31/31 in the interpreter-only build. The new tests are:
-- `mslugx_mission2_vs_mame` to `mslugx_mission6_vs_mame`;
-- `mslugx_mission1_vs_mame` (the bot's completed Mission 1);
+- `mslugx_missions_mission2_vs_mame` to `mslugx_missions_mission6_vs_mame`;
+- `mslugx_complete_mission1_vs_mame` (the bot's completed Mission 1);
 - `mslugx_start_mission_option_vs_mame`;
 - `mslugx_mission_mode_direct`;
 - `mslugx_records_bot`.

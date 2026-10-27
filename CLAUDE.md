@@ -73,7 +73,7 @@ repo\
 Docs: `docs/ROM_MAP.md`, `docs/PHASE1_COVERAGE.md`, `docs/PHASE3_RUNTIME.md`,
 `docs/PHASE4_VERIFICATION.md`, `docs/PHASE5_NATIVE.md`, `docs/PHASE6_REMASTER.md`,
 `docs/PHASE7_TWEAKS.md`, `docs/PHASE7B_DEBUG.md`, `docs/PHASE8_STAGES.md`, `docs/PHASE9_LOADER.md`,
-`docs/PHASE10_RELEASE.md`, `docs/PHASE11_SHARED.md`, `docs/PHASE12_MISSIONS.md`; shared: `docs/QOL_FEATURES.md`,
+`docs/PHASE10_RELEASE.md`, `docs/PHASE11_SHARED.md`, `docs/PHASE12_MISSIONS.md`, `docs/BOSS_RUSH.md`; shared: `docs/QOL_FEATURES.md`,
 `docs/ADPCM_B.md`.
 
 Published at https://github.com/AlmazProud/metal-slug-x-recomp (MIT). Before every publication:
@@ -115,9 +115,40 @@ Activate the environment: `. "C:\Projecto Decompile\env.ps1"` (PowerShell) or
 | 9. Universal loader | **Closed** (2026-10-12). See `docs/PHASE9_LOADER.md`. `ctest`: 20/20 (distributable build 18/18). |
 | 10. Publishing on GitHub | **Closed** (2026-10-12). Public repository. See `docs/PHASE10_RELEASE.md`. Release v1.0.0. |
 | 11. Adopt the shared tree of the Metal Slug ports | **Closed** (2026-10-26). See `docs/PHASE11_SHARED.md`. `ctest`: 23/23 (interpreter-only 21/21). Version 2.0.0 (not published). |
-| 12. Profile A: missions, score, records, Mission mode | **Closed** (2026-10-26), pending approval. See `docs/PHASE12_MISSIONS.md`. `ctest`: 33/33 (interpreter-only 31/31). |
-| 13. Profile B: bosses, health bar, Boss Rush | Planned (approved plan, 2026-10-26). |
+| 12. Profile A: missions, score, records, Mission mode | **Closed** (2026-10-26). See `docs/PHASE12_MISSIONS.md`. `ctest`: 33/33 (interpreter-only 31/31). |
+| 13. Profile B: bosses, health bar, Boss Rush | **Closed** (2026-10-26), pending approval. See `docs/BOSS_RUSH.md`. `ctest`: 53/53 (interpreter-only 51/51). |
 | 14. Publishing v2.0.0 | Planned. |
+
+### Phase 13: result
+
+Details in `docs/BOSS_RUSH.md`. All with bots (the user's choice).
+
+- **Objects:**
+  - a circular list from `0x1010A4` (`+4` previous, `+8` next, `+0xC` parent, `+0` the routine);
+  - life `+0x4E`, dead bit 7 of `+0x5F`.
+- **The game's kill request `0x1067E3`** is copied each frame to `0x1067E2`, which every enemy's
+  hit check obeys (like "D kills all"). Marking objects breaks Metal Slug X.
+- **New shared fields:**
+  - `kill_flag`, used by the fast-forward and Boss Rush's test defeat;
+  - `start_section_at` and `ProfileRushState.section`.
+- **New tools:** `PD_KILL_FLAG` in the port and in `scripted_run.lua`, `PD_TRACE_LIFE`,
+  `PD_SECTION_ONCE`.
+- **Bosses** (found by fighting from saved states):
+
+  | Mission | Code | Life |
+  |---|---|---|
+  | 1 | `0x0D5A92`-`0x0D67E6` | 5000 / cannon 700 |
+  | 2 | `0x026354`-`0x026FCE` | 3500 |
+  | 3 | `0x04A380`-`0x04ACDC` | 5500 |
+  | 4 | `0x0235E8`-`0x0241CC` | 7 guns, 500 each |
+  | 5 | `0x0A0C9A`-`0x0A0EE2` | 5000 |
+  | 6 | `0x0415BA`-`0x0417FE` | 6500 |
+
+  No names yet: a web search needs the user's OK.
+- **Boss Rush:** saved states made by the fast-forward (about 84 s the first time). Mission 2
+  starts from section 12, because the pyramid stops every bot.
+- **Against MAME** (`analysis/phase13`): 12 runs with every mission played to its end, and the
+  bosses fought. All identical, about 254 000 frames.
 
 ### Phase 12: result
 
@@ -569,9 +600,8 @@ Collected in the Metal Slug, 3, 4 and 5 ports (their `CLAUDE.md`); the essential
 
 ## To do
 
-- [ ] **Phases 12-14** (plan approved by the user, 2026-10-26): Metal Slug X's profile for
-      missions / score / records / Mission mode (12), bosses / health bar / Boss Rush (13),
-      then publishing v2.0.0 (14). Open: stage select entry 6 (Z80 timing). Not verified
+- [ ] **Phase 14** (plan approved by the user, 2026-10-26): publishing v2.0.0. Open from Phase
+      13: boss names (web search with the user's OK), Mission 5's middle boss. Open: stage select entry 6 (Z80 timing). Not verified
       for lack of files: Steam's copy and the arcade P1.
 - [ ] **Later, in their own conversations (the user's decision):**
   - **Metal Slug 3 port.** GOG copy at `K:\Metal Slug 3` (GOG id 1370911530), same DotEmu

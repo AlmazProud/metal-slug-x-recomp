@@ -68,6 +68,9 @@ The game files are recognized by their hashes, not by their names.
 - **Game modes:** Arcade (the whole game, with a chosen number of continues and a results page)
   and **Mission mode** (start at any mission you have reached, straight to the soldier select).
 - **Records:** best time and score per mission and the best Arcade score, from clean games only.
+- **Boss health bar** for every mission's boss, and **Boss Rush**: the six bosses in a row, with
+  your score, lives, bombs and weapon carried from one to the next (the first time, the port
+  prepares the fights by playing the missions itself, which takes a few minutes).
 - **Slowdown:** optional removal of the original slowdown (68000 at 2x or 4x speed).
 - **Red blood:** the game's own hidden BLOOD option.
 - **Music and sounds menu:** every track, effect and voice of the game, with names and
