@@ -234,17 +234,26 @@ foreach(stage 02 03 04 05 07 08 09 10 11 12 13)
     endif()
 endforeach()
 
-# Phase 12 (docs/PHASE12_MISSIONS.md): scripted runs against MAME (tools/mame_run.py, references
-# in PD_ANALYSIS/phase12): phase12/missions/mission2-6 start at Missions 2-6 (PD_POKE of the start
-# stage set and mission bytes right after the new game, in <run>_poke.txt); phase12/complete/
-# mission1 is the bot finishing Mission 1 (development mode and debug dips in <run>_env.txt).
-file(GLOB msx_phase12_runs ${PD_ANALYSIS}/phase12/*/*_fingerprints.txt)
-foreach(fp ${msx_phase12_runs})
+# Phases 12 and 13 (docs/PHASE12_MISSIONS.md, docs/BOSS_RUSH.md): scripted runs against MAME
+# (tools/mame_run.py, references in PD_ANALYSIS/phase12 and phase13), one test per run,
+# mslugx_<folder>_<run>_vs_mame, with the run's RAM writes (<run>_poke.txt: PD_POKE) and
+# environment (<run>_env.txt: PD_DEVMODE, PD_DIPS, PD_KILL_FLAG):
+#   phase12/missions/mission2-6  the scripted game started at Missions 2-6 (the start stage set and
+#                                mission bytes written right after the new game);
+#   phase12/complete/mission1    the bot finishing Mission 1 (development mode, debug dips);
+#   phase13/bosses/mission1-6    each mission from its start (Mission 2 from its last section) to
+#                                its end: a seeded bot, lives given back, the game's kill request;
+#   phase13/bars/mission1-6      the same up to each boss, then a fight without the kill request
+#                                (bombs given back).
+file(GLOB msx_scripted_runs ${PD_ANALYSIS}/phase12/*/*_fingerprints.txt ${PD_ANALYSIS}/phase13/*/*_fingerprints.txt)
+foreach(fp ${msx_scripted_runs})
     if(fp MATCHES "_(replay|port)_fingerprints\\.txt$")
         continue()
     endif()
     string(REGEX REPLACE "_fingerprints\\.txt$" "" base "${fp}")
     get_filename_component(run "${base}" NAME)
+    get_filename_component(folder "${base}" DIRECTORY)
+    get_filename_component(folder "${folder}" NAME)
     if(EXISTS "${base}_date.txt" AND EXISTS "${base}_frames.txt")
         file(READ "${base}_date.txt" date)
         file(READ "${base}_frames.txt" frames)
@@ -257,19 +266,63 @@ foreach(fp ${msx_phase12_runs})
             string(REPLACE ";" "\;" poke "${poke}")     # several writes: kept in one variable
             set(env "PD_POKE=${poke}")
         endif()
-        if(EXISTS "${base}_env.txt")                  # PD_DEVMODE, PD_DIPS (mame_run.py)
+        if(EXISTS "${base}_env.txt")
             file(STRINGS "${base}_env.txt" run_env)
             list(APPEND env ${run_env})
         endif()
-        add_test(NAME mslugx_${run}_vs_mame
+        add_test(NAME mslugx_${folder}_${run}_vs_mame
                  COMMAND Python3::Interpreter -I ${PROJECT_SOURCE_DIR}/tools/verify_mission.py
                          --exe $<TARGET_FILE:mslugx> --roms ${PD_ROMS}
                          --inputs ${base}_inputs.txt --reference ${fp}
                          --frames ${frames} --date ${date}
-                         --output ${CMAKE_CURRENT_BINARY_DIR}/mslugx_${run}_fingerprints_port.txt)
-        set_tests_properties(mslugx_${run}_vs_mame PROPERTIES ENVIRONMENT "${env}")
+                         --output ${CMAKE_CURRENT_BINARY_DIR}/mslugx_${folder}_${run}_fingerprints_port.txt)
+        set_tests_properties(mslugx_${folder}_${run}_vs_mame PROPERTIES ENVIRONMENT "${env}")
     endif()
 endforeach()
+# The boss health bar (docs/BOSS_RUSH.md) in the bar runs: each boss followed from its full life
+# (Mission 1's tank to its defeat; Mission 4's guns, 500 each).
+function(pd_msx_bossbar run expect)
+    set(base ${PD_ANALYSIS}/phase13/bars/${run})
+    if(EXISTS "${base}_inputs.txt" AND EXISTS "${base}_poke.txt" AND EXISTS "${base}_env.txt")
+        file(READ "${base}_date.txt" date)
+        file(READ "${base}_frames.txt" frames)
+        file(READ "${base}_poke.txt" poke)
+        string(STRIP "${date}" date)
+        string(STRIP "${frames}" frames)
+        string(STRIP "${poke}" poke)
+        string(REPLACE ";" "\;" poke "${poke}")
+        file(STRINGS "${base}_env.txt" run_env)
+        add_test(NAME mslugx_bossbar_${run}
+                 COMMAND mslugx --roms ${PD_ROMS} --headless --no-audio --frames ${frames}
+                         --inputs ${base}_inputs.txt --date ${date})
+        set_tests_properties(mslugx_bossbar_${run} PROPERTIES
+            ENVIRONMENT "PD_BOSSBAR=1;PD_POKE=${poke};${run_env}" PASS_REGULAR_EXPRESSION "${expect}")
+    endif()
+endfunction()
+pd_msx_bossbar(mission1 "bossbar 9631: boss 103CA4 4990/5000.*boss 103CA4 0/5000 dead")
+pd_msx_bossbar(mission2 "bossbar 4029: boss 103514 3490/3500.*boss 103514 2020/3500")
+pd_msx_bossbar(mission3 "bossbar 28529: boss 102F94 5490/5500.*boss 102F94 808/5500")
+pd_msx_bossbar(mission4 "bossbar 12974: boss 102AC4 400/500.*boss 1021D4 280/500")
+pd_msx_bossbar(mission5 "bossbar 16462: boss 104C74 4900/5000.*boss 104C74 4300/5000")
+# Boss Rush (docs/BOSS_RUSH.md): the six bosses' states made from an empty folder by the
+# fast-forward (the game's kill request, lives given back; Mission 2 from its last section), then
+# the whole run with the built-in bot and each boss defeated 900 frames after it loads
+# (PD_BOSSRUSH_KILL: the kill request and the death mark): the score carried from boss to boss, the
+# ending after the sixth. Then, from the fourth boss, the Heavy Machine Gun and 25 bombs given
+# during its mission reach the fifth.
+add_test(NAME mslugx_bossrush_reset
+         COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_CURRENT_BINARY_DIR}/mslugx_rush)
+set_tests_properties(mslugx_bossrush_reset PROPERTIES FIXTURES_SETUP mslugx_rush)
+add_test(NAME mslugx_bossrush_full
+         COMMAND mslugx --roms ${PD_ROMS} --headless --no-audio --frames 80000)
+set_tests_properties(mslugx_bossrush_full PROPERTIES FIXTURES_REQUIRED mslugx_rush FIXTURES_SETUP mslugx_rush_states
+    ENVIRONMENT "PD_BOSSRUSH=1;PD_BOSSRUSH_KILL=900;PD_BOSSRUSH_DIR=${CMAKE_CURRENT_BINARY_DIR}/mslugx_rush/"
+    PASS_REGULAR_EXPRESSION "bossrush: prepared in.*next boss, 1/6.*mission 2, score 00013300.*next boss, 2/6.*mission 3, score 00013900.*next boss, 3/6.*mission 4, score 00017100.*next boss, 4/6.*mission 5, score 00117600.*next boss, 5/6.*mission 6, score 00537700.*cleared, 6/6 bosses defeated")
+add_test(NAME mslugx_bossrush_carry
+         COMMAND mslugx --roms ${PD_ROMS} --headless --no-audio --frames 6000)
+set_tests_properties(mslugx_bossrush_carry PROPERTIES FIXTURES_REQUIRED mslugx_rush_states
+    ENVIRONMENT "PD_BOSSRUSH=1;PD_BOSSRUSH_KILL=900;PD_BOSSRUSH_FROM=3;PD_CHEAT=12200,weapon,0,5\;12201,bombs,0,25;PD_BOSSRUSH_DIR=${CMAKE_CURRENT_BINARY_DIR}/mslugx_rush/"
+    PASS_REGULAR_EXPRESSION "next boss, 2/6 bosses defeated.*mission 5, score 00103700, lives 9, bombs 25, weapon 5")
 # The "Start mission" option (PD_START_MISSION) against the MAME run that starts at Mission 3: the
 # option writes the same bytes at the same frame as the run's PD_POKE, so nothing differs.
 set(m3 ${PD_ANALYSIS}/phase12/missions/mission3)
